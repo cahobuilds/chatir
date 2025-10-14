@@ -3,10 +3,10 @@ name: Deploy to Vercel
 on:
   push:
     branches:
-      - develop
+      - main
   pull_request:
     branches:
-      - develop
+      - main
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -43,7 +43,7 @@ jobs:
 
   deploy-production:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
