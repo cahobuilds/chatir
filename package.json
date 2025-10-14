@@ -1,0 +1,104 @@
+{
+  "name": "tinadmin-ai-client-care-template",
+  "version": "1.0.0",
+  "description": "AI Client Care Template - Enterprise-grade admin platform for managing AI voice agents, chat conversations, and call analytics",
+  "private": false,
+  "main": "bin/create-ai-client-care.js",
+  "bin": {
+    "tinadmin-ai-client-care-template": "./bin/create-ai-client-care.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "public/",
+    "templates/",
+    "package.json",
+    "README.md",
+    "DEPLOYMENT.md",
+    "LICENSE",
+    "next.config.ts",
+    "tsconfig.json",
+    "tailwind.config.ts",
+    "postcss.config.mjs",
+    "eslint.config.mjs"
+  ],
+  "keywords": [
+    "nextjs",
+    "react",
+    "typescript",
+    "tailwindcss",
+    "ai",
+    "customer-care",
+    "voice-agents",
+    "chat-agents",
+    "call-analytics",
+    "admin-panel",
+    "template"
+  ],
+  "author": "TinAdmin",
+  "license": "MIT",
+  "homepage": "https://github.com/tindevelopers/ai-client-care",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tindevelopers/ai-client-care.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tindevelopers/ai-client-care/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^15.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/prismjs": "^1.26.5",
+    "typescript": "^5.0.0",
+    "tailwindcss": "^4.0.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^15.5.4",
+    "@heroicons/react": "^2.1.0",
+    "@svgr/webpack": "^8.1.0",
+    "@tailwindcss/forms": "^0.5.9",
+    "@tailwindcss/postcss": "^4.0.9",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.5.0",
+    "lucide-react": "^0.460.0",
+    "recharts": "^2.13.0",
+    "apexcharts": "^4.3.0",
+    "react-apexcharts": "^1.4.1",
+    "@popperjs/core": "^2.11.8",
+    "flatpickr": "^4.6.13",
+    "react-dropzone": "^14.2.3",
+    "swiper": "^11.0.5",
+    "simplebar-react": "^3.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^15.5.4"
+  },
+  "optionalDependencies": {
+    "@tailwindcss/oxide-linux-x64-gnu": "^4.0.0",
+    "lightningcss-linux-x64-gnu": "^1.29.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}

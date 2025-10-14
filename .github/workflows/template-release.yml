@@ -1,0 +1,122 @@
+name: Template Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      template_name:
+        description: 'Template name to release'
+        required: true
+        default: 'ai-customer-care'
+        type: choice
+        options:
+          - ai-customer-care
+          - blog-writer
+          - ecommerce
+      version:
+        description: 'Version to release'
+        required: true
+        default: '1.0.0'
+        type: string
+      release_notes:
+        description: 'Release notes'
+        required: false
+        default: 'Initial release'
+        type: string
+
+jobs:
+  extract-template:
+    name: Extract Template
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Extract template
+        run: |
+          node scripts/extract-template.js ${{ github.event.inputs.template_name }}
+          
+      - name: Prepare release package
+        run: |
+          cd extracted-templates/${{ github.event.inputs.template_name }}-standalone/
+          
+          # Update package.json version
+          npm version ${{ github.event.inputs.version }} --no-git-tag-version
+          
+          # Create release archive
+          tar -czf ../${{ github.event.inputs.template_name }}-v${{ github.event.inputs.version }}.tar.gz .
+          
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.template_name }}-release
+          path: extracted-templates/${{ github.event.inputs.template_name }}-v${{ github.event.inputs.version }}.tar.gz
+          retention-days: 90
+          
+  create-github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: extract-template
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Download release package
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.inputs.template_name }}-release
+          
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.template_name }}-v${{ github.event.inputs.version }}
+          release_name: ${{ github.event.inputs.template_name }} Template v${{ github.event.inputs.version }}
+          body: |
+            ## ${{ github.event.inputs.template_name }} Template v${{ github.event.inputs.version }}
+            
+            ${{ github.event.inputs.release_notes }}
+            
+            ### Installation
+            ```bash
+            # Download and extract
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.template_name }}-v${{ github.event.inputs.version }}/${{ github.event.inputs.template_name }}-v${{ github.event.inputs.version }}.tar.gz
+            tar -xzf ${{ github.event.inputs.template_name }}-v${{ github.event.inputs.version }}.tar.gz
+            cd ${{ github.event.inputs.template_name }}-standalone/
+            
+            # Install dependencies
+            npm install
+            
+            # Start development server
+            npm run dev
+            ```
+            
+            ### Features
+            - Complete Next.js 15 application
+            - TypeScript support
+            - Tailwind CSS styling
+            - Responsive design
+            - Production ready
+          draft: false
+          prerelease: false
+          
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./${{ github.event.inputs.template_name }}-v${{ github.event.inputs.version }}.tar.gz
+          asset_name: ${{ github.event.inputs.template_name }}-v${{ github.event.inputs.version }}.tar.gz
+          asset_content_type: application/gzip

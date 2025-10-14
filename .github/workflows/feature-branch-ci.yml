@@ -1,0 +1,66 @@
+name: Feature Branch CI/CD
+
+on:
+  push:
+    branches: [ blog-writer-admin-panel, ai-customer-care-bot ]
+  pull_request:
+    branches: [ blog-writer-admin-panel, ai-customer-care-bot ]
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies with retry
+      run: |
+        for i in {1..3}; do
+          echo "Attempt $i of 3: Installing dependencies..."
+          npm ci --prefer-offline --no-audit && break || {
+            echo "Attempt $i failed, waiting 10 seconds before retry..."
+            sleep 10
+          }
+        done
+        
+    - name: Run linting
+      run: npm run lint
+      
+    - name: Run type checking
+      run: npx tsc --noEmit
+      
+    - name: Build application
+      run: npm run build
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-files-${{ github.ref_name }}
+        path: |
+          .next/
+          public/
+        retention-days: 7
+        
+    - name: Run security audit
+      run: npm audit --audit-level=moderate || true
+      
+    - name: Test template structure
+      run: |
+        echo "Checking template structure..."
+        ls -la templates/
+        if [ -d "templates/blog-writer" ]; then
+          echo "✅ Blog writer template found"
+          ls -la templates/blog-writer/
+        fi
+        if [ -d "templates/ai-customer-care" ]; then
+          echo "✅ AI Customer Care template found"
+          ls -la templates/ai-customer-care/
+        fi

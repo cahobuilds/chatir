@@ -1,0 +1,227 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ ai-customer-care-bot, main, develop, staging ]
+  pull_request:
+    branches: [ ai-customer-care-bot, main, develop, staging ]
+
+jobs:
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Cache npm dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.npm
+            node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+          
+      - name: Install dependencies with retry
+        run: |
+          for i in {1..3}; do
+            echo "Attempt $i of 3: Installing dependencies..."
+            npm ci --prefer-offline --no-audit && break || {
+              echo "Attempt $i failed, waiting 10 seconds before retry..."
+              sleep 10
+            }
+          done
+        
+      - name: Run ESLint
+        run: npm run lint
+        
+      - name: Type check
+        run: npx tsc --noEmit
+        
+      - name: Run tests (if available)
+        run: npm test --if-present
+        
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Cache npm dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.npm
+            node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+          
+      - name: Install dependencies with retry
+        run: |
+          for i in {1..3}; do
+            echo "Attempt $i of 3: Installing dependencies..."
+            npm ci --prefer-offline --no-audit && break || {
+              echo "Attempt $i failed, waiting 10 seconds before retry..."
+              sleep 10
+            }
+          done
+        
+      - name: Build application
+        run: npm run build
+        
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-files
+          path: .next/
+          retention-days: 7
+          
+  deploy-preview:
+    name: Deploy Preview
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+          
+      - name: Deploy to Vercel Preview
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          
+  deploy-develop:
+    name: Deploy to Vercel (Develop)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+          
+      - name: Deploy to Vercel (Develop)
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Deploy to Vercel Staging
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+          
+      - name: Deploy to Vercel Production
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          
+  template-extraction:
+    name: Template Extraction Test
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/ai-customer-care-bot'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Cache npm dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.npm
+            node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+          
+      - name: Install dependencies with retry
+        run: |
+          for i in {1..3}; do
+            echo "Attempt $i of 3: Installing dependencies..."
+            npm ci --prefer-offline --no-audit && break || {
+              echo "Attempt $i failed, waiting 10 seconds before retry..."
+              sleep 10
+            }
+          done
+        
+      - name: Test template extraction
+        run: |
+          node scripts/extract-template.js ai-customer-care
+          ls -la ai-customer-care-standalone/
+          
+      - name: Test extracted template build
+        run: |
+          cd ai-customer-care-standalone/
+          for i in {1..3}; do
+            echo "Attempt $i of 3: Installing template dependencies..."
+            npm install --prefer-offline --no-audit && break || {
+              echo "Attempt $i failed, waiting 10 seconds before retry..."
+              sleep 10
+            }
+          done
+          npm run build
+          
+      - name: Upload extracted template
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-customer-care-template
+          path: ai-customer-care-standalone/
+          retention-days: 30
