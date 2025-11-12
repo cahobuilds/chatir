@@ -1,42 +1,29 @@
 import type { Metadata } from "next";
 import React from "react";
-import RealTimeMetrics from "@/components/RealTimeMetrics";
-import LiveCallMonitoring from "@/components/LiveCallMonitoring";
-import CallVolumeChart from "@/components/CallVolumeChart";
-import AgentAvailability from "@/components/AgentAvailability";
-import SentimentDistribution from "@/components/SentimentDistribution";
-import TopCallIntents from "@/components/TopCallIntents";
-import SystemHealthStatus from "@/components/SystemHealthStatus";
+import DashboardOverview from "@/components/DashboardOverview";
 
 export const metadata: Metadata = {
-  title:
-    "AI Customer Care Dashboard | TinAdmin - Real-Time Operations Center",
-  description: "Enterprise-grade admin platform for managing AI voice agents, chat conversations, call analytics, and omnichannel customer interactions",
+  title: "Dashboard | Multi-Tenant AI SaaS Platform",
+  description: "Overview of tenants, agents, and platform activity",
 };
 
-export default function AICustomerCareDashboard() {
+export default function DashboardPage() {
   return (
-    <div className="grid grid-cols-12 gap-4 md:gap-6">
-      {/* Real-time metrics row */}
-      <div className="col-span-12">
-        <RealTimeMetrics />
-      </div>
-
-      {/* Main dashboard content */}
-      <div className="col-span-12 space-y-6 xl:col-span-8">
-        <CallVolumeChart />
-        <LiveCallMonitoring />
-        <TopCallIntents />
-      </div>
-
-      {/* Sidebar content */}
-      <div className="col-span-12 xl:col-span-4">
-        <div className="space-y-6">
-          <AgentAvailability />
-          <SentimentDistribution />
-          <SystemHealthStatus />
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Dashboard
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Overview of your tenants and agents
+          </p>
         </div>
       </div>
+
+      {/* Dashboard Overview */}
+      <DashboardOverview />
     </div>
   );
 }

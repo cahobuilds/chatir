@@ -1,218 +1,386 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import Badge from "./ui/badge/Badge";
+import Button from "./ui/button/Button";
+import { Modal } from "./ui/modal";
+import Form from "./form/Form";
+import Input from "./form/input/InputField";
+import Label from "./form/Label";
+import Select from "./form/Select";
+import TextArea from "./form/input/TextArea";
 
-interface VoiceAgent {
+interface Agent {
   id: string;
   name: string;
-  status: "active" | "inactive" | "maintenance";
-  voice: string;
-  language: string;
-  callsHandled: number;
-  avgRating: number;
-  lastUpdated: string;
-  version: string;
+  type: "voice" | "chat";
+  is_active: boolean;
+  retell_agent_id?: string;
+  configuration?: {
+    voice_id?: string;
+    language?: string;
+  };
+  created_at: string;
+  updated_at: string;
 }
 
-const voiceAgents: VoiceAgent[] = [
-  {
-    id: "agent-1",
-    name: "AI Agent Alpha",
-    status: "active",
-    voice: "Sarah (Neural)",
-    language: "English (US)",
-    callsHandled: 1247,
-    avgRating: 4.8,
-    lastUpdated: "2 hours ago",
-    version: "v2.1.3"
-  },
-  {
-    id: "agent-2",
-    name: "AI Agent Beta",
-    status: "active",
-    voice: "Marcus (Neural)",
-    language: "English (UK)",
-    callsHandled: 892,
-    avgRating: 4.6,
-    lastUpdated: "1 hour ago",
-    version: "v2.1.2"
-  },
-  {
-    id: "agent-3",
-    name: "AI Agent Gamma",
-    status: "maintenance",
-    voice: "Elena (Neural)",
-    language: "Spanish",
-    callsHandled: 634,
-    avgRating: 4.7,
-    lastUpdated: "3 hours ago",
-    version: "v2.0.8"
-  },
-  {
-    id: "agent-4",
-    name: "AI Agent Delta",
-    status: "inactive",
-    voice: "David (Standard)",
-    language: "French",
-    callsHandled: 156,
-    avgRating: 4.2,
-    lastUpdated: "1 day ago",
-    version: "v1.9.5"
-  }
-];
-
 export default function VoiceAgentList() {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active": return "bg-green-500";
-      case "inactive": return "bg-gray-500";
-      case "maintenance": return "bg-yellow-500";
-      default: return "bg-gray-500";
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    type: "voice" as "voice" | "chat",
+    is_active: true,
+    voice_id: "",
+    language: "en-US",
+  });
+
+  useEffect(() => {
+    fetchAgents();
+  }, []);
+
+  const fetchAgents = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/agents");
+      if (response.ok) {
+        const data = await response.json();
+        // API returns { agents: [...] }
+        const agentsList = data.agents || data || [];
+        // Filter for voice agents only
+        const voiceAgents = agentsList.filter((agent: Agent) => agent.type === "voice");
+        setAgents(voiceAgents);
+      }
+    } catch (error) {
+      console.error("Failed to fetch agents:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "active": return "Active";
-      case "inactive": return "Inactive";
-      case "maintenance": return "Maintenance";
-      default: return "Unknown";
+  const handleCreate = () => {
+    setEditingAgent(null);
+    setFormData({
+      name: "",
+      type: "voice",
+      is_active: true,
+      voice_id: "",
+      language: "en-US",
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (agent: Agent) => {
+    setEditingAgent(agent);
+    setFormData({
+      name: agent.name,
+      type: agent.type,
+      is_active: agent.is_active,
+      voice_id: agent.configuration?.voice_id || "",
+      language: agent.configuration?.language || "en-US",
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this agent?")) return;
+
+    try {
+      const response = await fetch(`/api/agents/${id}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        fetchAgents();
+      }
+    } catch (error) {
+      console.error("Failed to delete agent:", error);
     }
   };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      // Get user's first tenant (in a real app, you'd have tenant selection)
+      const tenantsResponse = await fetch("/api/tenants");
+      if (!tenantsResponse.ok) {
+        alert("Failed to get tenant information");
+        return;
+      }
+      const tenantsData = await tenantsResponse.json();
+      const tenantId = tenantsData.tenants?.[0]?.id || tenantsData[0]?.id;
+      
+      if (!tenantId) {
+        alert("No tenant found. Please create a tenant first.");
+        return;
+      }
+
+      const url = editingAgent
+        ? `/api/agents/${editingAgent.id}`
+        : "/api/agents";
+      const method = editingAgent ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          name: formData.name,
+          type: formData.type,
+          is_active: formData.is_active,
+          configuration: {
+            voice_id: formData.voice_id,
+            language: formData.language,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        setIsModalOpen(false);
+        fetchAgents();
+      } else {
+        const error = await response.json();
+        alert(error.error || "Failed to save agent");
+      }
+    } catch (error) {
+      console.error("Failed to save agent:", error);
+      alert("Failed to save agent");
+    }
+  };
+
+  const getStatusBadgeColor = (isActive: boolean) => {
+    return isActive ? "success" : "error";
+  };
+
+  const voiceOptions = [
+    { value: "alloy", label: "Alloy" },
+    { value: "echo", label: "Echo" },
+    { value: "fable", label: "Fable" },
+    { value: "onyx", label: "Onyx" },
+    { value: "nova", label: "Nova" },
+    { value: "shimmer", label: "Shimmer" },
+  ];
+
+  const languageOptions = [
+    { value: "en-US", label: "English (US)" },
+    { value: "en-GB", label: "English (UK)" },
+    { value: "es-ES", label: "Spanish" },
+    { value: "fr-FR", label: "French" },
+    { value: "de-DE", label: "German" },
+    { value: "it-IT", label: "Italian" },
+  ];
+
+  if (loading) {
+    return (
+      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
+        <p className="text-gray-500 dark:text-gray-400">Loading agents...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Voice Agents
-        </h2>
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400">Filter:</span>
-            <select className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-              <option>All Status</option>
-              <option>Active</option>
-              <option>Inactive</option>
-              <option>Maintenance</option>
-            </select>
-          </div>
-          <button className="rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-            Bulk Actions
-          </button>
+    <>
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+        <div className="mb-6 flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-white/[0.05]">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Voice Agents
+          </h2>
+          <Button onClick={handleCreate} size="sm">
+            Create Agent
+          </Button>
         </div>
-      </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-200 dark:border-gray-700">
-              <th className="pb-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">
-                Agent
-              </th>
-              <th className="pb-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">
-                Voice & Language
-              </th>
-              <th className="pb-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">
-                Performance
-              </th>
-              <th className="pb-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">
-                Status
-              </th>
-              <th className="pb-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">
-                Version
-              </th>
-              <th className="pb-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {voiceAgents.map((agent) => (
-              <tr key={agent.id} className="hover:bg-gray-50 dark:hover:bg-gray-900">
-                <td className="py-4">
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      {agent.name}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      ID: {agent.id}
-                    </p>
-                  </div>
-                </td>
-                <td className="py-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {agent.voice}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {agent.language}
-                    </p>
-                  </div>
-                </td>
-                <td className="py-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {agent.callsHandled.toLocaleString()} calls
-                    </p>
-                    <div className="flex items-center space-x-1">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        ⭐ {agent.avgRating}
+        <div className="max-w-full overflow-x-auto">
+          <Table>
+            <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+              <TableRow>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Agent Name
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Voice & Language
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Status
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Created
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Actions
+                </TableCell>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+              {agents.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="px-5 py-8 text-center text-gray-500 dark:text-gray-400"
+                  >
+                    No voice agents found. Create your first agent to get started.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                agents.map((agent) => (
+                  <TableRow key={agent.id}>
+                    <TableCell className="px-5 py-4 text-start">
+                      <span className="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                        {agent.name}
                       </span>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-4">
-                  <div className="flex items-center space-x-2">
-                    <div className={`h-2 w-2 rounded-full ${getStatusColor(agent.status)}`}></div>
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                      {getStatusText(agent.status)}
-                    </span>
-                  </div>
-                </td>
-                <td className="py-4">
-                  <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                    {agent.version}
-                  </span>
-                </td>
-                <td className="py-4">
-                  <div className="flex items-center space-x-2">
-                    <button className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700">
-                      Edit
-                    </button>
-                    <button className="rounded bg-gray-500 px-3 py-1 text-xs text-white hover:bg-gray-600">
-                      Test
-                    </button>
-                    <button className="rounded bg-red-500 px-3 py-1 text-xs text-white hover:bg-red-600">
-                      Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      <div className="mt-6 flex items-center justify-between">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Showing {voiceAgents.length} agents
-        </p>
-        <div className="flex items-center space-x-2">
-          <button className="rounded bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-            Previous
-          </button>
-          <button className="rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700">
-            1
-          </button>
-          <button className="rounded bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-            2
-          </button>
-          <button className="rounded bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-            Next
-          </button>
+                      <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
+                        ID: {agent.id.slice(0, 8)}...
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-start">
+                      <span className="block text-gray-800 text-theme-sm dark:text-white/90">
+                        {agent.configuration?.voice_id || "Not set"}
+                      </span>
+                      <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
+                        {agent.configuration?.language || "Not set"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-start">
+                      <Badge
+                        size="sm"
+                        color={getStatusBadgeColor(agent.is_active)}
+                      >
+                        {agent.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-start text-gray-500 text-theme-sm dark:text-gray-400">
+                      {new Date(agent.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-start">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEdit(agent)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDelete(agent.id)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       </div>
-    </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="p-6">
+          <h3 className="mb-6 text-xl font-semibold text-gray-900 dark:text-white">
+            {editingAgent ? "Edit Agent" : "Create Voice Agent"}
+          </h3>
+          <Form onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="name">Agent Name</Label>
+                <Input
+                  type="text"
+                  id="name"
+                  name="name"
+                  placeholder="Enter agent name"
+                  defaultValue={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="voice_id">Voice</Label>
+                <Select
+                  options={voiceOptions}
+                  placeholder="Select a voice"
+                  defaultValue={formData.voice_id}
+                  onChange={(value) =>
+                    setFormData({ ...formData, voice_id: value })
+                  }
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="language">Language</Label>
+                <Select
+                  options={languageOptions}
+                  placeholder="Select a language"
+                  defaultValue={formData.language}
+                  onChange={(value) =>
+                    setFormData({ ...formData, language: value })
+                  }
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="is_active">Status</Label>
+                <Select
+                  options={[
+                    { value: "true", label: "Active" },
+                    { value: "false", label: "Inactive" },
+                  ]}
+                  placeholder="Select status"
+                  defaultValue={formData.is_active ? "true" : "false"}
+                  onChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      is_active: value === "true",
+                    })
+                  }
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm">
+                  {editingAgent ? "Update" : "Create"}
+                </Button>
+              </div>
+            </div>
+          </Form>
+        </div>
+      </Modal>
+    </>
   );
 }

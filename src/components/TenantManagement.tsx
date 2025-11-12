@@ -1,347 +1,471 @@
 "use client";
 
-import React, { useState } from "react";
-import { 
-  BuildingOfficeIcon,
-  UserGroupIcon,
-  CogIcon,
-  PlusIcon,
-  PencilIcon,
-  TrashIcon,
-  EyeIcon,
-  ShieldCheckIcon
-} from "@heroicons/react/24/outline";
+import React, { useState, useEffect } from "react";
+import ComponentCard from "./common/ComponentCard";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import Badge from "./ui/badge/Badge";
+import Button from "./ui/button/Button";
+import { Modal } from "./ui/modal";
+import { getRoleDisplayName } from "@/lib/roles-client";
+
+interface Tenant {
+  id: string;
+  name: string;
+  subdomain: string | null;
+  domain: string | null;
+  tier: 'standard' | 'premium' | 'enterprise';
+  billing_plan: string;
+  created_at: string;
+  tenant_id?: string; // From user_tenants join
+  role?: string; // User's role in this tenant
+}
+
+interface TenantUser {
+  id: string;
+  user_id: string;
+  email: string;
+  name: string;
+  role: string;
+  status: string;
+  last_login: string | null;
+  created_at: string;
+}
+
+interface TenantWithUsers extends Tenant {
+  users: TenantUser[];
+  agentCount?: number;
+  interactionCount?: number;
+}
 
 export default function TenantManagement() {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [tenants, setTenants] = useState([
-    {
-      id: "tenant_1",
-      name: "Acme Corporation",
-      domain: "acme.ai-care.com",
-      tier: "enterprise",
-      status: "active",
-      subtenants: 3,
-      agents: 25,
-      calls: 1250,
-      createdAt: "2024-01-01",
-      settings: {
-        maxAgents: 50,
-        maxConcurrentCalls: 100,
-        features: ["voice", "chat", "analytics", "integrations"]
+  const [tenants, setTenants] = useState<TenantWithUsers[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTenant, setSelectedTenant] = useState<TenantWithUsers | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    fetchTenants();
+  }, []);
+
+  const fetchTenants = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/tenants");
+      
+      if (!response.ok) {
+        console.error("Failed to fetch tenants");
+        return;
       }
-    },
-    {
-      id: "tenant_2", 
-      name: "TechStart Inc",
-      domain: "techstart.ai-care.com",
-      tier: "professional",
-      status: "active",
-      subtenants: 1,
-      agents: 8,
-      calls: 320,
-      createdAt: "2024-01-15",
-      settings: {
-        maxAgents: 20,
-        maxConcurrentCalls: 50,
-        features: ["voice", "chat", "analytics"]
-      }
-    },
-    {
-      id: "tenant_3",
-      name: "Global Services",
-      domain: "global.ai-care.com", 
-      tier: "enterprise",
-      status: "suspended",
-      subtenants: 5,
-      agents: 45,
-      calls: 2100,
-      createdAt: "2023-12-01",
-      settings: {
-        maxAgents: 100,
-        maxConcurrentCalls: 200,
-        features: ["voice", "chat", "analytics", "integrations", "custom_workflows"]
-      }
+
+      const data = await response.json();
+      const tenantList = data.tenants || [];
+
+      // Extract tenant objects from nested structure
+      const extractedTenants: Tenant[] = tenantList.map((item: any) => {
+        if (item.tenants) {
+          return {
+            ...item.tenants,
+            tenant_id: item.tenant_id,
+            role: item.role,
+          };
+        }
+        return {
+          id: item.id || item.tenant_id,
+          name: item.name,
+          subdomain: item.subdomain,
+          domain: item.domain,
+          tier: item.tier || 'standard',
+          billing_plan: item.billing_plan || 'pay_as_you_go',
+          created_at: item.created_at,
+          tenant_id: item.tenant_id,
+          role: item.role,
+        };
+      });
+
+      // Fetch users and stats for each tenant
+      const tenantsWithUsers = await Promise.all(
+        extractedTenants.map(async (tenant) => {
+          try {
+            // Fetch users for this tenant
+            const usersResponse = await fetch(`/api/tenants/${tenant.id}/users`);
+            const usersData = usersResponse.ok 
+              ? await usersResponse.json() 
+              : { users: [] };
+
+            // Fetch agent count
+            const agentsResponse = await fetch("/api/agents");
+            const agentsData = agentsResponse.ok 
+              ? await agentsResponse.json() 
+              : { agents: [] };
+            const agentCount = (agentsData.agents || []).filter(
+              (a: any) => a.tenant_id === tenant.id
+            ).length;
+
+            return {
+              ...tenant,
+              users: usersData.users || [],
+              agentCount,
+            };
+          } catch (error) {
+            console.error(`Failed to fetch data for tenant ${tenant.id}:`, error);
+            return {
+              ...tenant,
+              users: [],
+              agentCount: 0,
+            };
+          }
+        })
+      );
+
+      setTenants(tenantsWithUsers);
+    } catch (error) {
+      console.error("Failed to fetch tenants:", error);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
-  const [selectedTenant, setSelectedTenant] = useState<string | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [showCreateModal, setShowCreateModal] = useState(false);
-
-  const getTierColor = (tier: string) => {
+  const getTierColor = (tier: string): "primary" | "success" | "info" | "warning" | "error" | "light" | "dark" => {
     switch (tier) {
-      case "enterprise": return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
-      case "professional": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
-      case "standard": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+      case "enterprise": return "error";
+      case "premium": return "info";
+      case "standard": return "success";
+      default: return "light";
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-      case "suspended": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
-      case "pending": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+  const getRoleBadgeColor = (role: string): "primary" | "success" | "info" | "warning" | "error" | "light" | "dark" => {
+    switch (role) {
+      case "system_admin":
+      case "super_admin":
+        return "error";
+      case "organization_admin":
+      case "tenant_admin":
+        return "primary";
+      case "manager":
+      case "call_manager":
+        return "info";
+      case "agent":
+        return "success";
+      case "analyst":
+        return "warning";
+      case "viewer":
+      case "user":
+        return "light";
+      default:
+        return "light";
     }
   };
+
+  const handleViewTenant = (tenant: TenantWithUsers) => {
+    setSelectedTenant(tenant);
+    setIsModalOpen(true);
+  };
+
+  if (loading) {
+    return (
+      <ComponentCard title="Tenant Management" desc="Manage organizations and their users">
+        <div className="animate-pulse space-y-4">
+          <div className="h-12 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+      </ComponentCard>
+    );
+  }
+
+  const activeTenants = tenants.filter(t => true); // All tenants are active in our system
+  const totalAgents = tenants.reduce((acc, t) => acc + (t.agentCount || 0), 0);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-      <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-indigo-100 dark:bg-indigo-900 rounded-lg">
-              <BuildingOfficeIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Tenant Management
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Manage organizations and their sub-organizations
-              </p>
-            </div>
-          </div>
-          
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-          >
-            <PlusIcon className="w-4 h-4 mr-2" />
-            Add Tenant
-          </button>
-        </div>
-      </div>
-
-      <div className="p-6">
-        {/* Tenant Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <div className="flex items-center">
-              <BuildingOfficeIcon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                  Total Tenants
-                </p>
-                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                  {tenants.length}
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-            <div className="flex items-center">
-              <UserGroupIcon className="w-8 h-8 text-green-600 dark:text-green-400" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                  Active Tenants
-                </p>
-                <p className="text-2xl font-bold text-green-900 dark:text-green-100">
-                  {tenants.filter(t => t.status === 'active').length}
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-            <div className="flex items-center">
-              <ShieldCheckIcon className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
-                  Total Agents
-                </p>
-                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                  {tenants.reduce((acc, t) => acc + t.agents, 0)}
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-            <div className="flex items-center">
-              <CogIcon className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                  Total Calls
-                </p>
-                <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">
-                  {tenants.reduce((acc, t) => acc + t.calls, 0)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tenants Table */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-700">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Tenant
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Tier
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Subtenants
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Agents
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Calls
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Created
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {tenants.map((tenant) => (
-                <tr key={tenant.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">
-                        {tenant.name}
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {tenant.domain}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTierColor(tenant.tier)}`}>
-                      {tenant.tier}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(tenant.status)}`}>
-                      {tenant.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                    {tenant.subtenants}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                    {tenant.agents}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                    {tenant.calls.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(tenant.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex items-center justify-end space-x-2">
-                      <button
-                        onClick={() => setSelectedTenant(tenant.id)}
-                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                      >
-                        <EyeIcon className="w-4 h-4" />
-                      </button>
-                      <button className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300">
-                        <PencilIcon className="w-4 h-4" />
-                      </button>
-                      <button className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300">
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Tenant Details Modal */}
-        {selectedTenant && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white dark:bg-gray-800">
-              <div className="mt-3">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                    Tenant Details
-                  </h3>
-                  <button
-                    onClick={() => setSelectedTenant(null)}
-                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  >
-                    <span className="sr-only">Close</span>
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+    <>
+      <ComponentCard title="Tenant Management" desc="Manage organizations and their users">
+        <div className="space-y-6">
+          {/* Statistics */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                  <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
                 </div>
-                
-                {(() => {
-                  const tenant = tenants.find(t => t.id === selectedTenant);
-                  if (!tenant) return null;
-                  
-                  return (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Name
-                          </label>
-                          <p className="text-sm text-gray-900 dark:text-white">{tenant.name}</p>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Domain
-                          </label>
-                          <p className="text-sm text-gray-900 dark:text-white">{tenant.domain}</p>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Features
-                        </label>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {tenant.settings.features.map((feature) => (
-                            <span
-                              key={feature}
-                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"
-                            >
-                              {feature}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Max Agents
-                          </label>
-                          <p className="text-sm text-gray-900 dark:text-white">{tenant.settings.maxAgents}</p>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Max Concurrent Calls
-                          </label>
-                          <p className="text-sm text-gray-900 dark:text-white">{tenant.settings.maxConcurrentCalls}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                    Total Tenants
+                  </p>
+                  <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                    {tenants.length}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <div className="flex items-center">
+                <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                  <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                    Total Users
+                  </p>
+                  <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                    {tenants.reduce((acc, t) => acc + t.users.length, 0)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center">
+                <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                  <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                    Total Agents
+                  </p>
+                  <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                    {totalAgents}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        )}
-      </div>
-    </div>
+
+          {/* Tenants Table */}
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                <TableRow>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Tenant
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Tier
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Users
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Agents
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Your Role
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Created
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Actions
+                  </TableCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                {tenants.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="px-5 py-8 text-center text-gray-500 dark:text-gray-400">
+                      No tenants found. Create your first tenant to get started.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  tenants.map((tenant) => (
+                    <TableRow key={tenant.id}>
+                      <TableCell className="px-5 py-4 text-start">
+                        <div>
+                          <div className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                            {tenant.name}
+                          </div>
+                          {tenant.subdomain && (
+                            <div className="text-gray-500 text-theme-xs dark:text-gray-400">
+                              {tenant.subdomain}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-start">
+                        <Badge
+                          size="sm"
+                          color={getTierColor(tenant.tier)}
+                          variant="light"
+                        >
+                          {tenant.tier}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-start text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center gap-2">
+                          <span className="text-theme-sm font-medium">{tenant.users.length}</span>
+                          {tenant.users.length > 0 && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              ({tenant.users.map(u => getRoleDisplayName(u.role)).join(', ')})
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-start text-gray-600 dark:text-gray-400">
+                        {tenant.agentCount || 0}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-start">
+                        {tenant.role && (
+                          <Badge
+                            size="sm"
+                            color={getRoleBadgeColor(tenant.role)}
+                            variant="light"
+                          >
+                            {getRoleDisplayName(tenant.role)}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-start text-gray-500 text-theme-sm dark:text-gray-400">
+                        {new Date(tenant.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="px-5 py-4 text-start">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewTenant(tenant)}
+                        >
+                          View Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </ComponentCard>
+
+      {/* Tenant Details Modal */}
+      {selectedTenant && isModalOpen && (
+        <Modal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedTenant(null);
+          }}
+          title={`Tenant: ${selectedTenant.name}`}
+        >
+          <div className="space-y-6">
+            {/* Tenant Info */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Name
+                </label>
+                <p className="text-sm text-gray-900 dark:text-white">{selectedTenant.name}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Tier
+                </label>
+                <Badge
+                  size="sm"
+                  color={getTierColor(selectedTenant.tier)}
+                  variant="light"
+                >
+                  {selectedTenant.tier}
+                </Badge>
+              </div>
+              {selectedTenant.subdomain && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Subdomain
+                  </label>
+                  <p className="text-sm text-gray-900 dark:text-white">{selectedTenant.subdomain}</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Billing Plan
+                </label>
+                <p className="text-sm text-gray-900 dark:text-white">{selectedTenant.billing_plan}</p>
+              </div>
+            </div>
+
+            {/* Users Section */}
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                Users with Access ({selectedTenant.users.length})
+              </h4>
+              {selectedTenant.users.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No users found.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                      <TableRow>
+                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                          User
+                        </TableCell>
+                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                          Role
+                        </TableCell>
+                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                          Status
+                        </TableCell>
+                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                          Last Login
+                        </TableCell>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                      {selectedTenant.users.map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell className="px-4 py-3 text-start">
+                            <div>
+                              <div className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                                {user.name}
+                              </div>
+                              <div className="text-gray-500 text-theme-xs dark:text-gray-400">
+                                {user.email}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-start">
+                            <Badge
+                              size="sm"
+                              color={getRoleBadgeColor(user.role)}
+                              variant="light"
+                            >
+                              {getRoleDisplayName(user.role)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-start">
+                            <Badge
+                              size="sm"
+                              color={user.status === 'active' ? 'success' : 'error'}
+                              variant="light"
+                            >
+                              {user.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-start text-gray-500 text-theme-sm dark:text-gray-400">
+                            {user.last_login 
+                              ? new Date(user.last_login).toLocaleDateString()
+                              : 'Never'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }

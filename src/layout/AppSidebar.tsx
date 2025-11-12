@@ -1,79 +1,138 @@
 "use client";
-import React, { useEffect, useRef, useCallback, useState } from "react";
+import React, { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import {
-  AiIcon,
   ChevronDownIcon,
   HorizontaLDots,
-  UserCircleIcon,
 } from "../icons";
 import SidebarWidget from "./SidebarWidget";
-
-type NavItem = {
-  name: string;
-  icon: React.ReactNode;
-  path?: string;
-  new?: boolean;
-  subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
-};
-
-// AI Client Care focused navigation items
-// Update these paths to match your application structure
-const navItems: NavItem[] = [
-  {
-    name: "AI Client Care",
-    icon: <AiIcon />,
-    new: true,
-    subItems: [
-      { name: "Dashboard", path: "/dashboard" },
-      { name: "Chat Agent", path: "/agents/chat", new: true },
-      { name: "Voice Agent", path: "/agents/voice", new: true },
-      { name: "Knowledge Base", path: "/knowledge", new: true },
-      { name: "Conversation Flows", path: "/flows", new: true },
-      { name: "Call History", path: "/calls/history", new: true },
-      { name: "Analytics", path: "/analytics", pro: true },
-      { name: "Quality Control", path: "/quality", pro: true },
-      { name: "Monitoring", path: "/monitoring", pro: true },
-      { name: "Phone Numbers", path: "/numbers", new: true },
-      { name: "Integrations", path: "/integrations", new: true },
-      { name: "API Playground", path: "/api-playground", new: true },
-      { name: "Webhooks", path: "/webhooks", new: true },
-      { name: "Users", path: "/users", new: true },
-      { name: "Settings", path: "/settings", new: true },
-      { name: "Tenant Settings", path: "/tenant-settings", pro: true },
-    ],
-  },
-  {
-    icon: <UserCircleIcon />,
-    name: "User Profile",
-    path: "/profile",
-  },
-];
-
-// Empty arrays for clean AI Client Care focused interface
-// Removed othersItems and supportItems - only AI Client Care template needed
-
-
+import {
+  navigationConfig,
+  NavItem,
+  searchNavItems,
+  getAllNavItems,
+} from "../config/navigation";
+import Input from "../components/form/input/InputField";
+import Badge from "../components/ui/badge/Badge";
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
+  const [searchQuery, setSearchQuery] = useState("");
+  // Track multiple open submenus using Set of keys
+  const [openSubmenus, setOpenSubmenus] = useState<Set<string>>(new Set());
+  const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
+  const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const renderMenuItems = (
-    navItems: NavItem[],
-    menuType: "main" | "support" | "others"
-  ) => (
+  // Filter navigation based on search
+  const filteredNavigation = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return navigationConfig;
+    }
+
+    const searchResults = searchNavItems(searchQuery);
+    const categoryMap = new Map<string, NavItem>();
+
+    // Group results by category
+    searchResults.forEach((result) => {
+      const category = result.category;
+      if (!categoryMap.has(category)) {
+        const originalNav = navigationConfig.find((n) => n.category === category);
+        if (originalNav) {
+          categoryMap.set(category, {
+            ...originalNav,
+            subItems: originalNav.subItems?.filter((sub) =>
+              searchResults.some((r) => r.path === sub.path)
+            ),
+          });
+        }
+      }
+    });
+
+    return Array.from(categoryMap.values());
+  }, [searchQuery]);
+
+  // Group navigation by category
+  const navigationByCategory = useMemo(() => {
+    const categories: Record<string, NavItem[]> = {
+      dashboard: [],
+      admin: [],
+      settings: [],
+      templates: [],
+    };
+
+    filteredNavigation.forEach((nav) => {
+      if (categories[nav.category]) {
+        categories[nav.category].push(nav);
+      }
+    });
+
+    return categories;
+  }, [filteredNavigation]);
+
+  const isActive = useCallback((path: string) => path === pathname, [pathname]);
+
+  // Auto-open submenu if current path matches (but don't close others)
+  useEffect(() => {
+    navigationConfig.forEach((nav, index) => {
+      if (nav.subItems) {
+        nav.subItems.forEach((subItem) => {
+          if (isActive(subItem.path)) {
+            const key = `${nav.category}-${index}`;
+            setOpenSubmenus((prev) => new Set(prev).add(key));
+          }
+        });
+      }
+    });
+  }, [pathname, isActive]);
+
+  // Set default open state for submenus
+  useEffect(() => {
+    navigationConfig.forEach((nav, index) => {
+      if (nav.subItems && nav.defaultOpen) {
+        const key = `${nav.category}-${index}`;
+        setOpenSubmenus((prev) => new Set(prev).add(key));
+      }
+    });
+  }, []);
+
+  // Calculate submenu heights for all open submenus
+  useEffect(() => {
+    openSubmenus.forEach((key) => {
+      if (subMenuRefs.current[key]) {
+        setSubMenuHeight((prevHeights) => ({
+          ...prevHeights,
+          [key]: subMenuRefs.current[key]?.scrollHeight || 0,
+        }));
+      }
+    });
+  }, [openSubmenus]);
+
+  const handleSubmenuToggle = (index: number, category: string) => {
+    const key = `${category}-${index}`;
+    setOpenSubmenus((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
+  const renderMenuItems = (navItems: NavItem[], category: string) => (
     <ul className="flex flex-col gap-1">
       {navItems.map((nav, index) => (
         <li key={nav.name}>
           {nav.subItems ? (
             <button
-              onClick={() => handleSubmenuToggle(index, menuType)}
-              className={`menu-item group  ${
-                openSubmenu?.type === menuType && openSubmenu?.index === index
+              onClick={() => handleSubmenuToggle(index, category)}
+              className={`menu-item group ${
+                openSubmenus.has(`${category}-${index}`)
                   ? "menu-item-active"
                   : "menu-item-inactive"
               } cursor-pointer ${
@@ -83,8 +142,8 @@ const AppSidebar: React.FC = () => {
               }`}
             >
               <span
-                className={` ${
-                  openSubmenu?.type === menuType && openSubmenu?.index === index
+                className={`${
+                  openSubmenus.has(`${category}-${index}`)
                     ? "menu-item-icon-active"
                     : "menu-item-icon-inactive"
                 }`}
@@ -92,29 +151,25 @@ const AppSidebar: React.FC = () => {
                 {nav.icon}
               </span>
               {(isExpanded || isHovered || isMobileOpen) && (
-                <span className={`menu-item-text`}>{nav.name}</span>
+                <span className="menu-item-text">{nav.name}</span>
               )}
-              {nav.new && (isExpanded || isHovered || isMobileOpen) && (
-                <span
-                  className={`ml-auto absolute right-10 ${
-                    openSubmenu?.type === menuType &&
-                    openSubmenu?.index === index
-                      ? "menu-dropdown-badge-active"
-                      : "menu-dropdown-badge-inactive"
-                  } menu-dropdown-badge`}
-                >
-                  new
-                </span>
-              )}
-              {(isExpanded || isHovered || isMobileOpen) && nav.subItems && (
-                <ChevronDownIcon
-                  className={`ml-auto w-5 h-5 transition-transform duration-200  ${
-                    openSubmenu?.type === menuType &&
-                    openSubmenu?.index === index
-                      ? "rotate-180 text-brand-500"
-                      : ""
-                  }`}
-                />
+              {(isExpanded || isHovered || isMobileOpen) && (
+                <>
+                  {nav.type === "template" && (
+                    <Badge size="sm" color="warning" variant="light" className="ml-auto mr-2">
+                      Demo
+                    </Badge>
+                  )}
+                  {nav.subItems && (
+                    <ChevronDownIcon
+                      className={`ml-auto w-5 h-5 transition-transform duration-200 ${
+                        openSubmenus.has(`${category}-${index}`)
+                          ? "rotate-180 text-brand-500"
+                          : ""
+                      }`}
+                    />
+                  )}
+                </>
               )}
             </button>
           ) : (
@@ -135,7 +190,14 @@ const AppSidebar: React.FC = () => {
                   {nav.icon}
                 </span>
                 {(isExpanded || isHovered || isMobileOpen) && (
-                  <span className={`menu-item-text`}>{nav.name}</span>
+                  <>
+                    <span className="menu-item-text">{nav.name}</span>
+                    {nav.type === "template" && (
+                      <Badge size="sm" color="warning" variant="light" className="ml-auto">
+                        Demo
+                      </Badge>
+                    )}
+                  </>
                 )}
               </Link>
             )
@@ -143,13 +205,13 @@ const AppSidebar: React.FC = () => {
           {nav.subItems && (isExpanded || isHovered || isMobileOpen) && (
             <div
               ref={(el) => {
-                subMenuRefs.current[`${menuType}-${index}`] = el;
+                subMenuRefs.current[`${category}-${index}`] = el;
               }}
               className="overflow-hidden transition-all duration-300"
               style={{
                 height:
-                  openSubmenu?.type === menuType && openSubmenu?.index === index
-                    ? `${subMenuHeight[`${menuType}-${index}`]}px`
+                  openSubmenus.has(`${category}-${index}`)
+                    ? `${subMenuHeight[`${category}-${index}`] || 0}px`
                     : "0px",
               }}
             >
@@ -166,27 +228,42 @@ const AppSidebar: React.FC = () => {
                     >
                       {subItem.name}
                       <span className="flex items-center gap-1 ml-auto">
-                        {subItem.new && (
-                          <span
-                            className={`ml-auto ${
-                              isActive(subItem.path)
-                                ? "menu-dropdown-badge-active"
-                                : "menu-dropdown-badge-inactive"
-                            } menu-dropdown-badge `}
+                        {subItem.badge === "new" && (
+                          <Badge
+                            size="sm"
+                            color={
+                              isActive(subItem.path) ? "primary" : "light"
+                            }
+                            variant="light"
+                            className="menu-dropdown-badge"
                           >
                             new
-                          </span>
+                          </Badge>
                         )}
-                        {subItem.pro && (
-                          <span
-                            className={`ml-auto ${
-                              isActive(subItem.path)
-                                ? "menu-dropdown-badge-pro-active"
-                                : "menu-dropdown-badge-pro-inactive"
-                            } menu-dropdown-badge-pro `}
+                        {subItem.badge === "pro" && (
+                          <Badge
+                            size="sm"
+                            color={
+                              isActive(subItem.path) ? "info" : "light"
+                            }
+                            variant="light"
+                            className="menu-dropdown-badge-pro"
                           >
                             pro
-                          </span>
+                          </Badge>
+                        )}
+                        {subItem.badge === "demo" && (
+                          <Badge
+                            size="sm"
+                            color="warning"
+                            variant="light"
+                            className="menu-dropdown-badge"
+                          >
+                            demo
+                          </Badge>
+                        )}
+                        {subItem.type === "functional" && !subItem.badge && (
+                          <span className="h-2 w-2 rounded-full bg-green-500"></span>
                         )}
                       </span>
                     </Link>
@@ -200,75 +277,16 @@ const AppSidebar: React.FC = () => {
     </ul>
   );
 
-  const [openSubmenu, setOpenSubmenu] = useState<{
-    type: "main" | "support" | "others";
-    index: number;
-  } | null>(null);
-  const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>(
-    {}
-  );
-  const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
-  // const isActive = (path: string) => path === pathname;
-
-  const isActive = useCallback((path: string) => path === pathname, [pathname]);
-
-  
-  useEffect(() => {
-    // Check if the current path matches any submenu item
-    let submenuMatched = false;
-    navItems.forEach((nav, index) => {
-      if (nav.subItems) {
-        nav.subItems.forEach((subItem) => {
-          if (isActive(subItem.path)) {
-            setOpenSubmenu({
-              type: "main",
-              index,
-            });
-            submenuMatched = true;
-          }
-        });
-      }
-    });
-
-    // If no submenu item matches, close the open submenu
-    if (!submenuMatched) {
-      setOpenSubmenu(null);
-    }
-  }, [pathname, isActive]);
-
-  useEffect(() => {
-    // Set the height of the submenu items when the submenu is opened
-    if (openSubmenu !== null) {
-      const key = `${openSubmenu.type}-${openSubmenu.index}`;
-      if (subMenuRefs.current[key]) {
-        setSubMenuHeight((prevHeights) => ({
-          ...prevHeights,
-          [key]: subMenuRefs.current[key]?.scrollHeight || 0,
-        }));
-      }
-    }
-  }, [openSubmenu]);
-
-  const handleSubmenuToggle = (
-    index: number,
-    menuType: "main" | "support" | "others"
-  ) => {
-    setOpenSubmenu((prevOpenSubmenu) => {
-      if (
-        prevOpenSubmenu &&
-        prevOpenSubmenu.type === menuType &&
-        prevOpenSubmenu.index === index
-      ) {
-        return null;
-      }
-      return { type: menuType, index };
-    });
+  const categoryLabels: Record<string, string> = {
+    dashboard: "Dashboard",
+    admin: "Admin",
+    settings: "Settings",
+    templates: "Templates",
   };
 
   return (
     <aside
-      className={`fixed  flex flex-col xl:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-full transition-all duration-300 ease-in-out z-50 border-r border-gray-200 
+      className={`fixed flex flex-col xl:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-full transition-all duration-300 ease-in-out z-50 border-r border-gray-200 
         ${
           isExpanded || isMobileOpen
             ? "w-[290px]"
@@ -282,7 +300,7 @@ const AppSidebar: React.FC = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`py-8 flex  ${
+        className={`py-8 flex ${
           !isExpanded && !isHovered ? "xl:justify-center" : "justify-start"
         }`}
       >
@@ -314,26 +332,114 @@ const AppSidebar: React.FC = () => {
           )}
         </Link>
       </div>
-      <div className="flex flex-col overflow-y-auto  duration-300 ease-linear no-scrollbar">
-        
+
+      {/* Search Bar */}
+      {(isExpanded || isHovered || isMobileOpen) && (
+        <div className="mb-4">
+          <Input
+            type="text"
+            placeholder="Search pages..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full"
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
         <nav className="mb-6">
-          <div className="flex flex-col gap-4">
-            <div>
-              <h2
-                className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
-                  !isExpanded && !isHovered
-                    ? "xl:justify-center"
-                    : "justify-start"
-                }`}
-              >
-                {isExpanded || isHovered || isMobileOpen ? (
-                  "Menu"
-                ) : (
-                  <HorizontaLDots />
-                )}
-              </h2>
-              {renderMenuItems(navItems, "main")}
-            </div>
+          <div className="flex flex-col gap-6">
+            {/* Dashboard Section */}
+            {navigationByCategory.dashboard.length > 0 && (
+              <div>
+                <h2
+                  className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
+                    !isExpanded && !isHovered
+                      ? "xl:justify-center"
+                      : "justify-start"
+                  }`}
+                >
+                  {isExpanded || isHovered || isMobileOpen ? (
+                    categoryLabels.dashboard
+                  ) : (
+                    <HorizontaLDots />
+                  )}
+                </h2>
+                {renderMenuItems(navigationByCategory.dashboard, "dashboard")}
+              </div>
+            )}
+
+            {/* Admin Section */}
+            {navigationByCategory.admin.length > 0 && (
+              <div>
+                <h2
+                  className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
+                    !isExpanded && !isHovered
+                      ? "xl:justify-center"
+                      : "justify-start"
+                  }`}
+                >
+                  {isExpanded || isHovered || isMobileOpen ? (
+                    categoryLabels.admin
+                  ) : (
+                    <HorizontaLDots />
+                  )}
+                </h2>
+                {renderMenuItems(navigationByCategory.admin, "admin")}
+              </div>
+            )}
+
+            {/* Settings Section */}
+            {navigationByCategory.settings.length > 0 && (
+              <div>
+                <h2
+                  className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
+                    !isExpanded && !isHovered
+                      ? "xl:justify-center"
+                      : "justify-start"
+                  }`}
+                >
+                  {isExpanded || isHovered || isMobileOpen ? (
+                    categoryLabels.settings
+                  ) : (
+                    <HorizontaLDots />
+                  )}
+                </h2>
+                {renderMenuItems(navigationByCategory.settings, "settings")}
+              </div>
+            )}
+
+            {/* Templates Section */}
+            {navigationByCategory.templates.length > 0 && (
+              <div>
+                <h2
+                  className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
+                    !isExpanded && !isHovered
+                      ? "xl:justify-center"
+                      : "justify-start"
+                  }`}
+                >
+                  {isExpanded || isHovered || isMobileOpen ? (
+                    <>
+                      {categoryLabels.templates}
+                      <Badge size="sm" color="warning" variant="light" className="ml-2">
+                        Demo
+                      </Badge>
+                    </>
+                  ) : (
+                    <HorizontaLDots />
+                  )}
+                </h2>
+                {renderMenuItems(navigationByCategory.templates, "templates")}
+              </div>
+            )}
+
+            {/* No Results Message */}
+            {searchQuery && filteredNavigation.length === 0 && (
+              <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                <p className="text-sm">No pages found matching "{searchQuery}"</p>
+              </div>
+            )}
           </div>
         </nav>
         {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null}

@@ -1,279 +1,409 @@
 "use client";
 
-import React, { useState } from "react";
-import { 
-  PlusIcon, 
-  PencilIcon, 
-  TrashIcon, 
-  PlayIcon, 
-  PauseIcon,
-  EyeIcon,
-  ChatBubbleLeftRightIcon
-} from "@heroicons/react/24/outline";
+import React, { useState, useEffect } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import Badge from "./ui/badge/Badge";
+import Button from "./ui/button/Button";
+import { Modal } from "./ui/modal";
+import Form from "./form/Form";
+import Input from "./form/input/InputField";
+import Label from "./form/Label";
+import Select from "./form/Select";
+import TextArea from "./form/input/TextArea";
 
-interface ChatAgent {
+interface Agent {
   id: string;
   name: string;
-  description: string;
-  status: "active" | "inactive" | "training";
-  language: string;
-  responseTime: string;
-  conversations: number;
-  satisfaction: number;
-  lastActive: string;
-  model: string;
+  type: "voice" | "chat";
+  is_active: boolean;
+  description?: string;
+  retell_agent_id?: string;
+  configuration?: {
+    model?: string;
+    language?: string;
+  };
+  created_at: string;
+  updated_at: string;
 }
 
-const mockChatAgents: ChatAgent[] = [
-  {
-    id: "1",
-    name: "Customer Support Bot",
-    description: "Handles general customer inquiries and support requests",
-    status: "active",
-    language: "English",
-    responseTime: "2.3s",
-    conversations: 1247,
-    satisfaction: 4.2,
-    lastActive: "2 minutes ago",
-    model: "GPT-4"
-  },
-  {
-    id: "2",
-    name: "Sales Assistant",
-    description: "Helps with product information and sales inquiries",
-    status: "active",
-    language: "English",
-    responseTime: "1.8s",
-    conversations: 892,
-    satisfaction: 4.5,
-    lastActive: "5 minutes ago",
-    model: "GPT-4"
-  },
-  {
-    id: "3",
-    name: "Technical Support",
-    description: "Provides technical assistance and troubleshooting",
-    status: "training",
-    language: "English",
-    responseTime: "3.1s",
-    conversations: 156,
-    satisfaction: 3.8,
-    lastActive: "1 hour ago",
-    model: "GPT-3.5"
-  },
-  {
-    id: "4",
-    name: "Spanish Support",
-    description: "Customer support in Spanish language",
-    status: "inactive",
-    language: "Spanish",
-    responseTime: "2.7s",
-    conversations: 234,
-    satisfaction: 4.1,
-    lastActive: "2 hours ago",
-    model: "GPT-4"
-  }
-];
-
 export default function ChatAgentList() {
-  const [agents, setAgents] = useState<ChatAgent[]>(mockChatAgents);
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    type: "chat" as "voice" | "chat",
+    is_active: true,
+    model: "gpt-4",
+    language: "en-US",
+  });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
-      case "inactive":
-        return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300";
-      case "training":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
-      default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300";
+  useEffect(() => {
+    fetchAgents();
+  }, []);
+
+  const fetchAgents = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/agents");
+      if (response.ok) {
+        const data = await response.json();
+        // API returns { agents: [...] }
+        const agentsList = data.agents || data || [];
+        // Filter for chat agents only
+        const chatAgents = agentsList.filter((agent: Agent) => agent.type === "chat");
+        setAgents(chatAgents);
+      }
+    } catch (error) {
+      console.error("Failed to fetch agents:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const toggleAgentStatus = (agentId: string) => {
-    setAgents(agents.map(agent => 
-      agent.id === agentId 
-        ? { 
-            ...agent, 
-            status: agent.status === "active" ? "inactive" : "active" 
-          }
-        : agent
-    ));
+  const handleCreate = () => {
+    setEditingAgent(null);
+    setFormData({
+      name: "",
+      description: "",
+      type: "chat",
+      is_active: true,
+      model: "gpt-4",
+      language: "en-US",
+    });
+    setIsModalOpen(true);
   };
 
-  const deleteAgent = (agentId: string) => {
-    setAgents(agents.filter(agent => agent.id !== agentId));
+  const handleEdit = (agent: Agent) => {
+    setEditingAgent(agent);
+    setFormData({
+      name: agent.name,
+      description: agent.description || "",
+      type: agent.type,
+      is_active: agent.is_active,
+      model: agent.configuration?.model || "gpt-4",
+      language: agent.configuration?.language || "en-US",
+    });
+    setIsModalOpen(true);
   };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this agent?")) return;
+
+    try {
+      const response = await fetch(`/api/agents/${id}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        fetchAgents();
+      }
+    } catch (error) {
+      console.error("Failed to delete agent:", error);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      // Get user's first tenant (in a real app, you'd have tenant selection)
+      const tenantsResponse = await fetch("/api/tenants");
+      if (!tenantsResponse.ok) {
+        alert("Failed to get tenant information");
+        return;
+      }
+      const tenantsData = await tenantsResponse.json();
+      const tenantId = tenantsData.tenants?.[0]?.id || tenantsData[0]?.id;
+      
+      if (!tenantId) {
+        alert("No tenant found. Please create a tenant first.");
+        return;
+      }
+
+      const url = editingAgent
+        ? `/api/agents/${editingAgent.id}`
+        : "/api/agents";
+      const method = editingAgent ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          name: formData.name,
+          description: formData.description,
+          type: formData.type,
+          is_active: formData.is_active,
+          configuration: {
+            model: formData.model,
+            language: formData.language,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        setIsModalOpen(false);
+        fetchAgents();
+      } else {
+        const error = await response.json();
+        alert(error.error || "Failed to save agent");
+      }
+    } catch (error) {
+      console.error("Failed to save agent:", error);
+      alert("Failed to save agent");
+    }
+  };
+
+  const getStatusBadgeColor = (isActive: boolean) => {
+    return isActive ? "success" : "error";
+  };
+
+  const modelOptions = [
+    { value: "gpt-4", label: "GPT-4" },
+    { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
+    { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
+  ];
+
+  const languageOptions = [
+    { value: "en-US", label: "English (US)" },
+    { value: "en-GB", label: "English (UK)" },
+    { value: "es-ES", label: "Spanish" },
+    { value: "fr-FR", label: "French" },
+    { value: "de-DE", label: "German" },
+    { value: "it-IT", label: "Italian" },
+  ];
+
+  if (loading) {
+    return (
+      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
+        <p className="text-gray-500 dark:text-gray-400">Loading agents...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-      <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Chat Agents
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Manage your AI chat agents and their configurations
-            </p>
-          </div>
-          <button className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-            <PlusIcon className="w-4 h-4 mr-2" />
+    <>
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+        <div className="mb-6 flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-white/[0.05]">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Chat Agents
+          </h2>
+          <Button onClick={handleCreate} size="sm">
             Create Agent
-          </button>
+          </Button>
+        </div>
+
+        <div className="max-w-full overflow-x-auto">
+          <Table>
+            <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+              <TableRow>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Agent Name
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Description
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Model & Language
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Status
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Created
+                </TableCell>
+                <TableCell
+                  isHeader
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                >
+                  Actions
+                </TableCell>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+              {agents.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="px-5 py-8 text-center text-gray-500 dark:text-gray-400"
+                  >
+                    No chat agents found. Create your first agent to get started.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                agents.map((agent) => (
+                  <TableRow key={agent.id}>
+                    <TableCell className="px-5 py-4 text-start">
+                      <span className="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                        {agent.name}
+                      </span>
+                      <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
+                        ID: {agent.id.slice(0, 8)}...
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-start text-gray-500 text-theme-sm dark:text-gray-400">
+                      {agent.description || "No description"}
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-start">
+                      <span className="block text-gray-800 text-theme-sm dark:text-white/90">
+                        {agent.configuration?.model || "Not set"}
+                      </span>
+                      <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
+                        {agent.configuration?.language || "Not set"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-start">
+                      <Badge
+                        size="sm"
+                        color={getStatusBadgeColor(agent.is_active)}
+                      >
+                        {agent.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-start text-gray-500 text-theme-sm dark:text-gray-400">
+                      {new Date(agent.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="px-5 py-4 text-start">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEdit(agent)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDelete(agent.id)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       </div>
 
-      <div className="p-6">
-        <div className="space-y-4">
-          {agents.map((agent) => (
-            <div
-              key={agent.id}
-              className={`p-4 border rounded-lg transition-all duration-200 ${
-                selectedAgent === agent.id
-                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20"
-                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0">
-                    <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900 rounded-lg flex items-center justify-center">
-                      <ChatBubbleLeftRightIcon className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2">
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                        {agent.name}
-                      </h3>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(agent.status)}`}>
-                        {agent.status}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      {agent.description}
-                    </p>
-                    <div className="flex items-center space-x-4 mt-3 text-sm text-gray-500 dark:text-gray-400">
-                      <span>Language: {agent.language}</span>
-                      <span>Model: {agent.model}</span>
-                      <span>Response Time: {agent.responseTime}</span>
-                      <span>Conversations: {agent.conversations.toLocaleString()}</span>
-                      <span>Satisfaction: {agent.satisfaction}/5</span>
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Last active: {agent.lastActive}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setSelectedAgent(selectedAgent === agent.id ? null : agent.id)}
-                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                    title="View Details"
-                  >
-                    <EyeIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => toggleAgentStatus(agent.id)}
-                    className={`p-2 ${
-                      agent.status === "active" 
-                        ? "text-green-600 hover:text-green-700" 
-                        : "text-gray-400 hover:text-gray-600"
-                    }`}
-                    title={agent.status === "active" ? "Pause Agent" : "Activate Agent"}
-                  >
-                    {agent.status === "active" ? (
-                      <PauseIcon className="w-4 h-4" />
-                    ) : (
-                      <PlayIcon className="w-4 h-4" />
-                    )}
-                  </button>
-                  <button
-                    className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
-                    title="Edit Agent"
-                  >
-                    <PencilIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => deleteAgent(agent.id)}
-                    className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400"
-                    title="Delete Agent"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </div>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <div className="p-6">
+          <h3 className="mb-6 text-xl font-semibold text-gray-900 dark:text-white">
+            {editingAgent ? "Edit Agent" : "Create Chat Agent"}
+          </h3>
+          <Form onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="name">Agent Name</Label>
+                <Input
+                  type="text"
+                  id="name"
+                  name="name"
+                  placeholder="Enter agent name"
+                  defaultValue={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  required
+                />
               </div>
 
-              {selectedAgent === agent.id && (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                        Performance Metrics
-                      </h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Avg Response Time</span>
-                          <span className="font-medium">{agent.responseTime}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Success Rate</span>
-                          <span className="font-medium">94.2%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Escalation Rate</span>
-                          <span className="font-medium">5.8%</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                        Configuration
-                      </h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Language</span>
-                          <span className="font-medium">{agent.language}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Model</span>
-                          <span className="font-medium">{agent.model}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Max Tokens</span>
-                          <span className="font-medium">2048</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                        Recent Activity
-                      </h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Today&apos;s Conversations</span>
-                          <span className="font-medium">47</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Resolved Issues</span>
-                          <span className="font-medium">42</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600 dark:text-gray-400">Escalated</span>
-                          <span className="font-medium">5</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <TextArea
+                  placeholder="Enter agent description"
+                  rows={3}
+                  value={formData.description}
+                  onChange={(value) =>
+                    setFormData({ ...formData, description: value })
+                  }
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="model">Model</Label>
+                <Select
+                  options={modelOptions}
+                  placeholder="Select a model"
+                  defaultValue={formData.model}
+                  onChange={(value) =>
+                    setFormData({ ...formData, model: value })
+                  }
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="language">Language</Label>
+                <Select
+                  options={languageOptions}
+                  placeholder="Select a language"
+                  defaultValue={formData.language}
+                  onChange={(value) =>
+                    setFormData({ ...formData, language: value })
+                  }
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="is_active">Status</Label>
+                <Select
+                  options={[
+                    { value: "true", label: "Active" },
+                    { value: "false", label: "Inactive" },
+                  ]}
+                  placeholder="Select status"
+                  defaultValue={formData.is_active ? "true" : "false"}
+                  onChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      is_active: value === "true",
+                    })
+                  }
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm">
+                  {editingAgent ? "Update" : "Create"}
+                </Button>
+              </div>
             </div>
-          ))}
+          </Form>
         </div>
-      </div>
-    </div>
+      </Modal>
+    </>
   );
 }

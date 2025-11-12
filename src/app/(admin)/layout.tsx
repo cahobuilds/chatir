@@ -4,8 +4,11 @@ import { useSidebar } from "@/context/SidebarContext";
 import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
-import React from "react";
-import { usePathname } from "next/navigation";
+import EnhancedBreadcrumb from "@/components/common/EnhancedBreadcrumb";
+import TemplateBanner from "@/components/common/TemplateBanner";
+import React, { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function AdminLayout({
   children,
@@ -14,6 +17,29 @@ export default function AdminLayout({
 }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, loading } = useAuth();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/auth/login?redirect=' + encodeURIComponent(pathname));
+    }
+  }, [user, loading, router, pathname]);
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (!user) {
+    return null;
+  }
 
   // Route-specific styles for the main content container
   const getRouteSpecificStyles = () => {
@@ -49,6 +75,14 @@ export default function AdminLayout({
       >
         {/* Header */}
         <AppHeader />
+        {/* Breadcrumbs */}
+        <div className="px-4 md:px-6 pt-4">
+          <EnhancedBreadcrumb />
+        </div>
+        {/* Template Banner */}
+        <div className="px-4 md:px-6">
+          <TemplateBanner />
+        </div>
         {/* Page Content */}
         <div className={getRouteSpecificStyles()}>{children}</div>
       </div>
