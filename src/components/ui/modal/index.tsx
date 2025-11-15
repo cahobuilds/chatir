@@ -8,6 +8,7 @@ interface ModalProps {
   children: React.ReactNode;
   showCloseButton?: boolean; // New prop to control close button visibility
   isFullscreen?: boolean; // Default to false for backwards compatibility
+  title?: string; // Optional title for the modal
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -87,6 +88,11 @@ export const Modal: React.FC<ModalProps> = ({
               />
             </svg>
           </button>
+        )}
+        {title && (
+          <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h2>
+          </div>
         )}
         <div>{children}</div>
       </div>
