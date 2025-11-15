@@ -222,8 +222,8 @@ export default function ProfileEditPage() {
               <TextArea
                 id="bio"
                 value={formData.bio}
-                onChange={(e) =>
-                  setFormData({ ...formData, bio: e.target.value })
+                onChange={(value: string) =>
+                  setFormData({ ...formData, bio: value })
                 }
                 placeholder="Tell us about yourself..."
                 rows={4}
