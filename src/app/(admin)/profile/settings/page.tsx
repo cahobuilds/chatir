@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import AccountSettings from "@/components/profile/AccountSettings";
 import SecuritySettings from "@/components/profile/SecuritySettings";
 import UserPermissions from "@/components/profile/UserPermissions";
-import { getRoleInfo, type Role } from "@/lib/permissions";
+import { getRoleInfo, type Role, type LegacyRole } from "@/lib/permissions";
 
 interface Tenant {
   id: string;
@@ -17,7 +17,7 @@ interface Tenant {
 
 interface UserTenant {
   id: string;
-  role: Role;
+  role: LegacyRole;
   status: string;
   permissions: any;
   last_login: string | null;
