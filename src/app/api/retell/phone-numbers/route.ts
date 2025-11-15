@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       await supabase
         .from('agents')
         .update({
-          retell_phone_number_id: phoneNumber.phone_number_id,
+          retell_phone_number_id: (phoneNumber as any).phone_number_id || (phoneNumber as any).id,
         })
         .eq('id', agent_id);
     }
