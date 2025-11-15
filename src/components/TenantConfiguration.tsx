@@ -34,6 +34,7 @@ export default function TenantConfiguration() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [tenantName, setTenantName] = useState("");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [config, setConfig] = useState<any>(null);
 
   const supabase = createClient();
 
@@ -83,6 +84,40 @@ export default function TenantConfiguration() {
       setTenant(tenantData);
       setTenantName(tenantData.name);
       setLogoPreview((tenantData.branding as any)?.logo_url || null);
+      
+      // Initialize config state
+      setConfig({
+        branding: {
+          logo: (tenantData.branding as any)?.logo_url || "",
+          primaryColor: (tenantData.branding as any)?.primaryColor || "#4F46E5",
+          secondaryColor: (tenantData.branding as any)?.secondaryColor || "#06B6D4",
+          favicon: (tenantData.branding as any)?.favicon || "",
+          customDomain: (tenantData.branding as any)?.customDomain || "",
+          customCSS: (tenantData.branding as any)?.customCSS || ""
+        },
+        features: tenantData.settings?.features || {
+          voiceAgents: true,
+          chatAgents: true,
+          callRecording: true,
+          analytics: true,
+          integrations: true,
+          customWorkflows: false,
+          whiteLabel: false
+        },
+        limits: tenantData.settings?.limits || {
+          maxAgents: 50,
+          maxConcurrentCalls: 100,
+          maxSubtenants: 10,
+          storageLimit: "100GB",
+          apiRateLimit: 1000
+        },
+        security: tenantData.settings?.security || {
+          twoFactorAuth: false,
+          ssoEnabled: false,
+          ipWhitelist: []
+        }
+      });
+      
       setLoading(false);
     } catch (err: any) {
       console.error("Error fetching tenant:", err);
@@ -206,7 +241,8 @@ export default function TenantConfiguration() {
     }
   };
 
-  const config = tenant ? {
+  // Use config state, fallback to computed if not set
+  const currentConfig = config || (tenant ? {
     branding: {
       logo: (tenant.branding as any)?.logo_url || "",
       primaryColor: (tenant.branding as any)?.primaryColor || "#4F46E5",
@@ -418,19 +454,19 @@ export default function TenantConfiguration() {
                 <div className="flex items-center space-x-2">
                   <input
                     type="color"
-                    value={config.branding.primaryColor}
+                    value={currentConfig?.branding.primaryColor}
                     onChange={(e) => setConfig({
                       ...config,
-                      branding: {...config.branding, primaryColor: e.target.value}
+                      branding: {...currentConfig?.branding, primaryColor: e.target.value}
                     })}
                     className="w-10 h-10 border border-gray-300 dark:border-gray-600 rounded-lg"
                   />
                   <input
                     type="text"
-                    value={config.branding.primaryColor}
+                    value={currentConfig?.branding.primaryColor}
                     onChange={(e) => setConfig({
                       ...config,
-                      branding: {...config.branding, primaryColor: e.target.value}
+                      branding: {...currentConfig?.branding, primaryColor: e.target.value}
                     })}
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white text-sm"
                   />
@@ -443,19 +479,19 @@ export default function TenantConfiguration() {
                 <div className="flex items-center space-x-2">
                   <input
                     type="color"
-                    value={config.branding.secondaryColor}
+                    value={currentConfig?.branding.secondaryColor}
                     onChange={(e) => setConfig({
                       ...config,
-                      branding: {...config.branding, secondaryColor: e.target.value}
+                      branding: {...currentConfig?.branding, secondaryColor: e.target.value}
                     })}
                     className="w-10 h-10 border border-gray-300 dark:border-gray-600 rounded-lg"
                   />
                   <input
                     type="text"
-                    value={config.branding.secondaryColor}
+                    value={currentConfig?.branding.secondaryColor}
                     onChange={(e) => setConfig({
                       ...config,
-                      branding: {...config.branding, secondaryColor: e.target.value}
+                      branding: {...currentConfig?.branding, secondaryColor: e.target.value}
                     })}
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white text-sm"
                   />
@@ -469,10 +505,10 @@ export default function TenantConfiguration() {
               </label>
               <input
                 type="text"
-                value={config.branding.customDomain}
+                value={currentConfig?.branding.customDomain}
                 onChange={(e) => setConfig({
                   ...config,
-                  branding: {...config.branding, customDomain: e.target.value}
+                  branding: {...currentConfig?.branding, customDomain: e.target.value}
                 })}
                 placeholder="tenant.example.com"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
@@ -484,10 +520,10 @@ export default function TenantConfiguration() {
                 Custom CSS
               </label>
               <textarea
-                value={config.branding.customCSS}
+                value={currentConfig?.branding.customCSS}
                 onChange={(e) => setConfig({
                   ...config,
-                  branding: {...config.branding, customCSS: e.target.value}
+                  branding: {...currentConfig?.branding, customCSS: e.target.value}
                 })}
                 rows={4}
                 placeholder="/* Custom CSS styles */"
@@ -507,7 +543,7 @@ export default function TenantConfiguration() {
           </div>
           
           <div className="space-y-4">
-            {Object.entries(config.features).map(([key, value]) => (
+            {Object.entries(currentConfig?.features).map(([key, value]) => (
               <div key={key} className="flex items-center justify-between">
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -523,7 +559,7 @@ export default function TenantConfiguration() {
                     checked={value}
                     onChange={(e) => setConfig({
                       ...config,
-                      features: {...config.features, [key]: e.target.checked}
+                      features: {...currentConfig?.features, [key]: e.target.checked}
                     })}
                     className="sr-only peer"
                   />
@@ -550,10 +586,10 @@ export default function TenantConfiguration() {
               </label>
               <input
                 type="number"
-                value={config.limits.maxAgents}
+                value={currentConfig?.limits.maxAgents}
                 onChange={(e) => setConfig({
                   ...config,
-                  limits: {...config.limits, maxAgents: parseInt(e.target.value)}
+                  limits: {...currentConfig?.limits, maxAgents: parseInt(e.target.value)}
                 })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
               />
@@ -564,10 +600,10 @@ export default function TenantConfiguration() {
               </label>
               <input
                 type="number"
-                value={config.limits.maxConcurrentCalls}
+                value={currentConfig?.limits.maxConcurrentCalls}
                 onChange={(e) => setConfig({
                   ...config,
-                  limits: {...config.limits, maxConcurrentCalls: parseInt(e.target.value)}
+                  limits: {...currentConfig?.limits, maxConcurrentCalls: parseInt(e.target.value)}
                 })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
               />
@@ -578,10 +614,10 @@ export default function TenantConfiguration() {
               </label>
               <input
                 type="number"
-                value={config.limits.maxSubtenants}
+                value={currentConfig?.limits.maxSubtenants}
                 onChange={(e) => setConfig({
                   ...config,
-                  limits: {...config.limits, maxSubtenants: parseInt(e.target.value)}
+                  limits: {...currentConfig?.limits, maxSubtenants: parseInt(e.target.value)}
                 })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
               />
@@ -592,10 +628,10 @@ export default function TenantConfiguration() {
               </label>
               <input
                 type="number"
-                value={config.limits.apiRateLimit}
+                value={currentConfig?.limits.apiRateLimit}
                 onChange={(e) => setConfig({
                   ...config,
-                  limits: {...config.limits, apiRateLimit: parseInt(e.target.value)}
+                  limits: {...currentConfig?.limits, apiRateLimit: parseInt(e.target.value)}
                 })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
               />
@@ -625,10 +661,10 @@ export default function TenantConfiguration() {
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={config.security.ssoEnabled}
+                  checked={currentConfig?.security.ssoEnabled}
                   onChange={(e) => setConfig({
                     ...config,
-                    security: {...config.security, ssoEnabled: e.target.checked}
+                    security: {...currentConfig?.security, ssoEnabled: e.target.checked}
                   })}
                   className="sr-only peer"
                 />
@@ -648,10 +684,10 @@ export default function TenantConfiguration() {
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={config.security.mfaRequired}
+                  checked={currentConfig?.security.mfaRequired}
                   onChange={(e) => setConfig({
                     ...config,
-                    security: {...config.security, mfaRequired: e.target.checked}
+                    security: {...currentConfig?.security, mfaRequired: e.target.checked}
                   })}
                   className="sr-only peer"
                 />
@@ -665,10 +701,10 @@ export default function TenantConfiguration() {
               </label>
               <input
                 type="number"
-                value={config.security.sessionTimeout}
+                value={currentConfig?.security.sessionTimeout}
                 onChange={(e) => setConfig({
                   ...config,
-                  security: {...config.security, sessionTimeout: parseInt(e.target.value)}
+                  security: {...currentConfig?.security, sessionTimeout: parseInt(e.target.value)}
                 })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
               />
