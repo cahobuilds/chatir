@@ -170,6 +170,16 @@ export const ROLE_PERMISSIONS: Record<Role | LegacyRole, RolePermissions> = {
     ),
   },
   // Legacy roles (maintained for backward compatibility)
+  super_admin: {
+    role: 'super_admin',
+    displayName: 'Super Admin',
+    description: 'Full administrative access to tenant settings, user management, agent configuration, and billing. Can manage all aspects of the tenant.',
+    permissions: ALL_PERMISSIONS.filter(p => 
+      !p.id.startsWith('settings.system') && // Can't manage system settings
+      p.id !== 'tenant.create' && // Can't create tenants
+      p.id !== 'tenant.delete' // Can't delete tenants
+    ),
+  },
   tenant_admin: {
     role: 'tenant_admin',
     displayName: 'Tenant Admin',
