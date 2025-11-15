@@ -33,7 +33,7 @@ export default function TextAreaInput() {
             rows={6}
             value={messageTwo}
             error
-            onChange={(value) => setMessageTwo(value)}
+            onChange={(value: string) => setMessageTwo(value)}
             hint="Please enter a valid message."
           />
         </div>
