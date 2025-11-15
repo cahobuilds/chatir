@@ -72,8 +72,8 @@ export default function TenantConfiguration() {
       const userTenant = userTenants as any;
       const tenantData = userTenant.tenants as Tenant;
       
-      // Check if user is admin
-      const admin = ['tenant_admin', 'super_admin'].includes(userTenant.role);
+      // Check if user is admin (including system_admin)
+      const admin = ['system_admin', 'tenant_admin', 'super_admin'].includes(userTenant.role);
       setIsAdmin(admin);
 
       if (!admin) {

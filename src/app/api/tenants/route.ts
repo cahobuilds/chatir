@@ -53,16 +53,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    // Check if user is super_admin (can create tenants)
+    // Check if user is system_admin or super_admin (can create tenants)
     const { data: userTenant } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
-      .eq('role', 'super_admin')
+      .in('role', ['system_admin', 'super_admin'])
       .single();
 
     if (!userTenant) {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+      return NextResponse.json({ error: 'Forbidden: System admin or super admin access required' }, { status: 403 });
     }
 
     // Create tenant using admin client
