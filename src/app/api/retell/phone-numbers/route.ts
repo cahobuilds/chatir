@@ -109,10 +109,11 @@ export async function POST(request: NextRequest) {
 
     // Purchase phone number from Retell AI
     const retellClient = createRetellClient(tenant.retell_api_key);
-    const phoneNumber = await retellClient.phoneNumber.create({
-      area_code,
-      agent_id: agent_id || undefined,
-    });
+    const phoneNumberParams: any = { area_code };
+    if (agent_id) {
+      phoneNumberParams.agent_id = agent_id;
+    }
+    const phoneNumber = await retellClient.phoneNumber.create(phoneNumberParams);
 
     // If agent_id provided, update agent record
     if (agent_id) {
