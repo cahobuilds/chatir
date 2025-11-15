@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 // GET /api/agents/[id] - Get agent by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -18,7 +19,7 @@ export async function GET(
     const { data: agent, error: agentError } = await supabase
       .from('agents')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (agentError) {
@@ -38,9 +39,10 @@ export async function GET(
 // PATCH /api/agents/[id] - Update agent
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -52,7 +54,7 @@ export async function PATCH(
     const { data: agent } = await supabase
       .from('agents')
       .select('tenant_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (!agent) {
@@ -87,7 +89,7 @@ export async function PATCH(
     const { data: updatedAgent, error: updateError } = await supabase
       .from('agents')
       .update(updateData)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -104,9 +106,10 @@ export async function PATCH(
 // DELETE /api/agents/[id] - Delete agent
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -118,7 +121,7 @@ export async function DELETE(
     const { data: agent } = await supabase
       .from('agents')
       .select('tenant_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (!agent) {
@@ -141,7 +144,7 @@ export async function DELETE(
     const { error: deleteError } = await supabase
       .from('agents')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (deleteError) {
       return NextResponse.json({ error: deleteError.message }, { status: 500 });

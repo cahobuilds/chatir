@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // POST /api/tenants/[id]/logo - Upload tenant logo
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -20,7 +20,7 @@ export async function POST(
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', id)
       .in('role', ['tenant_admin', 'super_admin'])
       .single();
 
@@ -56,7 +56,7 @@ export async function POST(
 
     // Get file extension
     const fileExt = file.name.split('.').pop() || 'png';
-    const fileName = `${params.id}/logo.${fileExt}`;
+    const fileName = `${id}/logo.${fileExt}`;
 
     // Convert File to ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
@@ -86,7 +86,7 @@ export async function POST(
     const { data: tenant, error: updateError } = await supabase
       .from('tenants')
       .select('branding')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (updateError) {
@@ -106,7 +106,7 @@ export async function POST(
     const { data: updatedTenant, error: brandingError } = await supabase
       .from('tenants')
       .update({ branding: updatedBranding })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -132,7 +132,7 @@ export async function POST(
 // DELETE /api/tenants/[id]/logo - Delete tenant logo
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -148,7 +148,7 @@ export async function DELETE(
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', id)
       .in('role', ['tenant_admin', 'super_admin'])
       .single();
 
@@ -161,7 +161,7 @@ export async function DELETE(
     // List files in tenant folder
     const { data: files, error: listError } = await supabase.storage
       .from('tenant-logos')
-      .list(params.id);
+      .list(id);
 
     if (listError) {
       return NextResponse.json({ 
@@ -171,7 +171,7 @@ export async function DELETE(
 
     // Delete all logo files for this tenant
     if (files && files.length > 0) {
-      const filePaths = files.map(file => `${params.id}/${file.name}`);
+      const filePaths = files.map(file => `${id}/${file.name}`);
       const { error: deleteError } = await supabase.storage
         .from('tenant-logos')
         .remove(filePaths);
@@ -187,7 +187,7 @@ export async function DELETE(
     const { data: tenant } = await supabase
       .from('tenants')
       .select('branding')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (tenant) {
@@ -197,7 +197,7 @@ export async function DELETE(
       await supabase
         .from('tenants')
         .update({ branding: updatedBranding })
-        .eq('id', params.id);
+        .eq('id', id);
     }
 
     return NextResponse.json({ success: true });

@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // GET /api/retell/agents/[id] - Get Retell AI agent details
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -19,7 +19,7 @@ export async function GET(
     const { data: agent } = await supabase
       .from('agents')
       .select('tenant_id, retell_agent_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (!agent) {
@@ -73,7 +73,7 @@ export async function GET(
 // PATCH /api/retell/agents/[id] - Update Retell AI agent
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -87,7 +87,7 @@ export async function PATCH(
     const { data: agent } = await supabase
       .from('agents')
       .select('tenant_id, retell_agent_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (!agent) {
@@ -146,7 +146,7 @@ export async function PATCH(
           retell_agent_id: retellAgent.agent_id,
         },
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -166,7 +166,7 @@ export async function PATCH(
 // DELETE /api/retell/agents/[id] - Delete Retell AI agent
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -180,7 +180,7 @@ export async function DELETE(
     const { data: agent } = await supabase
       .from('agents')
       .select('tenant_id, retell_agent_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (!agent) {

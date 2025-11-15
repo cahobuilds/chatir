@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 // GET /api/tenants/[id] - Get tenant by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -19,7 +20,7 @@ export async function GET(
       .from('user_tenants')
       .select('tenant_id, role')
       .eq('user_id', user.id)
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', id)
       .single();
 
     if (!userTenant) {
@@ -30,7 +31,7 @@ export async function GET(
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (tenantError) {
@@ -46,9 +47,10 @@ export async function GET(
 // PATCH /api/tenants/[id] - Update tenant
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -61,7 +63,7 @@ export async function PATCH(
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', id)
       .in('role', ['tenant_admin', 'super_admin'])
       .single();
 
@@ -83,7 +85,7 @@ export async function PATCH(
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
       .update(updateData)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -100,9 +102,10 @@ export async function PATCH(
 // DELETE /api/tenants/[id] - Delete tenant (super_admin only)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -115,7 +118,7 @@ export async function DELETE(
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', id)
       .eq('role', 'super_admin')
       .single();
 
@@ -126,7 +129,7 @@ export async function DELETE(
     const { error: deleteError } = await supabase
       .from('tenants')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (deleteError) {
       return NextResponse.json({ error: deleteError.message }, { status: 500 });

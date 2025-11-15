@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // GET /api/roles/[id] - Get role by ID with permissions
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -18,7 +18,7 @@ export async function GET(
     const { data: role, error: roleError } = await supabase
       .from('roles')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (roleError) {
@@ -33,7 +33,7 @@ export async function GET(
     const { data: permissions, error: permError } = await supabase
       .from('role_permissions')
       .select('permission_id')
-      .eq('role_id', params.id);
+      .eq('role_id', id);
 
     if (permError) {
       return NextResponse.json({ error: permError.message }, { status: 500 });
@@ -43,7 +43,7 @@ export async function GET(
     const { count: userCount } = await supabase
       .from('user_tenants')
       .select('*', { count: 'exact', head: true })
-      .eq('role_id', params.id)
+      .eq('role_id', id)
       .eq('status', 'active');
 
     return NextResponse.json({
@@ -61,7 +61,7 @@ export async function GET(
 // PATCH /api/roles/[id] - Update role
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -88,7 +88,7 @@ export async function PATCH(
     const { data: role } = await supabase
       .from('roles')
       .select('is_system_role')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (role?.is_system_role) {
@@ -109,7 +109,7 @@ export async function PATCH(
     const { data: updatedRole, error: updateError } = await supabase
       .from('roles')
       .update(updateData)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -123,12 +123,12 @@ export async function PATCH(
       await supabase
         .from('role_permissions')
         .delete()
-        .eq('role_id', params.id);
+        .eq('role_id', id);
 
       // Insert new permissions
       if (permissions.length > 0) {
         const permissionInserts = permissions.map((permissionId: string) => ({
-          role_id: params.id,
+          role_id: id,
           permission_id: permissionId,
         }));
 
@@ -151,7 +151,7 @@ export async function PATCH(
 // DELETE /api/roles/[id] - Delete role
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -178,7 +178,7 @@ export async function DELETE(
     const { data: role } = await supabase
       .from('roles')
       .select('is_system_role')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (role?.is_system_role) {
@@ -189,7 +189,7 @@ export async function DELETE(
     const { count } = await supabase
       .from('user_tenants')
       .select('*', { count: 'exact', head: true })
-      .eq('role_id', params.id)
+      .eq('role_id', id)
       .eq('status', 'active');
 
     if (count && count > 0) {
@@ -203,7 +203,7 @@ export async function DELETE(
     const { error: deleteError } = await supabase
       .from('roles')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (deleteError) {
       return NextResponse.json({ error: deleteError.message }, { status: 500 });

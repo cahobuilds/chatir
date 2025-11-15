@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -32,7 +32,7 @@ export async function GET(
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', id)
       .eq('status', 'active')
       .single();
 
@@ -58,7 +58,7 @@ export async function GET(
         created_at,
         updated_at
       `)
-      .eq('tenant_id', params.id)
+      .eq('tenant_id', id)
       .eq('status', 'active')
       .order('created_at', { ascending: false });
 

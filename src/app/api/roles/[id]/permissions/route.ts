@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // GET /api/roles/[id]/permissions - Get permissions for a role
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -17,7 +17,7 @@ export async function GET(
     const { data: permissions, error: permError } = await supabase
       .from('role_permissions')
       .select('permission_id')
-      .eq('role_id', params.id)
+      .eq('role_id', id)
       .order('permission_id');
 
     if (permError) {
@@ -35,7 +35,7 @@ export async function GET(
 // POST /api/roles/[id]/permissions - Add permissions to role
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -69,7 +69,7 @@ export async function POST(
     }
 
     const permissionInserts = permission_ids.map((permissionId: string) => ({
-      role_id: params.id,
+      role_id: id,
       permission_id: permissionId,
     }));
 
@@ -90,7 +90,7 @@ export async function POST(
 // DELETE /api/roles/[id]/permissions - Remove permissions from role
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -128,7 +128,7 @@ export async function DELETE(
     const { error: deleteError } = await supabase
       .from('role_permissions')
       .delete()
-      .eq('role_id', params.id)
+      .eq('role_id', id)
       .in('permission_id', ids);
 
     if (deleteError) {
