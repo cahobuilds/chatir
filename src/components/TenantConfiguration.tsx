@@ -325,9 +325,19 @@ export default function TenantConfiguration() {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="text-center py-8">
           <ShieldCheckIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">
-            Admin access required to modify tenant settings
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            Admin Access Required
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            You need 'tenant_admin' or 'super_admin' role to modify tenant settings.
           </p>
+          {error && (
+            <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-left">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                {error}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );
