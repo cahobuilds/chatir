@@ -7,6 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -38,6 +39,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -93,6 +95,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
