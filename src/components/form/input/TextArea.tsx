@@ -25,14 +25,16 @@ const TextArea: React.FC<TextareaProps> = ({
 }) => {
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (onChange) {
-      // Support both onChange signatures
-      if (onChange.length === 1 && typeof onChange === 'function') {
-        // Check if it's the string signature or event signature
-        try {
-          (onChange as (value: string) => void)(e.target.value);
-        } catch {
-          (onChange as (e: React.ChangeEvent<HTMLTextAreaElement>) => void)(e);
-        }
+      // Support both onChange signatures: (value: string) => void or (e: ChangeEvent) => void
+      const onChangeStr = onChange as (value: string) => void;
+      const onChangeEvent = onChange as (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+      
+      // Try string signature first (original design)
+      try {
+        onChangeStr(e.target.value);
+      } catch {
+        // Fallback to event signature
+        onChangeEvent(e);
       }
     }
   };
