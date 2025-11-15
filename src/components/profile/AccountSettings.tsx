@@ -8,6 +8,8 @@ import { getRoleDisplayName } from "@/lib/roles-client";
 import ComponentCard from "../common/ComponentCard";
 import Link from "next/link";
 
+type Role = 'super_admin' | 'tenant_admin' | 'subtenant_admin' | 'agent' | 'viewer';
+
 interface Tenant {
   id: string;
   name: string;
