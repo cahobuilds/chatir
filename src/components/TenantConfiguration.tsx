@@ -543,7 +543,7 @@ export default function TenantConfiguration() {
           </div>
           
           <div className="space-y-4">
-            {Object.entries(currentConfig?.features).map(([key, value]) => (
+            {Object.entries(currentConfig?.features || {}).map(([key, value]) => (
               <div key={key} className="flex items-center justify-between">
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -556,7 +556,7 @@ export default function TenantConfiguration() {
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={value}
+                    checked={!!value}
                     onChange={(e) => setConfig({
                       ...config,
                       features: {...currentConfig?.features, [key]: e.target.checked}
