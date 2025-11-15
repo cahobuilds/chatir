@@ -69,7 +69,7 @@ export default function AccountSettings({ profile, selectedTenant, onTenantChang
       case "viewer":
         return "warning";
       default:
-        return "light";
+        return "info";
     }
   };
 
