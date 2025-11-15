@@ -458,8 +458,8 @@ export default function RolesManagement() {
                         hierarchy_level: parseInt(e.target.value) || 0,
                       })
                     }
-                    min={0}
-                    max={100}
+                    min="0"
+                    max="100"
                     required
                     className="bg-gray-50 dark:bg-gray-800"
                   />
