@@ -340,7 +340,7 @@ export default function ChatAgentList() {
                   placeholder="Enter agent description"
                   rows={3}
                   value={formData.description}
-                  onChange={(value) =>
+                  onChange={(value: string) =>
                     setFormData({ ...formData, description: value })
                   }
                 />
