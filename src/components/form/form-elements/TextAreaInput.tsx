@@ -15,7 +15,7 @@ export default function TextAreaInput() {
           <Label>Description</Label>
           <TextArea
             value={message}
-            onChange={(value) => setMessage(value)}
+            onChange={(value: string) => setMessage(value)}
             rows={6}
           />
         </div>
