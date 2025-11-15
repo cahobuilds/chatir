@@ -402,7 +402,7 @@ export default function RolesManagement() {
                     id="name"
                     type="text"
                     value={formData.name}
-                    onChange={(e) =>
+                    onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
                     placeholder="e.g., custom_manager"
@@ -421,7 +421,7 @@ export default function RolesManagement() {
                     id="display_name"
                     type="text"
                     value={formData.display_name}
-                    onChange={(e) =>
+                    onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
                       setFormData({ ...formData, display_name: e.target.value })
                     }
                     placeholder="e.g., Custom Manager"
@@ -436,7 +436,7 @@ export default function RolesManagement() {
                 <TextArea
                   id="description"
                   value={formData.description}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                     setFormData({ ...formData, description: e.target.value })
                   }
                   placeholder="Describe the role's responsibilities..."
@@ -452,7 +452,7 @@ export default function RolesManagement() {
                     id="hierarchy_level"
                     type="number"
                     value={formData.hierarchy_level}
-                    onChange={(e) =>
+                    onChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
                       setFormData({
                         ...formData,
                         hierarchy_level: parseInt(e.target.value) || 0,
