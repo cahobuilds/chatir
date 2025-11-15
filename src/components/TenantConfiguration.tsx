@@ -1,15 +1,244 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   CogIcon,
   ShieldCheckIcon,
   PaintBrushIcon,
-  GlobeAltIcon
+  GlobeAltIcon,
+  PhotoIcon,
+  XMarkIcon,
+  CheckIcon
 } from "@heroicons/react/24/outline";
+import { createClient } from "@/lib/supabase/client";
+
+interface Tenant {
+  id: string;
+  name: string;
+  branding: {
+    logo_url?: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
 
 export default function TenantConfiguration() {
-  const [config, setConfig] = useState({
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [tenantName, setTenantName] = useState("");
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    fetchTenantData();
+  }, []);
+
+  const fetchTenantData = async () => {
+    try {
+      setLoading(true);
+      
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setError("Not authenticated");
+        setLoading(false);
+        return;
+      }
+
+      // Get user's tenants
+      const { data: userTenants } = await supabase
+        .from('user_tenants')
+        .select('tenant_id, role, tenants(*)')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .single();
+
+      if (!userTenants || !userTenants.tenants) {
+        setError("No tenant found");
+        setLoading(false);
+        return;
+      }
+
+      const userTenant = userTenants as any;
+      const tenantData = userTenant.tenants as Tenant;
+      
+      // Check if user is admin
+      const admin = ['tenant_admin', 'super_admin'].includes(userTenant.role);
+      setIsAdmin(admin);
+
+      if (!admin) {
+        setError("Admin access required to modify tenant settings");
+        setLoading(false);
+        return;
+      }
+
+      setTenant(tenantData);
+      setTenantName(tenantData.name);
+      setLogoPreview((tenantData.branding as any)?.logo_url || null);
+      setLoading(false);
+    } catch (err: any) {
+      console.error("Error fetching tenant:", err);
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !tenant) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
+      setError("Invalid file type. Allowed: JPEG, PNG, GIF, WebP, SVG");
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError("File size exceeds 5MB limit");
+      return;
+    }
+
+    try {
+      setUploading(true);
+      setError(null);
+      setSuccess(null);
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`/api/tenants/${tenant.id}/logo`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      const data = await response.json();
+      setLogoPreview(data.logo_url);
+      setSuccess("Logo uploaded successfully!");
+      
+      // Refresh tenant data
+      await fetchTenantData();
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteLogo = async () => {
+    if (!tenant) return;
+
+    if (!confirm("Are you sure you want to delete the logo?")) return;
+
+    try {
+      setUploading(true);
+      setError(null);
+
+      const response = await fetch(`/api/tenants/${tenant.id}/logo`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Delete failed');
+      }
+
+      setLogoPreview(null);
+      setSuccess("Logo deleted successfully!");
+      
+      // Refresh tenant data
+      await fetchTenantData();
+    } catch (err: any) {
+      console.error("Delete error:", err);
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSaveName = async () => {
+    if (!tenant || !tenantName.trim()) {
+      setError("Tenant name is required");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch(`/api/tenants/${tenant.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: tenantName.trim() }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Update failed');
+      }
+
+      const data = await response.json();
+      setTenant(data.tenant);
+      setSuccess("Tenant name updated successfully!");
+    } catch (err: any) {
+      console.error("Update error:", err);
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const config = tenant ? {
+    branding: {
+      logo: (tenant.branding as any)?.logo_url || "",
+      primaryColor: (tenant.branding as any)?.primaryColor || "#4F46E5",
+      secondaryColor: (tenant.branding as any)?.secondaryColor || "#06B6D4",
+      favicon: (tenant.branding as any)?.favicon || "",
+      customDomain: (tenant.branding as any)?.customDomain || "",
+      customCSS: (tenant.branding as any)?.customCSS || ""
+    },
+    features: tenant.settings?.features || {
+      voiceAgents: true,
+      chatAgents: true,
+      callRecording: true,
+      analytics: true,
+      integrations: true,
+      customWorkflows: false,
+      whiteLabel: false
+    },
+    limits: tenant.settings?.limits || {
+      maxAgents: 50,
+      maxConcurrentCalls: 100,
+      maxSubtenants: 10,
+      storageLimit: "100GB",
+      apiRateLimit: 1000
+    },
+    security: tenant.settings?.security || {
+      ssoEnabled: false,
+      mfaRequired: true,
+      sessionTimeout: 480,
+      ipWhitelist: "",
+      auditLogging: true
+    }
+  } : {
     branding: {
       logo: "",
       primaryColor: "#4F46E5",
@@ -41,7 +270,31 @@ export default function TenantConfiguration() {
       ipWhitelist: "",
       auditLogging: true
     }
-  });
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="animate-pulse">
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4"></div>
+          <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="text-center py-8">
+          <ShieldCheckIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">
+            Admin access required to modify tenant settings
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -55,6 +308,46 @@ export default function TenantConfiguration() {
       </div>
 
       <div className="p-6 space-y-6">
+        {/* Success/Error Messages */}
+        {success && (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-center space-x-2">
+            <CheckIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+            <p className="text-sm text-green-800 dark:text-green-200">{success}</p>
+          </div>
+        )}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-center space-x-2">
+            <XMarkIcon className="w-5 h-5 text-red-600 dark:text-red-400" />
+            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+          </div>
+        )}
+
+        {/* Tenant Name */}
+        <div>
+          <div className="flex items-center space-x-2 mb-4">
+            <GlobeAltIcon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+              Organization Name
+            </h4>
+          </div>
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              value={tenantName}
+              onChange={(e) => setTenantName(e.target.value)}
+              placeholder="Enter organization name"
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+            />
+            <button
+              onClick={handleSaveName}
+              disabled={saving || !tenantName.trim()}
+              className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? "Saving..." : "Save Name"}
+            </button>
+          </div>
+        </div>
+
         {/* Branding Settings */}
         <div>
           <div className="flex items-center space-x-2 mb-4">
@@ -65,6 +358,58 @@ export default function TenantConfiguration() {
           </div>
           
           <div className="space-y-4">
+            {/* Logo Upload */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Organization Logo
+              </label>
+              <div className="flex items-start space-x-4">
+                {/* Logo Preview */}
+                <div className="flex-shrink-0">
+                  {logoPreview ? (
+                    <div className="relative">
+                      <img
+                        src={logoPreview}
+                        alt="Tenant logo"
+                        className="w-24 h-24 object-contain border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700"
+                      />
+                      <button
+                        onClick={handleDeleteLogo}
+                        disabled={uploading}
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50"
+                        title="Delete logo"
+                      >
+                        <XMarkIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-24 h-24 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center bg-gray-50 dark:bg-gray-700">
+                      <PhotoIcon className="w-8 h-8 text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                
+                {/* Upload Button */}
+                <div className="flex-1">
+                  <label className="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600">
+                    <PhotoIcon className="w-5 h-5 mr-2 text-gray-600 dark:text-gray-400" />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {uploading ? "Uploading..." : logoPreview ? "Change Logo" : "Upload Logo"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+                      onChange={handleLogoUpload}
+                      disabled={uploading}
+                      className="hidden"
+                    />
+                  </label>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    Supported formats: JPEG, PNG, GIF, WebP, SVG. Max size: 5MB
+                  </p>
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

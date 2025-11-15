@@ -196,3 +196,7 @@ vercel env ls
 - [Next.js Deployment Guide](https://nextjs.org/docs/deployment)
 - [Supabase Documentation](https://supabase.com/docs)
 
+
+
+
+
