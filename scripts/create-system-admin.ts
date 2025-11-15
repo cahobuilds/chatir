@@ -136,6 +136,9 @@ async function createSystemAdmin() {
 
     // Step 5: Create or update user_tenants relationship
     console.log('5. Creating user-tenant relationship...');
+    if (!masterTenant) {
+      throw new Error('Master tenant not found or created');
+    }
     const { data: existingUserTenant } = await supabase
       .from('user_tenants')
       .select('id')
