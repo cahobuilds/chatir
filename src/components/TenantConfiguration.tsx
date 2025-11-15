@@ -63,8 +63,9 @@ export default function TenantConfiguration() {
         .single();
 
       if (!userTenants || !userTenants.tenants) {
-        setError("No tenant found");
+        setError("No tenant found. Please ensure you are associated with a tenant.");
         setLoading(false);
+        setIsAdmin(false);
         return;
       }
 
@@ -76,7 +77,7 @@ export default function TenantConfiguration() {
       setIsAdmin(admin);
 
       if (!admin) {
-        setError("Admin access required to modify tenant settings");
+        setError(`Admin access required. Your current role is: ${userTenant.role}. You need 'tenant_admin' or 'super_admin' role to modify tenant settings.`);
         setLoading(false);
         return;
       }
