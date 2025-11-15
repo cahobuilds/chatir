@@ -18,6 +18,7 @@ export const Modal: React.FC<ModalProps> = ({
   className,
   showCloseButton = true, // Default to true for backwards compatibility
   isFullscreen = false,
+  title,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
 
