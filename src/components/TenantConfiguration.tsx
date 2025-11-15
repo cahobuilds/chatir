@@ -306,7 +306,7 @@ export default function TenantConfiguration() {
       ipWhitelist: "",
       auditLogging: true
     }
-  };
+  });
 
   if (loading) {
     return (
