@@ -7,7 +7,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { getRoleDisplayName } from "@/lib/roles-client";
 import ComponentCard from "../common/ComponentCard";
 import Link from "next/link";
-import { type Role } from "@/lib/permissions";
+import { type LegacyRole } from "@/lib/permissions";
 
 interface Tenant {
   id: string;
@@ -20,7 +20,7 @@ interface Tenant {
 
 interface UserTenant {
   id: string;
-  role: Role;
+  role: LegacyRole;
   status: string;
   permissions: any;
   last_login: string | null;
@@ -56,7 +56,7 @@ export default function AccountSettings({ profile, selectedTenant, onTenantChang
     );
   }
 
-  const getRoleBadgeColor = (role: Role): "primary" | "success" | "info" | "warning" | "error" => {
+  const getRoleBadgeColor = (role: LegacyRole): "primary" | "success" | "info" | "warning" | "error" => {
     switch (role) {
       case "super_admin":
         return "error";
