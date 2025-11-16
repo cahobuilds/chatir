@@ -11,8 +11,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "AI Client Care Dashboard | TinAdmin",
-  description: "Enterprise-grade admin platform for managing AI voice agents, chat conversations, and call analytics",
+  title: "AI Knowledge Bots | Intelligent Knowledge Management",
+  description: "Build and manage AI-powered knowledge bots for your organization. Multi-tenant SaaS platform for intelligent knowledge management.",
 };
 
 export default function RootLayout({
