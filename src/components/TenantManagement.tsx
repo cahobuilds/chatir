@@ -532,7 +532,7 @@ export default function TenantManagement() {
                         value={createFormData.name}
                         onChange={(e) => setCreateFormData({ ...createFormData, name: e.target.value })}
                         placeholder="Acme Corporation"
-                        error={createError && !createFormData.name.trim()}
+                        error={!!(createError && !createFormData.name.trim())}
                       />
                     </div>
 
