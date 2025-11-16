@@ -63,7 +63,7 @@ export default function TenantConfiguration() {
         .single();
 
       if (!userTenants || !userTenants.tenants) {
-        setError("No tenant found. Please ensure you are associated with a tenant.");
+        setError("No organization found. Please ensure you are associated with an organization.");
         setLoading(false);
         setIsAdmin(false);
         return;
@@ -77,7 +77,7 @@ export default function TenantConfiguration() {
       setIsAdmin(admin);
 
       if (!admin) {
-        setError(`Admin access required. Your current role is: ${userTenant.role}. You need 'tenant_admin' or 'super_admin' role to modify tenant settings.`);
+        setError(`Admin access required. Your current role is: ${userTenant.role}. You need 'organization_admin' or 'super_admin' role to modify organization settings.`);
         setLoading(false);
         return;
       }
@@ -108,7 +108,7 @@ export default function TenantConfiguration() {
         limits: tenantData.settings?.limits || {
           maxAgents: 50,
           maxConcurrentCalls: 100,
-          maxSubtenants: 10,
+          maxWorkspaces: 10,
           storageLimit: "100GB",
           apiRateLimit: 1000
         },
@@ -209,7 +209,7 @@ export default function TenantConfiguration() {
 
   const handleSaveName = async () => {
     if (!tenant || !tenantName.trim()) {
-      setError("Tenant name is required");
+      setError("Organization name is required");
       return;
     }
 
@@ -233,7 +233,7 @@ export default function TenantConfiguration() {
 
       const data = await response.json();
       setTenant(data.tenant);
-      setSuccess("Tenant name updated successfully!");
+      setSuccess("Organization name updated successfully!");
     } catch (err: any) {
       console.error("Update error:", err);
       setError(err.message);
@@ -264,7 +264,7 @@ export default function TenantConfiguration() {
     limits: tenant.settings?.limits || {
       maxAgents: 50,
       maxConcurrentCalls: 100,
-      maxSubtenants: 10,
+      maxWorkspaces: 10,
       storageLimit: "100GB",
       apiRateLimit: 1000
     },
@@ -296,7 +296,7 @@ export default function TenantConfiguration() {
     limits: {
       maxAgents: 50,
       maxConcurrentCalls: 100,
-      maxSubtenants: 10,
+      maxWorkspaces: 10,
       storageLimit: "100GB",
       apiRateLimit: 1000
     },
@@ -329,7 +329,7 @@ export default function TenantConfiguration() {
             Admin Access Required
           </h3>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            You need 'tenant_admin' or 'super_admin' role to modify tenant settings.
+            You need 'organization_admin' or 'super_admin' role to modify organization settings.
           </p>
           {error && (
             <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-left">
@@ -349,7 +349,7 @@ export default function TenantConfiguration() {
         <div className="flex items-center space-x-2">
           <CogIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Tenant Configuration
+            Organization Configuration
           </h3>
         </div>
       </div>
@@ -369,7 +369,7 @@ export default function TenantConfiguration() {
           </div>
         )}
 
-        {/* Tenant Name */}
+        {/* Organization Name */}
         <div>
           <div className="flex items-center space-x-2 mb-4">
             <GlobeAltIcon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
@@ -621,14 +621,14 @@ export default function TenantConfiguration() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Max Subtenants
+                Max Workspaces
               </label>
               <input
                 type="number"
-                value={currentConfig?.limits.maxSubtenants}
+                value={currentConfig?.limits.maxWorkspaces}
                 onChange={(e) => setConfig({
                   ...config,
-                  limits: {...currentConfig?.limits, maxSubtenants: parseInt(e.target.value)}
+                  limits: {...currentConfig?.limits, maxWorkspaces: parseInt(e.target.value)}
                 })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
               />

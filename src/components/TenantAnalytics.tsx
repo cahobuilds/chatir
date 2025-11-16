@@ -79,7 +79,7 @@ export default function TenantAnalytics() {
           <div className="flex items-center space-x-2">
             <ChartBarIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Tenant Analytics
+              Organization Analytics
             </h3>
           </div>
           <div className="flex space-x-2">

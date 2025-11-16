@@ -21,7 +21,10 @@ export function getRoleDisplayName(roleName: string): string {
   const roleMap: Record<string, string> = {
     'system_admin': 'System Admin',
     'super_admin': 'Super Admin',
+    'tenant_admin': 'Organization Admin',
     'organization_admin': 'Organization Admin',
+    'subtenant_admin': 'Workspace Admin',
+    'workspace_admin': 'Workspace Admin',
     'manager': 'Manager',
     'call_manager': 'Call Manager',
     'agent': 'Agent',

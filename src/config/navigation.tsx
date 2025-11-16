@@ -38,7 +38,7 @@ export const navigationConfig: NavItem[] = [
     category: "dashboard",
     path: "/dashboard",
     type: "functional",
-    description: "Overview of tenants and agents",
+    description: "Overview of organizations and agents",
   },
 
   // Admin - Functional features
@@ -122,11 +122,11 @@ export const navigationConfig: NavItem[] = [
         description: "General application settings",
       },
       {
-        name: "Tenant Settings",
+        name: "Organization Settings",
         path: "/tenant-settings",
         type: "functional",
         badge: "pro",
-        description: "Tenant-specific configuration",
+        description: "Organization-specific configuration",
       },
       // Future settings items
       // {

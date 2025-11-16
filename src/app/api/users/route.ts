@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin
+    // Check if user is system_admin or super_admin
     const { data: userTenant } = await supabase
       .from('user_tenants')
       .select('role')
@@ -21,8 +21,8 @@ export async function GET(request: NextRequest) {
       .in('role', ['system_admin', 'super_admin'])
       .single();
 
-    if (!userTenant || userTenant.role !== 'system_admin') {
-      return NextResponse.json({ error: 'Forbidden: System admin access required' }, { status: 403 });
+    if (!userTenant || !['system_admin', 'super_admin'].includes(userTenant.role)) {
+      return NextResponse.json({ error: 'Forbidden: System admin or super admin access required' }, { status: 403 });
     }
 
     // Get all users with their tenant relationships
@@ -77,16 +77,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin
+    // Check if user is system_admin or super_admin
     const { data: userTenant } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
-      .in('role', ['system_admin'])
+      .in('role', ['system_admin', 'super_admin'])
       .single();
 
-    if (!userTenant || userTenant.role !== 'system_admin') {
-      return NextResponse.json({ error: 'Forbidden: System admin access required' }, { status: 403 });
+    if (!userTenant || !['system_admin', 'super_admin'].includes(userTenant.role)) {
+      return NextResponse.json({ error: 'Forbidden: System admin or super admin access required' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -101,10 +101,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate role
-    const validRoles = ['system_admin', 'super_admin', 'tenant_admin', 'subtenant_admin', 'agent', 'viewer'];
+    // Support both tenant_admin (legacy) and organization_admin (new) - they map to the same role
+    const validRoles = ['system_admin', 'super_admin', 'tenant_admin', 'organization_admin', 'subtenant_admin', 'workspace_admin', 'agent', 'viewer'];
     if (!validRoles.includes(role)) {
       return NextResponse.json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` }, { status: 400 });
     }
+    
+    // Normalize role names: organization_admin -> tenant_admin (database uses tenant_admin)
+    const normalizedRole = role === 'organization_admin' ? 'tenant_admin' : 
+                          role === 'workspace_admin' ? 'subtenant_admin' : role;
 
     // Step 1: Create auth user
     const { data: authData, error: createError } = await adminSupabase.auth.admin.createUser({
@@ -142,7 +147,7 @@ export async function POST(request: NextRequest) {
     const userTenantInserts = tenant_ids.map((tenantId: string) => ({
       user_id: authData.user.id,
       tenant_id: tenantId,
-      role,
+      role: normalizedRole, // Use normalized role for database
       status: 'active',
     }));
 

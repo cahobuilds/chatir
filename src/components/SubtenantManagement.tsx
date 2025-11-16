@@ -77,7 +77,7 @@ export default function SubtenantManagement() {
           <div className="flex items-center space-x-2">
             <UserGroupIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Subtenant Management
+              Workspace Management
             </h3>
           </div>
           
@@ -86,18 +86,18 @@ export default function SubtenantManagement() {
             className="inline-flex items-center px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
           >
             <PlusIcon className="w-4 h-4 mr-2" />
-            Add Subtenant
+            Add Workspace
           </button>
         </div>
       </div>
 
       <div className="p-6">
-        {/* Subtenant Statistics */}
+        {/* Workspace Statistics */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <div className="text-center">
               <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                Total Subtenants
+                Total Workspaces
               </p>
               <p className="text-xl font-bold text-blue-900 dark:text-blue-100">
                 {subtenants.length}
@@ -128,7 +128,7 @@ export default function SubtenantManagement() {
           </div>
         </div>
 
-        {/* Subtenants List */}
+        {/* Workspaces List */}
         <div className="space-y-3">
           {subtenants.map((subtenant) => (
             <div
@@ -207,7 +207,7 @@ export default function SubtenantManagement() {
               <div className="mt-3">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                    Subtenant Details
+                    Workspace Details
                   </h3>
                   <button
                     onClick={() => setSelectedSubtenant(null)}
@@ -291,7 +291,7 @@ export default function SubtenantManagement() {
                         <div className="flex space-x-3">
                           <button className="flex-1 inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                             <PencilIcon className="w-4 h-4 mr-2" />
-                            Edit Subtenant
+                            Edit Workspace
                           </button>
                           <button className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                             <ChevronRightIcon className="w-4 h-4 mr-2" />

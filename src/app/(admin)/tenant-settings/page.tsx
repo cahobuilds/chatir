@@ -9,8 +9,8 @@ import TenantAnalytics from "@/components/TenantAnalytics";
 
 export const metadata: Metadata = {
   title:
-    "Tenant Management | TinAdmin - AI Customer Care Dashboard",
-  description: "Manage tenants, subtenants, and multi-tenant configurations for AI customer care operations.",
+    "Organization Management | AI Knowledge Bots",
+  description: "Manage organizations, workspaces, and multi-organization configurations for AI knowledge bot operations.",
 };
 
 export default function TenantSettingsPage() {
@@ -25,10 +25,10 @@ export default function TenantSettingsPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Tenant Management
+              Organization Management
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Manage multi-tenant configurations, subtenants, and billing
+              Manage organizations, workspaces, and billing
             </p>
           </div>
         </div>

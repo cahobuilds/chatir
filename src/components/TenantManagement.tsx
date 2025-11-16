@@ -170,7 +170,7 @@ export default function TenantManagement() {
 
   if (loading) {
     return (
-      <ComponentCard title="Tenant Management" desc="Manage organizations and their users">
+      <ComponentCard title="Organization Management" desc="Manage organizations and their users">
         <div className="animate-pulse space-y-4">
           <div className="h-12 bg-gray-200 dark:bg-gray-700 rounded"></div>
           <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
@@ -184,7 +184,7 @@ export default function TenantManagement() {
 
   return (
     <>
-      <ComponentCard title="Tenant Management" desc="Manage organizations and their users">
+      <ComponentCard title="Organization Management" desc="Manage organizations and their users">
         <div className="space-y-6">
           {/* Statistics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -197,7 +197,7 @@ export default function TenantManagement() {
                 </div>
                 <div className="ml-3">
                   <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                    Total Tenants
+                    Total Organizations
                   </p>
                   <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
                     {tenants.length}
@@ -243,13 +243,13 @@ export default function TenantManagement() {
             </div>
           </div>
 
-          {/* Tenants Table */}
+          {/* Organizations Table */}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
                 <TableRow>
                   <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                    Tenant
+                    Organization
                   </TableCell>
                   <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                     Tier
@@ -275,7 +275,7 @@ export default function TenantManagement() {
                 {tenants.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="px-5 py-8 text-center text-gray-500 dark:text-gray-400">
-                      No tenants found. Create your first tenant to get started.
+                      No organizations found. Create your first organization to get started.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -347,7 +347,7 @@ export default function TenantManagement() {
         </div>
       </ComponentCard>
 
-      {/* Tenant Details Modal */}
+      {/* Organization Details Modal */}
       {selectedTenant && isModalOpen && (
         <Modal
           isOpen={isModalOpen}
@@ -355,10 +355,10 @@ export default function TenantManagement() {
             setIsModalOpen(false);
             setSelectedTenant(null);
           }}
-          title={`Tenant: ${selectedTenant.name}`}
+          title={`Organization: ${selectedTenant.name}`}
         >
           <div className="space-y-6">
-            {/* Tenant Info */}
+            {/* Organization Info */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

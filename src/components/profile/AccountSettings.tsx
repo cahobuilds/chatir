@@ -168,11 +168,11 @@ export default function AccountSettings({ profile, selectedTenant, onTenantChang
           </div>
         )}
 
-        {/* Tenant Selector (if multiple tenants) */}
+        {/* Organization Selector (if multiple organizations) */}
         {profile.tenants.length > 1 && (
           <div className="pb-6 border-b border-gray-200 dark:border-gray-700">
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Select Tenant
+              Select Organization
             </h4>
             <div className="space-y-2">
               {profile.tenants.map((userTenant) => (

@@ -1,8 +1,8 @@
-# Multitenant Architecture for AI Customer Care Bot
+# Multi-Organization Architecture for AI Knowledge Bots
 
 ## Overview
 
-This document outlines the multitenant architecture design for the AI Customer Care Bot system, enabling multiple organizations (tenants) and their sub-organizations (subtenants) to use the platform with complete data isolation and customizable configurations.
+This document outlines the multi-organization architecture design for the AI Knowledge Bots system, enabling multiple organizations and their workspaces to use the platform with complete data isolation and customizable configurations.
 
 ## 🏗️ Architecture Principles
 
@@ -25,20 +25,41 @@ This document outlines the multitenant architecture design for the AI Customer C
 
 ## 🏢 Tenant Hierarchy
 
+The `tenants` table supports hierarchical structures through the `parent_id` field, enabling two primary use cases:
+
+### 1. Reseller/Partner Model (Future)
+```
+Platform (system_admin)
+├── Reseller A (is_reseller=true, parent_id=NULL)
+│   ├── Organization A1 (is_reseller=false, parent_id=ResellerA)
+│   ├── Organization A2 (is_reseller=false, parent_id=ResellerA)
+│   └── Organization A3 (is_reseller=false, parent_id=ResellerA)
+└── Reseller B (is_reseller=true, parent_id=NULL)
+    ├── Organization B1 (is_reseller=false, parent_id=ResellerB)
+    └── Organization B2 (is_reseller=false, parent_id=ResellerB)
+```
+
+### 2. Organizational Hierarchy (Current)
 ```
 Master Platform
-├── Tenant A (Enterprise Customer)
-│   ├── Subtenant A1 (Department 1)
-│   ├── Subtenant A2 (Department 2)
-│   └── Subtenant A3 (Regional Office)
-├── Tenant B (SMB Customer)
-│   ├── Subtenant B1 (Sales Team)
-│   └── Subtenant B2 (Support Team)
-└── Tenant C (Agency)
-    ├── Subtenant C1 (Client 1)
-    ├── Subtenant C2 (Client 2)
-    └── Subtenant C3 (Client 3)
+├── Tenant A (Enterprise Customer, parent_id=NULL)
+│   ├── Subtenant A1 (Department 1, parent_id=TenantA)
+│   ├── Subtenant A2 (Department 2, parent_id=TenantA)
+│   └── Subtenant A3 (Regional Office, parent_id=TenantA)
+├── Tenant B (SMB Customer, parent_id=NULL)
+│   ├── Subtenant B1 (Sales Team, parent_id=TenantB)
+│   └── Subtenant B2 (Support Team, parent_id=TenantB)
+└── Tenant C (Agency, parent_id=NULL)
+    ├── Subtenant C1 (Client 1, parent_id=TenantC)
+    ├── Subtenant C2 (Client 2, parent_id=TenantC)
+    └── Subtenant C3 (Client 3, parent_id=TenantC)
 ```
+
+### Key Points:
+- **`parent_id`**: Enables hierarchical relationships. NULL for top-level tenants.
+- **`is_reseller`**: Boolean flag marking reseller/partner accounts (future feature).
+- **Data Isolation**: All tables use `tenant_id` for complete data isolation.
+- **Flexibility**: Same structure supports both reseller model and organizational hierarchies.
 
 ## 🗄️ Database Architecture
 

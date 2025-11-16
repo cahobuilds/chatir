@@ -30,24 +30,24 @@ interface Agent {
 }
 
 interface DashboardStats {
-  totalTenants: number;
+  totalOrganizations: number;
   totalAgents: number;
   activeAgents: number;
   voiceAgents: number;
   chatAgents: number;
   recentAgents: Agent[];
-  recentTenants: Tenant[];
+  recentOrganizations: Tenant[];
 }
 
 export default function DashboardOverview() {
   const [stats, setStats] = useState<DashboardStats>({
-    totalTenants: 0,
+    totalOrganizations: 0,
     totalAgents: 0,
     activeAgents: 0,
     voiceAgents: 0,
     chatAgents: 0,
     recentAgents: [],
-    recentTenants: [],
+    recentOrganizations: [],
   });
   const [loading, setLoading] = useState(true);
 
@@ -116,7 +116,7 @@ export default function DashboardOverview() {
         )
         .slice(0, 5);
 
-      const recentTenants = tenants
+      const recentOrganizations = tenants
         .filter((t: Tenant) => t.created_at) // Filter out items without created_at
         .sort(
           (a: Tenant, b: Tenant) =>
@@ -126,13 +126,13 @@ export default function DashboardOverview() {
         .slice(0, 5);
 
       setStats({
-        totalTenants: tenants.length,
+        totalOrganizations: tenants.length,
         totalAgents: agents.length,
         activeAgents,
         voiceAgents,
         chatAgents,
         recentAgents,
-        recentTenants,
+        recentOrganizations,
       });
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
@@ -143,8 +143,8 @@ export default function DashboardOverview() {
 
   const metricCards = [
     {
-      title: "Total Tenants",
-      value: stats.totalTenants,
+      title: "Total Organizations",
+      value: stats.totalOrganizations,
       icon: "🏢",
       color: "bg-blue-500",
       description: "Active organizations",
@@ -320,14 +320,14 @@ export default function DashboardOverview() {
           )}
         </ComponentCard>
 
-        {/* Recent Tenants */}
-        <ComponentCard title="Recent Tenants" desc="Latest organizations">
-          {stats.recentTenants.length === 0 ? (
+        {/* Recent Organizations */}
+        <ComponentCard title="Recent Organizations" desc="Latest organizations">
+          {stats.recentOrganizations.length === 0 ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <p>No tenants yet</p>
-              <Link href="/tenants">
+              <p>No organizations yet</p>
+              <Link href="/tenant-settings">
                 <Button size="sm" className="mt-4">
-                  Create Tenant
+                  Create Organization
                 </Button>
               </Link>
             </div>
@@ -358,7 +358,7 @@ export default function DashboardOverview() {
                     </TableRow>
                   </TableHeader>
                   <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                    {stats.recentTenants.map((tenant) => (
+                    {stats.recentOrganizations.map((tenant) => (
                       <TableRow key={tenant.id}>
                         <TableCell className="px-4 py-3 text-start">
                           <span className="block font-medium text-gray-800 text-theme-sm dark:text-white/90">

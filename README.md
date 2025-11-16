@@ -26,11 +26,11 @@ A comprehensive AI Client Care management platform built with Next.js, TypeScrip
 - **API Playground** - Test and explore API endpoints
 - **Webhooks** - Event-driven integrations
 
-### 🏢 Multi-Tenant Support
-- **Tenant Management** - Manage multiple organizations
-- **Subtenant Configuration** - Hierarchical tenant structure
+### 🏢 Multi-Organization Support
+- **Organization Management** - Manage multiple organizations
+- **Workspace Configuration** - Hierarchical organization structure
 - **Role-based Access Control** - Granular permissions
-- **Billing & Analytics** - Per-tenant billing and reporting
+- **Billing & Analytics** - Per-organization billing and reporting
 
 ### ⚙️ System Configuration
 - **Quality Assurance** - Call evaluation and compliance monitoring
