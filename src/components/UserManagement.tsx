@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   UsersIcon,
   PencilIcon,
@@ -12,6 +12,7 @@ import {
   CheckCircleIcon,
   XCircleIcon
 } from "@heroicons/react/24/outline";
+import { getRoleDisplayName } from "@/lib/roles-client";
 
 interface User {
   id: string;
@@ -26,81 +27,68 @@ interface User {
   permissions: string[];
 }
 
-const mockUsers: User[] = [
-  {
-    id: "1",
-    name: "John Smith",
-    email: "john.smith@company.com",
-    role: "Admin",
-    status: "active",
-    lastLogin: "2024-12-19 14:30:25",
-    createdAt: "2024-01-15",
-    department: "Engineering",
-    permissions: ["all"]
-  },
-  {
-    id: "2",
-    name: "Sarah Johnson",
-    email: "sarah.johnson@company.com",
-    role: "Manager",
-    status: "active",
-    lastLogin: "2024-12-19 13:45:12",
-    createdAt: "2024-02-01",
-    department: "Operations",
-    permissions: ["view", "edit", "manage_agents", "view_analytics", "manage_users"]
-  },
-  {
-    id: "3",
-    name: "Mike Chen",
-    email: "mike.chen@company.com",
-    role: "Agent",
-    status: "active",
-    lastLogin: "2024-12-19 12:20:08",
-    createdAt: "2024-03-10",
-    department: "Customer Service",
-    permissions: ["view", "intervene", "view_calls"]
-  },
-  {
-    id: "4",
-    name: "Emily Davis",
-    email: "emily.davis@company.com",
-    role: "Analyst",
-    status: "active",
-    lastLogin: "2024-12-19 11:15:33",
-    createdAt: "2024-04-05",
-    department: "Analytics",
-    permissions: ["view", "analytics", "reports"]
-  },
-  {
-    id: "5",
-    name: "David Wilson",
-    email: "david.wilson@company.com",
-    role: "Agent",
-    status: "inactive",
-    lastLogin: "2024-12-18 16:45:22",
-    createdAt: "2024-05-20",
-    department: "Customer Service",
-    permissions: ["view", "intervene", "view_calls"]
-  },
-  {
-    id: "6",
-    name: "Lisa Brown",
-    email: "lisa.brown@company.com",
-    role: "Viewer",
-    status: "pending",
-    lastLogin: "Never",
-    createdAt: "2024-12-19",
-    department: "Management",
-    permissions: ["view"]
-  }
-];
-
 export default function UserManagement() {
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [showNewUser, setShowNewUser] = useState(false);
   const [filter, setFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/users');
+      
+      if (!response.ok) {
+        console.error('Failed to fetch users');
+        return;
+      }
+
+      const data = await response.json();
+      const usersList = data.users || [];
+
+      // Transform API data to component format
+      const transformedUsers: User[] = usersList.map((user: any) => {
+        // Get primary role and status from first tenant relationship
+        // If user has multiple tenants, use the first active one, or first one
+        const activeTenant = user.tenants?.find((t: any) => t.status === 'active') || user.tenants?.[0];
+        const role = activeTenant?.role || 'viewer';
+        const status = activeTenant?.status || (user.email_confirmed ? 'active' : 'pending');
+        
+        // Format dates
+        const createdAt = user.created_at 
+          ? new Date(user.created_at).toISOString().split('T')[0]
+          : 'Unknown';
+        
+        // Get last login from API response
+        const lastLogin = user.last_login 
+          ? new Date(user.last_login).toLocaleString()
+          : 'Never';
+
+        return {
+          id: user.id,
+          name: user.name || user.email,
+          email: user.email,
+          role: getRoleDisplayName(role),
+          status: status as "active" | "inactive" | "pending",
+          lastLogin,
+          createdAt,
+          permissions: [], // Permissions would come from role system
+        };
+      });
+
+      setUsers(transformedUsers);
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getStatusIcon = (status: string) => {
@@ -221,7 +209,17 @@ export default function UserManagement() {
 
         {/* Users List */}
         <div className="space-y-4">
-          {filteredUsers.map((user) => (
+          {loading ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-2"></div>
+              <p>Loading users...</p>
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <p>No users found</p>
+            </div>
+          ) : (
+            filteredUsers.map((user) => (
             <div
               key={user.id}
               className={`p-4 border rounded-lg transition-all duration-200 ${
@@ -259,10 +257,6 @@ export default function UserManagement() {
                   </p>
                   
                   <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center space-x-1">
-                      <ShieldCheckIcon className="w-3 h-3" />
-                      <span>{user.department}</span>
-                    </div>
                     <div className="flex items-center space-x-1">
                       <ClockIcon className="w-3 h-3" />
                       <span>Last login: {user.lastLogin}</span>
@@ -327,7 +321,8 @@ export default function UserManagement() {
                 </div>
               )}
             </div>
-          ))}
+          ))
+          )}
         </div>
 
         {/* New User Form */}

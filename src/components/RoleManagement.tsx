@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   ShieldCheckIcon,
   PlusIcon,
@@ -90,9 +90,66 @@ const availablePermissions = [
 ];
 
 export default function RoleManagement() {
-  const [roles, setRoles] = useState<Role[]>(mockRoles);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [showNewRole, setShowNewRole] = useState(false);
+
+  useEffect(() => {
+    fetchRoles();
+  }, []);
+
+  const fetchRoles = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/roles');
+      
+      if (!response.ok) {
+        console.error('Failed to fetch roles');
+        return;
+      }
+
+      const data = await response.json();
+      const rolesList = data.roles || [];
+
+      // Fetch user counts for each role
+      const usersResponse = await fetch('/api/users');
+      const usersData = usersResponse.ok ? await usersResponse.json() : { users: [] };
+      const users = usersData.users || [];
+
+      // Transform API data to component format
+      const transformedRoles: Role[] = rolesList.map((role: any) => {
+        // Count users with this role
+        const userCount = users.filter((u: any) => 
+          u.tenants?.some((t: any) => t.role === role.name)
+        ).length;
+
+        // Get permissions count (API returns permission_count)
+        // For display, we'll show the count, but actual permissions would need separate fetch
+        const permissions = role.permission_count ? 
+          [`${role.permission_count} permissions`] : 
+          [];
+
+        return {
+          id: role.id,
+          name: role.name,
+          description: role.description || `${role.name} role`,
+          permissions,
+          userCount: role.user_count || userCount,
+          isDefault: role.is_default || false,
+          createdAt: role.created_at 
+            ? new Date(role.created_at).toISOString().split('T')[0]
+            : 'Unknown',
+        };
+      });
+
+      setRoles(transformedRoles);
+    } catch (error) {
+      console.error('Failed to fetch roles:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getRoleColor = (name: string) => {
     switch (name) {
@@ -157,7 +214,17 @@ export default function RoleManagement() {
 
       <div className="p-6">
         <div className="space-y-4">
-          {roles.map((role) => (
+          {loading ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-2"></div>
+              <p>Loading roles...</p>
+            </div>
+          ) : roles.length === 0 ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <p>No roles found</p>
+            </div>
+          ) : (
+            roles.map((role) => (
             <div
               key={role.id}
               className={`p-4 border rounded-lg transition-all duration-200 ${
@@ -193,7 +260,7 @@ export default function RoleManagement() {
                     </div>
                     <div className="flex items-center space-x-1">
                       <KeyIcon className="w-3 h-3" />
-                      <span>{role.permissions.length} permissions</span>
+                      <span>{role.permissions?.length || 0} permissions</span>
                     </div>
                     <span>Created: {role.createdAt}</span>
                   </div>
@@ -231,19 +298,24 @@ export default function RoleManagement() {
                     Permissions
                   </h5>
                   <div className="flex flex-wrap gap-2">
-                    {role.permissions.map((permission, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
-                      >
-                        {permission}
-                      </span>
-                    ))}
+                    {role.permissions && role.permissions.length > 0 ? (
+                      role.permissions.map((permission, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
+                        >
+                          {permission}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">No permissions assigned</span>
+                    )}
                   </div>
                 </div>
               )}
             </div>
-          ))}
+          ))
+          )}
         </div>
 
         {/* New Role Form */}

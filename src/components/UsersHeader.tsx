@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { 
   UsersIcon,
   ShieldCheckIcon,
@@ -8,7 +8,66 @@ import {
   CogIcon
 } from "@heroicons/react/24/outline";
 
+interface Stats {
+  totalUsers: number;
+  activeUsers: number;
+  pendingInvites: number;
+  totalRoles: number;
+}
+
 export default function UsersHeader() {
+  const [stats, setStats] = useState<Stats>({
+    totalUsers: 0,
+    activeUsers: 0,
+    pendingInvites: 0,
+    totalRoles: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch users and roles in parallel
+      const [usersResponse, rolesResponse] = await Promise.all([
+        fetch('/api/users'),
+        fetch('/api/roles'),
+      ]);
+
+      if (usersResponse.ok && rolesResponse.ok) {
+        const usersData = await usersResponse.json();
+        const rolesData = await rolesResponse.json();
+
+        const users = usersData.users || [];
+        const roles = rolesData.roles || [];
+
+        // Calculate statistics
+        const activeUsers = users.filter((u: any) => 
+          u.tenants?.some((t: any) => t.status === 'active')
+        ).length;
+
+        const pendingInvites = users.filter((u: any) => 
+          !u.email_confirmed || u.tenants?.some((t: any) => t.status === 'pending')
+        ).length;
+
+        setStats({
+          totalUsers: users.length,
+          activeUsers,
+          pendingInvites,
+          totalRoles: roles.length,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-center justify-between">
@@ -48,7 +107,7 @@ export default function UsersHeader() {
                 Total Users
               </p>
               <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                24
+                {loading ? '...' : stats.totalUsers}
               </p>
             </div>
           </div>
@@ -62,7 +121,7 @@ export default function UsersHeader() {
                 Active Users
               </p>
               <p className="text-2xl font-bold text-green-900 dark:text-green-100">
-                18
+                {loading ? '...' : stats.activeUsers}
               </p>
             </div>
           </div>
@@ -76,7 +135,7 @@ export default function UsersHeader() {
                 Pending Invites
               </p>
               <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-100">
-                3
+                {loading ? '...' : stats.pendingInvites}
               </p>
             </div>
           </div>
@@ -90,7 +149,7 @@ export default function UsersHeader() {
                 Roles
               </p>
               <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                5
+                {loading ? '...' : stats.totalRoles}
               </p>
             </div>
           </div>

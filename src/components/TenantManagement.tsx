@@ -13,6 +13,10 @@ import Badge from "./ui/badge/Badge";
 import Button from "./ui/button/Button";
 import { Modal } from "./ui/modal";
 import { getRoleDisplayName } from "@/lib/roles-client";
+import Form from "./form/Form";
+import Label from "./form/Label";
+import Input from "./form/input/InputField";
+import Alert from "./ui/alert/Alert";
 
 interface Tenant {
   id: string;
@@ -55,6 +59,16 @@ export default function TenantManagement() {
     name: '',
     subdomain: '',
     tier: 'standard' as 'standard' | 'premium' | 'enterprise',
+    email: '',
+    phone: '',
+    website: '',
+    address: {
+      street: '',
+      city: '',
+      state: '',
+      zip: '',
+      country: '',
+    },
   });
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
@@ -201,6 +215,22 @@ export default function TenantManagement() {
           name: createFormData.name,
           subdomain: createFormData.subdomain || createFormData.name.toLowerCase().replace(/\s+/g, '-'),
           tier: createFormData.tier,
+          domain: createFormData.website || undefined,
+          billing_email: createFormData.email || undefined,
+          settings: {
+            contact: {
+              email: createFormData.email || undefined,
+              phone: createFormData.phone || undefined,
+              website: createFormData.website || undefined,
+            },
+            address: {
+              street: createFormData.address.street || undefined,
+              city: createFormData.address.city || undefined,
+              state: createFormData.address.state || undefined,
+              zip: createFormData.address.zip || undefined,
+              country: createFormData.address.country || undefined,
+            },
+          },
         }),
       });
 
@@ -211,7 +241,21 @@ export default function TenantManagement() {
 
       const data = await response.json();
       setCreateSuccess(`Organization "${data.tenant.name}" created successfully!`);
-      setCreateFormData({ name: '', subdomain: '', tier: 'standard' });
+      setCreateFormData({ 
+        name: '', 
+        subdomain: '', 
+        tier: 'standard',
+        email: '',
+        phone: '',
+        website: '',
+        address: {
+          street: '',
+          city: '',
+          state: '',
+          zip: '',
+          country: '',
+        },
+      });
       
       // Refresh the tenants list
       await fetchTenants();
@@ -427,97 +471,265 @@ export default function TenantManagement() {
           isOpen={isCreateModalOpen}
           onClose={() => {
             setIsCreateModalOpen(false);
-            setCreateFormData({ name: '', subdomain: '', tier: 'standard' });
+            setCreateFormData({ 
+              name: '', 
+              subdomain: '', 
+              tier: 'standard',
+              email: '',
+              phone: '',
+              website: '',
+              address: {
+                street: '',
+                city: '',
+                state: '',
+                zip: '',
+                country: '',
+              },
+            });
             setCreateError(null);
             setCreateSuccess(null);
           }}
+          className="max-w-4xl mx-4"
           title="Create New Organization"
         >
-          <form onSubmit={handleCreateOrganization} className="space-y-4">
+          <div className="px-6 py-6">
             {createError && (
-              <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
-                <p className="text-sm text-red-800 dark:text-red-200">{createError}</p>
+              <div className="mb-6">
+                <Alert
+                  variant="error"
+                  title="Error"
+                  message={createError}
+                />
               </div>
             )}
 
             {createSuccess && (
-              <div className="rounded-md bg-green-50 dark:bg-green-900/20 p-4">
-                <p className="text-sm text-green-800 dark:text-green-200">{createSuccess}</p>
+              <div className="mb-6">
+                <Alert
+                  variant="success"
+                  title="Success"
+                  message={createSuccess}
+                />
               </div>
             )}
 
-            <div>
-              <label htmlFor="org-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Organization Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="org-name"
-                type="text"
-                required
-                value={createFormData.name}
-                onChange={(e) => setCreateFormData({ ...createFormData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
-                placeholder="Acme Corporation"
-              />
-            </div>
+            <Form onSubmit={handleCreateOrganization}>
+              <div className="space-y-8">
+                {/* Basic Information Section */}
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-6 pb-3 border-b border-gray-200 dark:border-gray-700">
+                    Basic Information
+                  </h3>
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <Label htmlFor="org-name">
+                        Organization Name <span className="text-error-500">*</span>
+                      </Label>
+                      <Input
+                        id="org-name"
+                        type="text"
+                        required
+                        value={createFormData.name}
+                        onChange={(e) => setCreateFormData({ ...createFormData, name: e.target.value })}
+                        placeholder="Acme Corporation"
+                        error={createError && !createFormData.name.trim()}
+                      />
+                    </div>
 
-            <div>
-              <label htmlFor="org-subdomain" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Subdomain (optional)
-              </label>
-              <input
-                id="org-subdomain"
-                type="text"
-                value={createFormData.subdomain}
-                onChange={(e) => setCreateFormData({ ...createFormData, subdomain: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
-                placeholder="acme (auto-generated if empty)"
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Leave empty to auto-generate from organization name
-              </p>
-            </div>
+                    <div>
+                      <Label htmlFor="org-subdomain">Subdomain</Label>
+                      <Input
+                        id="org-subdomain"
+                        type="text"
+                        value={createFormData.subdomain}
+                        onChange={(e) => setCreateFormData({ ...createFormData, subdomain: e.target.value })}
+                        placeholder="acme"
+                        hint="Auto-generated from organization name if left empty"
+                      />
+                    </div>
 
-            <div>
-              <label htmlFor="org-tier" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Tier
-              </label>
-              <select
-                id="org-tier"
-                value={createFormData.tier}
-                onChange={(e) => setCreateFormData({ ...createFormData, tier: e.target.value as 'standard' | 'premium' | 'enterprise' })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="standard">Standard</option>
-                <option value="premium">Premium</option>
-                <option value="enterprise">Enterprise</option>
-              </select>
-            </div>
+                    <div>
+                      <Label htmlFor="org-tier">Tier</Label>
+                      <div className="relative">
+                        <select
+                          id="org-tier"
+                          value={createFormData.tier}
+                          onChange={(e) => setCreateFormData({ ...createFormData, tier: e.target.value as 'standard' | 'premium' | 'enterprise' })}
+                          className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 pr-11 text-sm shadow-theme-xs text-gray-800 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:focus:border-brand-800"
+                        >
+                          <option value="standard">Standard</option>
+                          <option value="premium">Premium</option>
+                          <option value="enterprise">Enterprise</option>
+                        </select>
+                        <span className="absolute text-gray-500 -translate-y-1/2 pointer-events-none right-3 top-1/2 dark:text-gray-400">
+                          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-            <div className="flex space-x-3 pt-4">
-              <Button
-                type="submit"
-                disabled={isCreating || !createFormData.name.trim()}
-                variant="primary"
-                className="flex-1"
-              >
-                {isCreating ? 'Creating...' : 'Create Organization'}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setIsCreateModalOpen(false);
-                  setCreateFormData({ name: '', subdomain: '', tier: 'standard' });
-                  setCreateError(null);
-                  setCreateSuccess(null);
-                }}
-                variant="outline"
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
+                {/* Contact Information Section */}
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-6 pb-3 border-b border-gray-200 dark:border-gray-700">
+                    Contact Information
+                  </h3>
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="org-email">Email</Label>
+                      <Input
+                        id="org-email"
+                        type="email"
+                        value={createFormData.email}
+                        onChange={(e) => setCreateFormData({ ...createFormData, email: e.target.value })}
+                        placeholder="contact@example.com"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="org-phone">Phone</Label>
+                      <Input
+                        id="org-phone"
+                        type="tel"
+                        value={createFormData.phone}
+                        onChange={(e) => setCreateFormData({ ...createFormData, phone: e.target.value })}
+                        placeholder="+1 (555) 123-4567"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <Label htmlFor="org-website">Website</Label>
+                      <Input
+                        id="org-website"
+                        type="url"
+                        value={createFormData.website}
+                        onChange={(e) => setCreateFormData({ ...createFormData, website: e.target.value })}
+                        placeholder="https://www.example.com"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address Section */}
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-6 pb-3 border-b border-gray-200 dark:border-gray-700">
+                    Address
+                  </h3>
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <Label htmlFor="org-address-street">Street Address</Label>
+                      <Input
+                        id="org-address-street"
+                        type="text"
+                        value={createFormData.address.street}
+                        onChange={(e) => setCreateFormData({ 
+                          ...createFormData, 
+                          address: { ...createFormData.address, street: e.target.value }
+                        })}
+                        placeholder="123 Main Street"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="org-address-city">City</Label>
+                      <Input
+                        id="org-address-city"
+                        type="text"
+                        value={createFormData.address.city}
+                        onChange={(e) => setCreateFormData({ 
+                          ...createFormData, 
+                          address: { ...createFormData.address, city: e.target.value }
+                        })}
+                        placeholder="New York"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="org-address-state">State/Province</Label>
+                      <Input
+                        id="org-address-state"
+                        type="text"
+                        value={createFormData.address.state}
+                        onChange={(e) => setCreateFormData({ 
+                          ...createFormData, 
+                          address: { ...createFormData.address, state: e.target.value }
+                        })}
+                        placeholder="NY"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="org-address-zip">ZIP/Postal Code</Label>
+                      <Input
+                        id="org-address-zip"
+                        type="text"
+                        value={createFormData.address.zip}
+                        onChange={(e) => setCreateFormData({ 
+                          ...createFormData, 
+                          address: { ...createFormData.address, zip: e.target.value }
+                        })}
+                        placeholder="10001"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="org-address-country">Country</Label>
+                      <Input
+                        id="org-address-country"
+                        type="text"
+                        value={createFormData.address.country}
+                        onChange={(e) => setCreateFormData({ 
+                          ...createFormData, 
+                          address: { ...createFormData.address, country: e.target.value }
+                        })}
+                        placeholder="United States"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setIsCreateModalOpen(false);
+                      setCreateFormData({ 
+                        name: '', 
+                        subdomain: '', 
+                        tier: 'standard',
+                        email: '',
+                        phone: '',
+                        website: '',
+                        address: {
+                          street: '',
+                          city: '',
+                          state: '',
+                          zip: '',
+                          country: '',
+                        },
+                      });
+                      setCreateError(null);
+                      setCreateSuccess(null);
+                    }}
+                    variant="outline"
+                    disabled={isCreating}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isCreating || !createFormData.name.trim()}
+                    variant="primary"
+                  >
+                    {isCreating ? 'Creating...' : 'Create Organization'}
+                  </Button>
+                </div>
+              </div>
+            </Form>
+          </div>
         </Modal>
       )}
 
@@ -530,112 +742,142 @@ export default function TenantManagement() {
             setSelectedTenant(null);
           }}
           title={`Organization: ${selectedTenant.name}`}
+          className="max-w-3xl mx-4"
         >
-          <div className="space-y-6">
-            {/* Organization Info */}
-            <div className="grid grid-cols-2 gap-4">
+          <div className="px-6 py-6">
+            <div className="space-y-8">
+              {/* Organization Info */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Name
-                </label>
-                <p className="text-sm text-gray-900 dark:text-white">{selectedTenant.name}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Tier
-                </label>
-                <Badge
-                  size="sm"
-                  color={getTierColor(selectedTenant.tier)}
-                  variant="light"
-                >
-                  {selectedTenant.tier}
-                </Badge>
-              </div>
-              {selectedTenant.subdomain && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Subdomain
-                  </label>
-                  <p className="text-sm text-gray-900 dark:text-white">{selectedTenant.subdomain}</p>
+                <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-6 pb-3 border-b border-gray-200 dark:border-gray-700">
+                  Organization Details
+                </h3>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <Label>Organization Name</Label>
+                    <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
+                      {selectedTenant.name}
+                    </p>
+                  </div>
+                  <div>
+                    <Label>Tier</Label>
+                    <div className="mt-1.5">
+                      <Badge
+                        size="sm"
+                        color={getTierColor(selectedTenant.tier)}
+                        variant="light"
+                      >
+                        {selectedTenant.tier.charAt(0).toUpperCase() + selectedTenant.tier.slice(1)}
+                      </Badge>
+                    </div>
+                  </div>
+                  {selectedTenant.subdomain && (
+                    <div>
+                      <Label>Subdomain</Label>
+                      <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
+                        {selectedTenant.subdomain}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <Label>Billing Plan</Label>
+                    <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
+                      {selectedTenant.billing_plan?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'N/A'}
+                    </p>
+                  </div>
+                  {selectedTenant.domain && (
+                    <div>
+                      <Label>Domain</Label>
+                      <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
+                        {selectedTenant.domain}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <Label>Created</Label>
+                    <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
+                      {selectedTenant.created_at 
+                        ? new Date(selectedTenant.created_at).toLocaleDateString('en-US', { 
+                            year: 'numeric', 
+                            month: 'long', 
+                            day: 'numeric' 
+                          })
+                        : 'N/A'}
+                    </p>
+                  </div>
                 </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Billing Plan
-                </label>
-                <p className="text-sm text-gray-900 dark:text-white">{selectedTenant.billing_plan}</p>
               </div>
-            </div>
 
-            {/* Users Section */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-                Users with Access ({selectedTenant.users.length})
-              </h4>
-              {selectedTenant.users.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400">No users found.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
-                      <TableRow>
-                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                          User
-                        </TableCell>
-                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                          Role
-                        </TableCell>
-                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                          Status
-                        </TableCell>
-                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                          Last Login
-                        </TableCell>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                      {selectedTenant.users.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell className="px-4 py-3 text-start">
-                            <div>
-                              <div className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                                {user.name}
-                              </div>
-                              <div className="text-gray-500 text-theme-xs dark:text-gray-400">
-                                {user.email}
-                              </div>
-                            </div>
+              {/* Users Section */}
+              <div>
+                <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-6 pb-3 border-b border-gray-200 dark:border-gray-700">
+                  Users with Access ({selectedTenant.users.length})
+                </h3>
+                {selectedTenant.users.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No users found for this organization.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                        <TableRow>
+                          <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                            User
                           </TableCell>
-                          <TableCell className="px-4 py-3 text-start">
-                            <Badge
-                              size="sm"
-                              color={getRoleBadgeColor(user.role)}
-                              variant="light"
-                            >
-                              {getRoleDisplayName(user.role)}
-                            </Badge>
+                          <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                            Role
                           </TableCell>
-                          <TableCell className="px-4 py-3 text-start">
-                            <Badge
-                              size="sm"
-                              color={user.status === 'active' ? 'success' : 'error'}
-                              variant="light"
-                            >
-                              {user.status}
-                            </Badge>
+                          <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                            Status
                           </TableCell>
-                          <TableCell className="px-4 py-3 text-start text-gray-500 text-theme-sm dark:text-gray-400">
-                            {user.last_login 
-                              ? new Date(user.last_login).toLocaleDateString()
-                              : 'Never'}
+                          <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                            Last Login
                           </TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+                      </TableHeader>
+                      <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                        {selectedTenant.users.map((user) => (
+                          <TableRow key={user.id}>
+                            <TableCell className="px-4 py-3 text-start">
+                              <div>
+                                <div className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                                  {user.name}
+                                </div>
+                                <div className="text-gray-500 text-theme-xs dark:text-gray-400">
+                                  {user.email}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="px-4 py-3 text-start">
+                              <Badge
+                                size="sm"
+                                color={getRoleBadgeColor(user.role)}
+                                variant="light"
+                              >
+                                {getRoleDisplayName(user.role)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="px-4 py-3 text-start">
+                              <Badge
+                                size="sm"
+                                color={user.status === 'active' ? 'success' : 'error'}
+                                variant="light"
+                              >
+                                {user.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="px-4 py-3 text-start text-gray-500 text-theme-sm dark:text-gray-400">
+                              {user.last_login 
+                                ? new Date(user.last_login).toLocaleDateString()
+                                : 'Never'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </Modal>

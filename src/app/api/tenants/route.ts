@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, subdomain, tier, settings, branding } = body;
+    const { name, subdomain, tier, settings, branding, domain, billing_email } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -117,7 +117,9 @@ export async function POST(request: NextRequest) {
       .insert({
         name,
         subdomain: subdomain || name.toLowerCase().replace(/\s+/g, '-'),
+        domain: domain || null,
         tier: tier || 'standard',
+        billing_email: billing_email || null,
         settings: settings || {},
         branding: branding || {},
       })

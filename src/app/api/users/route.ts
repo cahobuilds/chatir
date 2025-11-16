@@ -32,10 +32,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: usersError.message }, { status: 500 });
     }
 
-    // Get user-tenant relationships
+    // Get user-tenant relationships with last_login
     const { data: userTenants, error: userTenantsError } = await adminSupabase
       .from('user_tenants')
-      .select('user_id, tenant_id, role, status, tenants(id, name)');
+      .select('user_id, tenant_id, role, status, last_login, tenants(id, name)');
 
     if (userTenantsError) {
       return NextResponse.json({ error: userTenantsError.message }, { status: 500 });
@@ -44,12 +44,20 @@ export async function GET(request: NextRequest) {
     // Map users with their tenant relationships
     const usersWithTenants = allUsers.users.map((authUser) => {
       const tenantRelationships = userTenants?.filter(ut => ut.user_id === authUser.id) || [];
+      // Get most recent last_login from any tenant relationship
+      const lastLogin = tenantRelationships
+        .map(ut => ut.last_login)
+        .filter(Boolean)
+        .sort()
+        .reverse()[0] || null;
+      
       return {
         id: authUser.id,
         email: authUser.email,
         name: authUser.user_metadata?.name || authUser.email,
         created_at: authUser.created_at,
         email_confirmed: !!authUser.email_confirmed_at,
+        last_login: lastLogin,
         tenants: tenantRelationships.map(ut => ({
           tenant_id: ut.tenant_id,
           tenant_name: (ut.tenants as any)?.name,
