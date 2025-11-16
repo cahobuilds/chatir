@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 1: Create auth user
-    const { data: authData, error: authError: createError } = await adminSupabase.auth.admin.createUser({
+    const { data: authData, error: createError } = await adminSupabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true, // Auto-confirm email

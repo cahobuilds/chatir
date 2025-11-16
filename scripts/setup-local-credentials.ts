@@ -99,9 +99,13 @@ async function setupLocalCredentials() {
       }
 
       testTenant = newTenant;
-      console.log(`   ✅ Created test tenant: ${testTenant.name}`);
+      console.log(`   ✅ Created test tenant: ${newTenant.name}`);
     } else {
       console.log(`   ✅ Using existing tenant: ${testTenant.name}`);
+    }
+
+    if (!testTenant) {
+      throw new Error('Test tenant not found or created');
     }
 
     // Step 5: Get tenant_admin role
@@ -116,9 +120,6 @@ async function setupLocalCredentials() {
 
     // Step 6: Create or update user_tenants relationship
     console.log('6. Creating user-tenant relationship...');
-    if (!testTenant) {
-      throw new Error('Test tenant not found or created');
-    }
 
     const { data: existingUserTenant } = await supabase
       .from('user_tenants')
