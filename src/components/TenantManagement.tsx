@@ -48,6 +48,16 @@ export default function TenantManagement() {
   const [loading, setLoading] = useState(true);
   const [selectedTenant, setSelectedTenant] = useState<TenantWithUsers | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [createFormData, setCreateFormData] = useState({
+    name: '',
+    subdomain: '',
+    tier: 'standard' as 'standard' | 'premium' | 'enterprise',
+  });
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTenants();
@@ -65,6 +75,13 @@ export default function TenantManagement() {
 
       const data = await response.json();
       const tenantList = data.tenants || [];
+
+      // Get current user's role (check if they're system_admin or super_admin in any tenant)
+      // System admins can have multiple tenant relationships, check all of them
+      const adminRole = tenantList.find((item: any) => 
+        item.role === 'system_admin' || item.role === 'super_admin'
+      )?.role || null;
+      setCurrentUserRole(adminRole);
 
       // Extract tenant objects from nested structure
       const extractedTenants: Tenant[] = tenantList.map((item: any) => {
@@ -168,6 +185,51 @@ export default function TenantManagement() {
     setIsModalOpen(true);
   };
 
+  const handleCreateOrganization = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+    setCreateSuccess(null);
+    setIsCreating(true);
+
+    try {
+      const response = await fetch('/api/tenants', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: createFormData.name,
+          subdomain: createFormData.subdomain || createFormData.name.toLowerCase().replace(/\s+/g, '-'),
+          tier: createFormData.tier,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create organization');
+      }
+
+      const data = await response.json();
+      setCreateSuccess(`Organization "${data.tenant.name}" created successfully!`);
+      setCreateFormData({ name: '', subdomain: '', tier: 'standard' });
+      
+      // Refresh the tenants list
+      await fetchTenants();
+      
+      // Close modal after a short delay
+      setTimeout(() => {
+        setIsCreateModalOpen(false);
+        setCreateSuccess(null);
+      }, 2000);
+    } catch (error: any) {
+      setCreateError(error.message || 'Failed to create organization');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const canCreateOrganization = currentUserRole === 'system_admin' || currentUserRole === 'super_admin';
+
   if (loading) {
     return (
       <ComponentCard title="Organization Management" desc="Manage organizations and their users">
@@ -186,6 +248,18 @@ export default function TenantManagement() {
     <>
       <ComponentCard title="Organization Management" desc="Manage organizations and their users">
         <div className="space-y-6">
+          {/* Header with Create Button */}
+          {canCreateOrganization && (
+            <div className="flex justify-end mb-4">
+              <Button
+                onClick={() => setIsCreateModalOpen(true)}
+                size="sm"
+                variant="primary"
+              >
+                + Create Organization
+              </Button>
+            </div>
+          )}
           {/* Statistics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -346,6 +420,106 @@ export default function TenantManagement() {
           </div>
         </div>
       </ComponentCard>
+
+      {/* Create Organization Modal */}
+      {isCreateModalOpen && (
+        <Modal
+          isOpen={isCreateModalOpen}
+          onClose={() => {
+            setIsCreateModalOpen(false);
+            setCreateFormData({ name: '', subdomain: '', tier: 'standard' });
+            setCreateError(null);
+            setCreateSuccess(null);
+          }}
+          title="Create New Organization"
+        >
+          <form onSubmit={handleCreateOrganization} className="space-y-4">
+            {createError && (
+              <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+                <p className="text-sm text-red-800 dark:text-red-200">{createError}</p>
+              </div>
+            )}
+
+            {createSuccess && (
+              <div className="rounded-md bg-green-50 dark:bg-green-900/20 p-4">
+                <p className="text-sm text-green-800 dark:text-green-200">{createSuccess}</p>
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="org-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Organization Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="org-name"
+                type="text"
+                required
+                value={createFormData.name}
+                onChange={(e) => setCreateFormData({ ...createFormData, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+                placeholder="Acme Corporation"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="org-subdomain" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Subdomain (optional)
+              </label>
+              <input
+                id="org-subdomain"
+                type="text"
+                value={createFormData.subdomain}
+                onChange={(e) => setCreateFormData({ ...createFormData, subdomain: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+                placeholder="acme (auto-generated if empty)"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Leave empty to auto-generate from organization name
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="org-tier" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Tier
+              </label>
+              <select
+                id="org-tier"
+                value={createFormData.tier}
+                onChange={(e) => setCreateFormData({ ...createFormData, tier: e.target.value as 'standard' | 'premium' | 'enterprise' })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="standard">Standard</option>
+                <option value="premium">Premium</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </div>
+
+            <div className="flex space-x-3 pt-4">
+              <Button
+                type="submit"
+                disabled={isCreating || !createFormData.name.trim()}
+                variant="primary"
+                className="flex-1"
+              >
+                {isCreating ? 'Creating...' : 'Create Organization'}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setIsCreateModalOpen(false);
+                  setCreateFormData({ name: '', subdomain: '', tier: 'standard' });
+                  setCreateError(null);
+                  setCreateSuccess(null);
+                }}
+                variant="outline"
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {/* Organization Details Modal */}
       {selectedTenant && isModalOpen && (

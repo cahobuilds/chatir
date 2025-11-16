@@ -1,10 +1,11 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-// GET /api/tenants - Get current user's tenants
+// GET /api/tenants - Get current user's tenants (or all tenants for system_admin/super_admin)
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
+    const adminSupabase = createAdminClient();
     
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -12,23 +13,68 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user's tenants through user_tenants table
-    const { data: userTenants, error: userTenantsError } = await supabase
+    // Check if user is system_admin or super_admin
+    const { data: userTenants } = await supabase
       .from('user_tenants')
-      .select(`
-        tenant_id,
-        role,
-        status,
-        tenants (*)
-      `)
+      .select('role')
       .eq('user_id', user.id)
-      .eq('status', 'active');
+      .in('role', ['system_admin', 'super_admin'])
+      .eq('status', 'active')
+      .limit(1);
 
-    if (userTenantsError) {
-      return NextResponse.json({ error: userTenantsError.message }, { status: 500 });
+    const isSystemAdmin = userTenants && userTenants.length > 0;
+
+    if (isSystemAdmin) {
+      // For system_admin/super_admin: return ALL tenants with their role info
+      const { data: allTenants, error: allTenantsError } = await adminSupabase
+        .from('tenants')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (allTenantsError) {
+        return NextResponse.json({ error: allTenantsError.message }, { status: 500 });
+      }
+
+      // Get user's role for each tenant (if they have one)
+      const { data: userTenantRoles } = await supabase
+        .from('user_tenants')
+        .select('tenant_id, role')
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+
+      const tenantRoleMap = new Map(
+        (userTenantRoles || []).map(ut => [ut.tenant_id, ut.role])
+      );
+
+      // Format response to match expected structure
+      const adminRole = userTenants && userTenants.length > 0 ? userTenants[0].role : 'system_admin';
+      const formattedTenants = (allTenants || []).map((tenant: any) => ({
+        tenant_id: tenant.id,
+        role: tenantRoleMap.get(tenant.id) || adminRole, // Use system_admin/super_admin role if no specific role
+        status: 'active',
+        tenants: tenant,
+      }));
+
+      return NextResponse.json({ tenants: formattedTenants });
+    } else {
+      // For regular users: return only their tenants
+      const { data: userTenants, error: userTenantsError } = await supabase
+        .from('user_tenants')
+        .select(`
+          tenant_id,
+          role,
+          status,
+          tenants (*)
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+
+      if (userTenantsError) {
+        return NextResponse.json({ error: userTenantsError.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ tenants: userTenants || [] });
     }
-
-    return NextResponse.json({ tenants: userTenants });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
