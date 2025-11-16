@@ -2,6 +2,8 @@
 
 A comprehensive AI Client Care management platform built with Next.js, TypeScript, and Tailwind CSS.
 
+> **Latest Update**: Connected to remote Supabase instance and configured for production deployment.
+
 ## 🚀 Features
 
 ### 🤖 AI Agent Management
