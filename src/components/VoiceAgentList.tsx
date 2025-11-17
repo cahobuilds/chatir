@@ -20,7 +20,7 @@ import Alert from "./ui/alert/Alert";
 import TextArea from "./form/input/TextArea";
 import { ArrowPathIcon, PencilIcon, TrashIcon, PlayIcon } from "@heroicons/react/24/outline";
 import AgentEditModal from "./AgentEditModal";
-import AgentTestModal from "./AgentTestModal";
+import AgentInteractionModal from "./AgentInteractionModal";
 
 interface Agent {
   id: string;
@@ -633,8 +633,8 @@ export default function VoiceAgentList() {
         }}
       />
 
-      {/* Agent Test Modal */}
-      <AgentTestModal
+      {/* Agent Interaction Modal */}
+      <AgentInteractionModal
         agent={testingAgent}
         isOpen={isTestModalOpen}
         onClose={() => {
