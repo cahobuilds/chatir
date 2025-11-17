@@ -187,8 +187,13 @@ export async function PATCH(
                     'llm_id' in retellAgent.response_engine) {
                   const llmId = retellAgent.response_engine.llm_id;
                   
+                  // Retrieve current LLM configuration to preserve required fields
+                  const currentLlm = await retellClient.llm.retrieve(llmId);
+                  
                   // Update the LLM's general_prompt (empty string clears it)
+                  // Must include start_speaker as it's required
                   await retellClient.llm.update(llmId, {
+                    start_speaker: currentLlm.start_speaker || 'agent', // Preserve existing or default to 'agent'
                     general_prompt: prompt || null, // null clears the prompt in Retell
                   });
                   

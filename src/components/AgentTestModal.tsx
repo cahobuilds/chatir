@@ -27,6 +27,8 @@ interface Message {
   type: "user" | "agent";
   text: string;
   timestamp: Date;
+  finalized?: boolean;
+  isTyping?: boolean;
 }
 
 // TypeScript declarations for Web Speech API
@@ -107,6 +109,12 @@ export default function AgentTestModal({
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const retellClientRef = useRef<RetellWebClient | null>(null);
   const retellCallIdRef = useRef<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   // Initialize Web Speech API and Speech Synthesis
   useEffect(() => {
@@ -296,11 +304,15 @@ export default function AgentTestModal({
             console.log("Retell call ready - engine connected and audio active");
             setSuccess("Connected to Retell AI - audio is now active!");
             // Ensure audio playback is started (required for some browsers)
+            // This must be called after user interaction, so we call it here
             try {
               retellClient.startAudioPlayback?.();
             } catch (e) {
               console.warn("Could not start audio playback:", e);
             }
+            
+            // Clear any welcome messages - agent will speak first
+            setMessages([]);
           });
 
           retellClient.on("call_ended", () => {
@@ -323,17 +335,97 @@ export default function AgentTestModal({
 
           retellClient.on("update", (data: any) => {
             // Handle real-time updates from Retell
+            // The update event contains conversation state updates
+            console.log("Retell update event:", data);
+            
+            // Handle transcript updates - Retell sends updates with transcript and response fields
             if (data.transcript) {
               setTranscription(data.transcript);
+              
+              // Add or update user message with transcript
+              setMessages((prev) => {
+                const lastMessage = prev[prev.length - 1];
+                if (lastMessage && lastMessage.type === 'user' && !lastMessage.finalized) {
+                  // Update existing user message
+                  return prev.map((msg, idx) => 
+                    idx === prev.length - 1 
+                      ? { ...msg, text: data.transcript, finalized: false }
+                      : msg
+                  );
+                } else {
+                  // Add new user message
+                  return [...prev, {
+                    id: `user-${Date.now()}`,
+                    type: 'user' as const,
+                    text: data.transcript,
+                    timestamp: new Date(),
+                    finalized: false,
+                  }];
+                }
+              });
+            }
+            
+            // Handle agent response updates
+            if (data.response) {
+              setMessages((prev) => {
+                // Remove any typing indicators
+                const withoutTyping = prev.filter(msg => !msg.isTyping);
+                const lastMessage = withoutTyping[withoutTyping.length - 1];
+                
+                if (lastMessage && lastMessage.type === 'agent' && !lastMessage.finalized) {
+                  // Update existing agent message
+                  return withoutTyping.map((msg, idx) => 
+                    idx === withoutTyping.length - 1 
+                      ? { ...msg, text: data.response, finalized: true }
+                      : msg
+                  );
+                } else {
+                  // Add new agent message
+                  return [...withoutTyping, {
+                    id: `agent-${Date.now()}`,
+                    type: 'agent' as const,
+                    text: data.response,
+                    timestamp: new Date(),
+                    finalized: true,
+                  }];
+                }
+              });
+            }
+            
+            // Finalize any pending user messages when we get a response
+            if (data.response) {
+              setMessages((prev) => 
+                prev.map(msg => 
+                  msg.type === 'user' && !msg.finalized 
+                    ? { ...msg, finalized: true }
+                    : msg
+                )
+              );
             }
           });
 
           retellClient.on("agent_start_talking", () => {
             setIsSpeaking(true);
+            // Add indicator that agent is speaking
+            setMessages((prev) => {
+              const lastMessage = prev[prev.length - 1];
+              if (lastMessage && lastMessage.type === 'agent' && lastMessage.text === '...') {
+                return prev; // Already has speaking indicator
+              }
+              return [...prev, {
+                id: `speaking-${Date.now()}`,
+                type: 'agent' as const,
+                text: '...',
+                timestamp: new Date(),
+                isTyping: true,
+              }];
+            });
           });
 
           retellClient.on("agent_stop_talking", () => {
             setIsSpeaking(false);
+            // Remove typing indicator
+            setMessages((prev) => prev.filter(msg => !msg.isTyping));
           });
 
           // Start the call
@@ -341,16 +433,9 @@ export default function AgentTestModal({
             accessToken: access_token,
           });
 
-          // Add welcome message
-          const welcomeText = `Connected to ${agent.name}. You can now speak naturally and hear the agent's voice in real-time.`;
-          const welcomeMessage: Message = {
-            id: Date.now().toString(),
-            type: "agent",
-            text: welcomeText,
-            timestamp: new Date(),
-          };
-          setMessages([welcomeMessage]);
-
+          // Don't add welcome message here - wait for call_ready
+          // The agent will speak its first message automatically
+          
           return; // Exit early, Retell handles everything
         } catch (retellError: any) {
           console.error("Retell setup error:", retellError);
@@ -722,91 +807,137 @@ export default function AgentTestModal({
               </>
             ) : (
               <>
-                {/* Chat Interface */}
-                <div className="flex flex-col h-[400px] border border-gray-200 rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                  {/* Messages Area */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {/* Real-time Conversation Interface - Retell Style */}
+                <div className="flex flex-col h-[500px] border border-gray-200 rounded-lg dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+                  {/* Conversation Header */}
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          isRecording 
+                            ? (isSpeaking ? 'bg-green-500 animate-pulse' : 'bg-blue-500 animate-pulse')
+                            : 'bg-gray-400'
+                        }`}></div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {isRecording 
+                            ? (isSpeaking ? 'Agent speaking...' : 'Listening...')
+                            : 'Ready'
+                          }
+                        </span>
+                      </div>
+                      <Button
+                        onClick={handleStopAudioTest}
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                      >
+                        End Call
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Messages Area - Real-time conversation */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
                     {messages.length === 0 ? (
-                      <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center justify-center h-full">
                         <div className="text-center">
-                          <MicrophoneIcon className="h-8 w-8 mx-auto mb-2 text-indigo-600 dark:text-indigo-400" />
-                          <p>Listening... Speak into your microphone</p>
+                          <div className="mb-4">
+                            <div className="relative w-16 h-16 mx-auto">
+                              <div className="absolute inset-0 rounded-full bg-indigo-100 dark:bg-indigo-900/20 animate-ping"></div>
+                              <div className="absolute inset-2 rounded-full bg-indigo-200 dark:bg-indigo-800/40"></div>
+                              <MicrophoneIcon className="absolute inset-0 m-auto h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                          </div>
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Waiting for conversation to start...
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Speak into your microphone
+                          </p>
                         </div>
                       </div>
                     ) : (
                       messages.map((message) => (
                         <div
                           key={message.id}
-                          className={`flex ${
+                          className={`flex items-start gap-3 ${
                             message.type === "user" ? "justify-end" : "justify-start"
                           }`}
                         >
+                          {message.type === "agent" && (
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+                                <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
+                              </svg>
+                            </div>
+                          )}
+                          
                           <div
-                            className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                            className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${
                               message.type === "user"
-                                ? "bg-indigo-600 text-white"
-                                : "bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600"
+                                ? "bg-indigo-600 text-white rounded-br-sm"
+                                : message.isTyping
+                                ? "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-bl-sm"
+                                : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-bl-sm"
                             }`}
                           >
-                            <p className="text-sm whitespace-pre-wrap">{message.text}</p>
-                            <p className="text-xs mt-1 opacity-70">
-                              {message.timestamp.toLocaleTimeString()}
-                            </p>
+                            {message.isTyping ? (
+                              <div className="flex items-center gap-1">
+                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                              </div>
+                            ) : (
+                              <>
+                                <p className={`text-sm whitespace-pre-wrap ${
+                                  message.finalized === false ? 'opacity-70 italic' : ''
+                                }`}>
+                                  {message.text}
+                                </p>
+                                {message.finalized === false && (
+                                  <div className="flex items-center gap-1 mt-1">
+                                    <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>
+                                    <span className="text-xs opacity-60">Transcribing...</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
                           </div>
+
+                          {message.type === "user" && (
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                          )}
                         </div>
                       ))
                     )}
                     
-                    {/* Live transcription indicator */}
-                    {isListening && transcription && (
-                      <div className="flex justify-end">
-                        <div className="max-w-[80%] rounded-lg px-4 py-2 bg-indigo-100 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
-                          <p className="text-sm text-gray-600 dark:text-gray-300 italic">
+                    {/* Live transcription indicator - shows interim results */}
+                    {isListening && transcription && !messages.some(m => m.type === 'user' && !m.finalized && m.text === transcription) && (
+                      <div className="flex justify-end items-start gap-3">
+                        <div className="max-w-[75%] rounded-2xl rounded-br-sm px-4 py-2.5 bg-indigo-100 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 shadow-sm">
+                          <p className="text-sm text-gray-700 dark:text-gray-300 italic">
                             {transcription}
                           </p>
                           <div className="flex items-center gap-1 mt-1">
-                            <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></div>
+                            <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-pulse"></div>
                             <p className="text-xs text-gray-500 dark:text-gray-400">Listening...</p>
                           </div>
                         </div>
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                          </svg>
+                        </div>
                       </div>
                     )}
+                    {/* Scroll anchor for auto-scroll */}
+                    <div ref={messagesEndRef} />
                   </div>
-
-                  {/* Status Indicators */}
-                  <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 bg-gray-50 dark:bg-gray-800/50">
-                    <div className="flex items-center justify-center gap-4">
-                      {isListening && (
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
-                          <span className="text-sm text-red-700 dark:text-red-400 font-medium">
-                            Recording...
-                          </span>
-                        </div>
-                      )}
-                      {isSpeaking && (
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
-                          <span className="text-sm text-blue-700 dark:text-blue-400 font-medium">
-                            Speaking...
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* End Call Button */}
-                <div className="flex justify-end">
-                  <Button
-                    onClick={handleStopAudioTest}
-                    size="sm"
-                    variant="outline"
-                    className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                  >
-                    <StopIcon className="w-4 h-4 mr-2" />
-                    End the Call
-                  </Button>
                 </div>
               </>
             )}
