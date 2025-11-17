@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { isReseller } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/tenants/[id] - Get tenant by ID
@@ -74,13 +75,26 @@ export async function PATCH(
     const body = await request.json();
     const { name, subdomain, tier, settings, branding, retell_api_key } = body;
 
+    // Check if this tenant is a reseller (only resellers can update retell_api_key)
+    const tenantIsReseller = await isReseller(id);
+    
+    // If trying to update retell_api_key, verify tenant is a reseller
+    if (retell_api_key !== undefined && !tenantIsReseller) {
+      return NextResponse.json(
+        { error: 'Only resellers can configure Retell API keys. Organizations inherit Retell configuration from their reseller.' },
+        { status: 403 }
+      );
+    }
+
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
     if (subdomain !== undefined) updateData.subdomain = subdomain;
     if (tier !== undefined) updateData.tier = tier;
     if (settings !== undefined) updateData.settings = settings;
     if (branding !== undefined) updateData.branding = branding;
-    if (retell_api_key !== undefined) updateData.retell_api_key = retell_api_key;
+    if (retell_api_key !== undefined && tenantIsReseller) {
+      updateData.retell_api_key = retell_api_key;
+    }
 
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')

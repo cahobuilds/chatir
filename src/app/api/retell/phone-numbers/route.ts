@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
+import { getResellerRetellConfig } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/retell/phone-numbers - Get available phone numbers
@@ -32,22 +33,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get tenant's Retell API key
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('retell_api_key')
-      .eq('id', tenant_id)
-      .single();
+    // Get reseller's Retell API key (organizations inherit from reseller)
+    const retellApiKey = await getResellerRetellConfig(tenant_id);
 
-    if (!tenant?.retell_api_key) {
+    if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Tenant Retell API key not configured' },
+        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
         { status: 400 }
       );
     }
 
-    // Get phone numbers from Retell AI
-    const retellClient = createRetellClient(tenant.retell_api_key);
+    // Get phone numbers from Retell AI using reseller's API key
+    const retellClient = createRetellClient(retellApiKey);
     const phoneNumbers = await retellClient.phoneNumber.list();
 
     return NextResponse.json({ phone_numbers: phoneNumbers });
@@ -93,22 +90,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
-    // Get tenant's Retell API key
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('retell_api_key')
-      .eq('id', tenant_id)
-      .single();
+    // Get reseller's Retell API key (organizations inherit from reseller)
+    const retellApiKey = await getResellerRetellConfig(tenant_id);
 
-    if (!tenant?.retell_api_key) {
+    if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Tenant Retell API key not configured' },
+        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
         { status: 400 }
       );
     }
 
-    // Purchase phone number from Retell AI
-    const retellClient = createRetellClient(tenant.retell_api_key);
+    // Purchase phone number from Retell AI using reseller's API key
+    const retellClient = createRetellClient(retellApiKey);
     const phoneNumberParams: any = { area_code };
     if (agent_id) {
       phoneNumberParams.agent_id = agent_id;

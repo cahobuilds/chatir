@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
+import { getResellerRetellConfig } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/retell/agents/[id] - Get Retell AI agent details
@@ -43,22 +44,18 @@ export async function GET(
       return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
     }
 
-    // Get tenant's Retell API key
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('retell_api_key')
-      .eq('id', agent.tenant_id)
-      .single();
+    // Get reseller's Retell API key (organizations inherit from reseller)
+    const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
 
-    if (!tenant?.retell_api_key) {
+    if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Tenant Retell API key not configured' },
+        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
         { status: 400 }
       );
     }
 
-    // Get Retell AI agent details
-    const retellClient = createRetellClient(tenant.retell_api_key);
+    // Get Retell AI agent details using reseller's API key
+    const retellClient = createRetellClient(retellApiKey);
     const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
 
     return NextResponse.json({ retell_agent: retellAgent });
@@ -113,16 +110,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
     }
 
-    // Get tenant's Retell API key
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('retell_api_key')
-      .eq('id', agent.tenant_id)
-      .single();
+    // Get reseller's Retell API key (organizations inherit from reseller)
+    const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
 
-    if (!tenant?.retell_api_key) {
+    if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Tenant Retell API key not configured' },
+        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
         { status: 400 }
       );
     }
@@ -130,8 +123,8 @@ export async function PATCH(
     const body = await request.json();
     const { agent_name, voice_id, llm_websocket_url, ...retellConfig } = body;
 
-    // Update Retell AI agent
-    const retellClient = createRetellClient(tenant.retell_api_key);
+    // Update Retell AI agent using reseller's API key
+    const retellClient = createRetellClient(retellApiKey);
     const retellAgent = await retellClient.agent.update(agent.retell_agent_id, {
       agent_name,
       voice_id,
@@ -204,16 +197,12 @@ export async function DELETE(
     }
 
     if (agent.retell_agent_id) {
-      // Get tenant's Retell API key
-      const { data: tenant } = await supabase
-        .from('tenants')
-        .select('retell_api_key')
-        .eq('id', agent.tenant_id)
-        .single();
+      // Get reseller's Retell API key (organizations inherit from reseller)
+      const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
 
-      if (tenant?.retell_api_key) {
-        // Delete Retell AI agent
-        const retellClient = createRetellClient(tenant.retell_api_key);
+      if (retellApiKey) {
+        // Delete Retell AI agent using reseller's API key
+        const retellClient = createRetellClient(retellApiKey);
         await retellClient.agent.delete(agent.retell_agent_id);
       }
     }

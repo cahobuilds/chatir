@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
+import { getResellerRetellConfig, getResellerTenantId } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/retell/calls - Create a phone call
@@ -53,22 +54,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get tenant's Retell API key
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('retell_api_key')
-      .eq('id', agent.tenant_id)
-      .single();
+    // Get reseller's Retell API key (organizations inherit from reseller)
+    const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
 
-    if (!tenant?.retell_api_key) {
+    if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Tenant Retell API key not configured' },
+        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
         { status: 400 }
       );
     }
 
-    // Create phone call via Retell AI
-    const retellClient = createRetellClient(tenant.retell_api_key);
+    // Get reseller tenant ID for billing tracking
+    const resellerTenantId = await getResellerTenantId(agent.tenant_id);
+
+    // Create phone call via Retell AI using reseller's API key
+    const retellClient = createRetellClient(retellApiKey);
     const call = await retellClient.call.createPhoneCall({
       from_number,
       to_number,
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
       metadata: metadata || {},
     });
 
-    // Create interaction record
+    // Create interaction record with reseller tracking
     const { data: interaction, error: interactionError } = await supabase
       .from('interactions')
       .insert({
@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
         retell_call_id: call.call_id,
         customer_phone: to_number,
         metadata: metadata || {},
+        reseller_tenant_id: resellerTenantId,
       })
       .select()
       .single();

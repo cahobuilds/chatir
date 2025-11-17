@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
+import { getResellerRetellConfig } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/retell/agents/sync - Sync agents from Retell AI to local database
@@ -32,22 +33,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
     }
 
-    // Get tenant's Retell API key
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('retell_api_key')
-      .eq('id', tenant_id)
-      .single();
+    // Get reseller's Retell API key (organizations inherit from reseller)
+    const retellApiKey = await getResellerRetellConfig(tenant_id);
 
-    if (!tenant?.retell_api_key) {
+    if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Tenant Retell API key not configured. Please configure it in tenant settings.' },
+        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
         { status: 400 }
       );
     }
 
-    // List agents from Retell AI
-    const retellClient = createRetellClient(tenant.retell_api_key);
+    // List agents from Retell AI using reseller's API key
+    const retellClient = createRetellClient(retellApiKey);
     const retellAgents = await retellClient.agent.list();
 
     // Get existing agents for this tenant
