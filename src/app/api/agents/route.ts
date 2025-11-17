@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     if (isSystemAdmin) {
       let agentsQuery = adminSupabase
         .from('agents')
-        .select('*, agent_folders(id, name)');
+        .select('*');
 
       // Apply type filter if provided
       if (typeFilter && ['voice', 'chat'].includes(typeFilter)) {
@@ -48,6 +48,24 @@ export async function GET(request: NextRequest) {
 
       if (agentsError) {
         return NextResponse.json({ error: agentsError.message }, { status: 500 });
+      }
+
+      // Fetch folder information separately if agents have folder_id
+      if (agents && agents.length > 0) {
+        const folderIds = [...new Set(agents.map(a => a.folder_id).filter(Boolean))];
+        if (folderIds.length > 0) {
+          const { data: folders } = await adminSupabase
+            .from('agent_folders')
+            .select('id, name')
+            .in('id', folderIds);
+          
+          const folderMap = new Map(folders?.map(f => [f.id, f]) || []);
+          agents.forEach(agent => {
+            if (agent.folder_id && folderMap.has(agent.folder_id)) {
+              (agent as any).agent_folders = folderMap.get(agent.folder_id);
+            }
+          });
+        }
       }
 
       return NextResponse.json({ agents: agents || [] });
@@ -74,7 +92,7 @@ export async function GET(request: NextRequest) {
 
     let agentsQuery = supabase
       .from('agents')
-      .select('*, agent_folders(id, name)');
+      .select('*');
 
     // Apply tenant filter
     agentsQuery = agentsQuery.in('tenant_id', tenantIds);
@@ -113,6 +131,24 @@ export async function GET(request: NextRequest) {
 
     if (agentsError) {
       return NextResponse.json({ error: agentsError.message }, { status: 500 });
+    }
+
+    // Fetch folder information separately if agents have folder_id
+    if (agents && agents.length > 0) {
+      const folderIds = [...new Set(agents.map(a => a.folder_id).filter(Boolean))];
+      if (folderIds.length > 0) {
+        const { data: folders } = await supabase
+          .from('agent_folders')
+          .select('id, name')
+          .in('id', folderIds);
+        
+        const folderMap = new Map(folders?.map(f => [f.id, f]) || []);
+        agents.forEach(agent => {
+          if (agent.folder_id && folderMap.has(agent.folder_id)) {
+            (agent as any).agent_folders = folderMap.get(agent.folder_id);
+          }
+        });
+      }
     }
 
     return NextResponse.json({ agents: agents || [] });
