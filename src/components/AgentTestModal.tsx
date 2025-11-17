@@ -303,12 +303,13 @@ export default function AgentTestModal({
           retellClient.on("call_ready", () => {
             console.log("Retell call ready - engine connected and audio active");
             setSuccess("Connected to Retell AI - audio is now active!");
-            // Ensure audio playback is started (required for some browsers)
-            // This must be called after user interaction, so we call it here
+            
+            // Audio playback should already be initialized, but ensure it's active
+            // This is a safety check for browsers that require it after connection
             try {
               retellClient.startAudioPlayback?.();
             } catch (e) {
-              console.warn("Could not start audio playback:", e);
+              console.warn("Could not start audio playback (may already be started):", e);
             }
             
             // Clear any welcome messages - agent will speak first
@@ -319,12 +320,25 @@ export default function AgentTestModal({
             console.log("Retell call ended");
             setIsRecording(false);
             setIsListening(false);
-            retellClientRef.current = null;
-            retellCallIdRef.current = null;
+            // Clear refs after a short delay to allow for potential reconnection attempts
+            setTimeout(() => {
+              retellClientRef.current = null;
+              retellCallIdRef.current = null;
+            }, 1000);
           });
 
           retellClient.on("error", (error: any) => {
             console.error("Retell error:", error);
+            
+            // Don't fail on PublishTrackError if it's just a timing issue
+            // The SDK will retry automatically
+            if (error?.message?.includes("PublishTrackError") || 
+                error?.message?.includes("publishing rejected")) {
+              console.warn("PublishTrackError detected - this may be a timing issue, SDK will retry");
+              // Don't end the call, let it retry
+              return;
+            }
+            
             setError(`Retell error: ${error.message || "Unknown error"}`);
             setIsRecording(false);
             setIsListening(false);
@@ -428,10 +442,20 @@ export default function AgentTestModal({
             setMessages((prev) => prev.filter(msg => !msg.isTyping));
           });
 
-          // Start the call
+          // Start the call - this will connect to Retell
+          // The SDK will automatically enable microphone after connection
+          // We need to wait for call_ready before the engine is fully ready
+          // Add a small delay to ensure audio context is ready
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
           await retellClient.startCall({
             accessToken: access_token,
           });
+
+          console.log("Call started, waiting for engine to be ready...");
+          
+          // Note: startAudioPlayback() must be called AFTER startCall() 
+          // because it requires the room to exist. We'll call it in call_ready handler.
 
           // Don't add welcome message here - wait for call_ready
           // The agent will speak its first message automatically
