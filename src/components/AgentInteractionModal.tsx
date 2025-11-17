@@ -332,6 +332,7 @@ export default function AgentInteractionModal({
             retellClient.on("call_started", () => {
               console.log("Retell call started - waiting for engine to initialize...");
               setIsInitializing(true);
+              isInitializingRef.current = true;
               setInitializationStartTime(Date.now());
               setIsRecording(true);
               setIsListening(false); // Don't set listening until call_ready
@@ -339,7 +340,7 @@ export default function AgentInteractionModal({
               // Show initialization message
               setMessages([{
                 id: 'init',
-                type: 'system',
+                type: 'agent' as const, // Use 'agent' type since 'system' doesn't exist
                 text: 'Initializing agent... Please wait while the engine connects.',
                 timestamp: new Date(),
               }]);
@@ -349,6 +350,7 @@ export default function AgentInteractionModal({
               const initTime = initializationStartTime ? Date.now() - initializationStartTime : 0;
               console.log(`Retell call ready - engine connected and audio active (took ${initTime}ms)`);
               setIsInitializing(false);
+              isInitializingRef.current = false;
               setInitializationStartTime(null);
               setSuccess("Connected - audio is active!");
               
@@ -389,12 +391,13 @@ export default function AgentInteractionModal({
             retellClient.on("call_ended", () => {
               console.log("Retell call ended");
               setIsInitializing(false);
+              isInitializingRef.current = false;
               setInitializationStartTime(null);
               setIsRecording(false);
               setIsListening(false);
               
               // Check if call ended before call_ready (indicates configuration issue)
-              if (isInitializing) {
+              if (isInitializingRef.current) {
                 setError("Call ended during initialization. The agent may need more time to initialize. Please try again.");
               } else if (!retellCallIdRef.current) {
                 setError("Call ended immediately. Please check agent configuration in Retell AI dashboard:\n1. Agent LLM must be configured\n2. Agent must have valid API keys\n3. Check Retell dashboard for agent status");
@@ -416,7 +419,7 @@ export default function AgentInteractionModal({
                 console.warn("This is usually a timing issue during initialization. Waiting for call_ready...");
                 
                 // If we're still initializing, don't show error - wait for call_ready
-                if (isInitializing) {
+                if (isInitializingRef.current) {
                   console.log("Still initializing - ignoring PublishTrackError, waiting for call_ready");
                   return;
                 }
@@ -440,7 +443,7 @@ export default function AgentInteractionModal({
               const errorMessage = error?.message || error?.error || "Unknown error";
               
               // Don't show error if we're still initializing (might be transient)
-              if (!isInitializing) {
+              if (!isInitializingRef.current) {
                 setError(`Retell error: ${errorMessage}. Check agent configuration in Retell AI dashboard.`);
               }
               
@@ -451,6 +454,7 @@ export default function AgentInteractionModal({
                 setIsRecording(false);
                 setIsListening(false);
                 setIsInitializing(false);
+                isInitializingRef.current = false;
                 try {
                   retellClient.stopCall();
                 } catch (e) {
@@ -472,6 +476,7 @@ export default function AgentInteractionModal({
               // Clear initialization message once we get real updates
               if (transcript || response) {
                 setIsInitializing(false);
+                isInitializingRef.current = false;
                 setMessages((prev) => prev.filter(msg => msg.id !== 'init'));
               }
               
@@ -549,7 +554,7 @@ export default function AgentInteractionModal({
             
             // Set a timeout to show warning if initialization takes too long
             setTimeout(() => {
-              if (isInitializing && retellClientRef.current) {
+              if (isInitializingRef.current && retellClientRef.current) {
                 console.warn("Initialization taking longer than expected - agent may still connect");
                 setMessages((prev) => {
                   const hasInitMsg = prev.some(msg => msg.id === 'init');
@@ -567,10 +572,11 @@ export default function AgentInteractionModal({
             
             // Set a longer timeout to give up if initialization takes too long (3 minutes)
             setTimeout(() => {
-              if (isInitializing && retellClientRef.current) {
+              if (isInitializingRef.current && retellClientRef.current) {
                 console.error("Initialization timeout - agent failed to initialize after 3 minutes");
                 setError("Agent initialization timed out. Please check agent configuration in Retell AI dashboard or try again.");
                 setIsInitializing(false);
+                isInitializingRef.current = false;
                 setIsRecording(false);
                 setIsListening(false);
               }
