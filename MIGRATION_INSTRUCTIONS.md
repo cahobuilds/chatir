@@ -1,93 +1,71 @@
-# Running Database Migrations
+# Migration Instructions
 
-Your Supabase project is configured. Follow these steps to run the migrations:
+## Apply the RLS Fix Migration
 
-## Option 1: Using Supabase CLI (Recommended)
+The migration `20251115000000_fix_agent_folders_rls_recursion.sql` fixes the 500 errors on `/api/folders` endpoint.
 
-### Step 1: Authenticate with Supabase
+### Option 1: Apply via Supabase Dashboard (Recommended for Production)
 
-Open a terminal and run:
-
-```bash
-supabase login
-```
-
-This will open your browser to authenticate. After authentication, you'll be able to link and push migrations.
-
-### Step 2: Link Your Project
-
-```bash
-supabase link --project-ref ystivchlyoijaghwdcjd
-```
-
-When prompted, enter your database password: `REDACTED`
-
-### Step 3: Push Migrations
-
-```bash
-supabase db push
-```
-
-This will apply all migrations to your remote Supabase database.
-
-## Option 2: Using Supabase Dashboard (Alternative)
-
-If CLI authentication doesn't work, you can run the migration SQL directly:
-
-1. Go to [Supabase Dashboard](https://supabase.com/dashboard/project/ystivchlyoijaghwdcjd)
+1. Go to your Supabase project dashboard
 2. Navigate to **SQL Editor**
-3. Open the migration file: `supabase/migrations/20251111172146_create_initial_schema.sql`
+3. Open the migration file: `supabase/migrations/20251115000000_fix_agent_folders_rls_recursion.sql`
 4. Copy the entire contents
-5. Paste into SQL Editor
-6. Click **Run**
+5. Paste into the SQL Editor
+6. Click **Run** to execute
 
-## Verify Migration
+### Option 2: Apply via Supabase CLI (If Local DB is Running)
 
-After running migrations, verify in Supabase Dashboard:
+```bash
+# Make sure Supabase is running locally
+supabase start
 
-1. Go to **Table Editor**
-2. You should see these tables:
-   - ✅ `tenants`
-   - ✅ `user_tenants`
-   - ✅ `agents`
-   - ✅ `interactions`
-   - ✅ `billing_records`
-   - ✅ `api_keys`
+# Apply the migration
+supabase migration up
+```
 
-3. Go to **Authentication** → **Policies**
-4. Verify RLS policies are enabled on all tables
+### Option 3: Apply via Direct SQL Connection
 
-## Environment Variables
+If you have direct database access:
 
-Your `.env.local` file has been created with:
-- ✅ Supabase URL
-- ✅ Anon Key (public)
-- ✅ Service Role Key (secret - server-side only)
+```bash
+psql -h your-db-host -U postgres -d postgres -f supabase/migrations/20251115000000_fix_agent_folders_rls_recursion.sql
+```
 
-**Important:** Never commit `.env.local` to git!
+## Verify the Migration
 
-## Next Steps
+After applying, test the folders endpoint:
 
-After migrations are complete:
+```bash
+# Should return 200 OK instead of 500
+curl -X GET "https://your-domain.com/api/folders?tenant_id=YOUR_TENANT_ID" \
+  -H "Cookie: your-auth-cookie"
+```
 
-1. ✅ Test database connection: `npm run dev`
-2. ✅ Set up authentication (see `docs/ARCHITECTURE_RECOMMENDATIONS.md`)
-3. ✅ Create your first tenant
-4. ✅ Set up Retell AI integration
+Check your browser console - the repeated 500 errors for `/api/folders` should stop.
 
-## Troubleshooting
+## What the Migration Does
 
-### "Access denied" error
-- Make sure you're logged in: `supabase login`
-- Verify project ref is correct: `ystivchlyoijaghwdcjd`
+1. **Drops existing problematic policies** that cause RLS recursion
+2. **Updates `get_user_tenant_ids()` function** to include status check
+3. **Creates `is_folder_admin()` helper function** for admin checks
+4. **Recreates policies** using SECURITY DEFINER functions to prevent recursion
 
-### Migration fails
-- Check SQL syntax in migration file
-- Verify database password is correct
-- Check Supabase dashboard for error messages
+## Rollback (If Needed)
 
-### RLS policies not working
-- Verify policies were created (check SQL Editor → History)
-- Ensure user is authenticated
-- Check `user_tenants` table has correct entries
+If you need to rollback, you can recreate the original policies, but this is not recommended as they have the recursion issue:
 
+```sql
+-- Only if you need to rollback (not recommended)
+DROP POLICY IF EXISTS "Users can view folders in their tenant" ON agent_folders;
+DROP POLICY IF EXISTS "Admins can manage folders in their tenant" ON agent_folders;
+
+-- Recreate original policies (these have the recursion issue)
+CREATE POLICY "Users can view folders in their tenant"
+  ON agent_folders FOR SELECT
+  USING (
+    tenant_id IN (
+      SELECT tenant_id FROM user_tenants
+      WHERE user_id = auth.uid() AND status = 'active'
+    )
+  );
+```

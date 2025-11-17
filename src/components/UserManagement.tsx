@@ -22,6 +22,13 @@ import Alert from "./ui/alert/Alert";
 import Button from "./ui/button/Button";
 import { useOrganization } from "@/context/OrganizationContext";
 
+interface TenantAssignment {
+  tenant_id: string;
+  tenant_name: string;
+  role: string;
+  status: string;
+}
+
 interface User {
   id: string;
   name: string;
@@ -33,6 +40,7 @@ interface User {
   avatar?: string;
   department?: string;
   permissions: string[];
+  tenants?: TenantAssignment[]; // Add tenant relationships
 }
 
 interface Organization {
@@ -54,9 +62,19 @@ interface UserManagementProps {
 
 export default function UserManagement({ onAddUserClick, externalShowModal, onModalClose }: UserManagementProps) {
   const [users, setUsers] = useState<User[]>([]);
+  const [fullUsersData, setFullUsersData] = useState<any[]>([]); // Store full API response
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [showNewUser, setShowNewUser] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateSuccess, setUpdateSuccess] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    email: '',
+    tenantAssignments: [] as Array<{ tenant_id: string; role: string; status: string }>,
+  });
   
   // Sync with external modal state if provided
   useEffect(() => {
@@ -190,6 +208,9 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
 
       const data = await response.json();
       const usersList = data.users || [];
+      
+      // Store full data for editing
+      setFullUsersData(usersList);
 
       // Transform API data to component format
       const transformedUsers: User[] = usersList.map((user: any) => {
@@ -218,6 +239,7 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
           lastLogin,
           createdAt,
           permissions: [], // Permissions would come from role system
+          tenants: user.tenants || [], // Store tenant relationships
         };
       });
 
@@ -281,21 +303,150 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
     return matchesFilter && matchesSearch;
   });
 
-  const deleteUser = (userId: string) => {
+  const deleteUser = async (userId: string) => {
     const user = users.find(u => u.id === userId);
-    if (user?.role === "Admin") {
+    if (user?.role === "Admin" || user?.role === "System Admin") {
       alert("Cannot delete admin users");
       return;
     }
-    setUsers(users.filter(user => user.id !== userId));
+    
+    if (!confirm(`Are you sure you want to delete user ${user?.name || user?.email}? This action cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete user');
+      }
+      
+      await fetchUsers(); // Refresh users list
+    } catch (error: any) {
+      alert(`Error deleting user: ${error.message}`);
+    }
   };
 
-  const toggleUserStatus = (userId: string) => {
-    setUsers(users.map(user => 
-      user.id === userId 
-        ? { ...user, status: user.status === "active" ? "inactive" : "active" }
-        : user
-    ));
+  const toggleUserStatus = async (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    
+    const newStatus = user.status === "active" ? "inactive" : "active";
+    
+    // Update tenant assignments with new status
+    const fullUser = fullUsersData.find(u => u.id === userId);
+    if (fullUser && fullUser.tenants) {
+      const tenantAssignments = fullUser.tenants.map((t: any) => ({
+        tenant_id: t.tenant_id,
+        role: t.role,
+        status: newStatus,
+      }));
+      
+      try {
+        const response = await fetch(`/api/users/${userId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenant_assignments: tenantAssignments }),
+        });
+        
+        if (response.ok) {
+          await fetchUsers(); // Refresh users
+        } else {
+          const error = await response.json();
+          alert(`Failed to update user status: ${error.error}`);
+        }
+      } catch (error: any) {
+        alert(`Error updating user: ${error.message}`);
+      }
+    }
+  };
+
+  const handleEditUser = async (userId: string) => {
+    const fullUser = fullUsersData.find(u => u.id === userId);
+    if (!fullUser) return;
+    
+    setEditingUser(users.find(u => u.id === userId) || null);
+    setEditFormData({
+      name: fullUser.name || fullUser.email,
+      email: fullUser.email,
+      tenantAssignments: (fullUser.tenants || []).map((t: any) => ({
+        tenant_id: t.tenant_id,
+        role: t.role,
+        status: t.status,
+      })),
+    });
+    
+    // Fetch organizations if not already loaded
+    if (organizations.length === 0) {
+      await fetchOrganizations();
+    }
+    if (roles.length === 0) {
+      await fetchRoles();
+    }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    
+    setIsUpdating(true);
+    setUpdateError(null);
+    setUpdateSuccess(null);
+    
+    try {
+      const response = await fetch(`/api/users/${editingUser.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editFormData.name,
+          email: editFormData.email,
+          tenant_assignments: editFormData.tenantAssignments,
+        }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update user');
+      }
+      
+      setUpdateSuccess('User updated successfully!');
+      await fetchUsers();
+      
+      setTimeout(() => {
+        setEditingUser(null);
+        setUpdateSuccess(null);
+      }, 2000);
+    } catch (error: any) {
+      setUpdateError(error.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const addTenantAssignment = () => {
+    setEditFormData({
+      ...editFormData,
+      tenantAssignments: [
+        ...editFormData.tenantAssignments,
+        { tenant_id: '', role: 'viewer', status: 'active' },
+      ],
+    });
+  };
+
+  const removeTenantAssignment = (index: number) => {
+    setEditFormData({
+      ...editFormData,
+      tenantAssignments: editFormData.tenantAssignments.filter((_, i) => i !== index),
+    });
+  };
+
+  const updateTenantAssignment = (index: number, field: string, value: string) => {
+    const updated = [...editFormData.tenantAssignments];
+    updated[index] = { ...updated[index], [field]: value };
+    setEditFormData({ ...editFormData, tenantAssignments: updated });
   };
 
   const getInitials = (name: string) => {
@@ -523,6 +674,7 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
                     )}
                   </button>
                   <button
+                    onClick={() => handleEditUser(user.id)}
                     className="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
                     title="Edit user"
                   >
@@ -541,20 +693,61 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
 
               {/* User Details */}
               {selectedUser === user.id && (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <h5 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
-                    Permissions
-                  </h5>
-                  <div className="flex flex-wrap gap-2">
-                    {user.permissions.map((permission, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
-                      >
-                        {permission}
-                      </span>
-                    ))}
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
+                  {/* Organizations */}
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center">
+                      <BuildingOfficeIcon className="w-4 h-4 mr-2" />
+                      Organizations ({user.tenants?.length || 0})
+                    </h5>
+                    {user.tenants && user.tenants.length > 0 ? (
+                      <div className="space-y-2">
+                        {user.tenants.map((tenant, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                          >
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                {tenant.tenant_name || 'Unknown Organization'}
+                              </p>
+                              <div className="flex items-center space-x-2 mt-1">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(getRoleDisplayName(tenant.role))}`}>
+                                  {getRoleDisplayName(tenant.role)}
+                                </span>
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(tenant.status)}`}>
+                                  {tenant.status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        No organizations assigned
+                      </p>
+                    )}
                   </div>
+                  
+                  {/* Permissions */}
+                  {user.permissions && user.permissions.length > 0 && (
+                    <div>
+                      <h5 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                        Permissions
+                      </h5>
+                      <div className="flex flex-wrap gap-2">
+                        {user.permissions.map((permission, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
+                          >
+                            {permission}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -780,6 +973,224 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
               </div>
               </Form>
             </div>
+        </Modal>
+
+        {/* Edit User Modal */}
+        <Modal
+          isOpen={!!editingUser}
+          onClose={() => {
+            setEditingUser(null);
+            setEditFormData({
+              name: '',
+              email: '',
+              tenantAssignments: [],
+            });
+            setUpdateError(null);
+            setUpdateSuccess(null);
+          }}
+          className="max-w-3xl mx-4 my-4"
+          title="Edit User"
+        >
+          <div className="px-6 py-4">
+            {updateError && (
+              <div className="mb-6">
+                <Alert
+                  variant="error"
+                  title="Error"
+                  message={updateError}
+                />
+              </div>
+            )}
+
+            {updateSuccess && (
+              <div className="mb-6">
+                <Alert
+                  variant="success"
+                  title="Success"
+                  message={updateSuccess}
+                />
+              </div>
+            )}
+
+            <Form onSubmit={handleUpdateUser}>
+              <div className="space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                    Basic Information
+                  </h3>
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="edit-user-name">
+                        Full Name <span className="text-error-500">*</span>
+                      </Label>
+                      <Input
+                        id="edit-user-name"
+                        type="text"
+                        required
+                        value={editFormData.name}
+                        onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                        placeholder="John Doe"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-user-email">
+                        Email Address <span className="text-error-500">*</span>
+                      </Label>
+                      <Input
+                        id="edit-user-email"
+                        type="email"
+                        required
+                        value={editFormData.email}
+                        onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                        placeholder="john@example.com"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Organization Assignments */}
+                <div>
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                    <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
+                      Organization Assignments
+                    </h3>
+                    <Button
+                      type="button"
+                      onClick={addTenantAssignment}
+                      variant="outline"
+                      className="text-xs"
+                    >
+                      + Add Organization
+                    </Button>
+                  </div>
+                  
+                  {editFormData.tenantAssignments.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 py-4">
+                      No organizations assigned. Click "Add Organization" to assign this user to an organization.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {editFormData.tenantAssignments.map((assignment, index) => (
+                        <div
+                          key={index}
+                          className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4"
+                        >
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                              Assignment {index + 1}
+                            </h4>
+                            <button
+                              type="button"
+                              onClick={() => removeTenantAssignment(index)}
+                              className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                            <div>
+                              <Label htmlFor={`tenant-${index}`}>
+                                Organization <span className="text-error-500">*</span>
+                              </Label>
+                              <select
+                                id={`tenant-${index}`}
+                                value={assignment.tenant_id}
+                                onChange={(e) => updateTenantAssignment(index, 'tenant_id', e.target.value)}
+                                className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 pr-11 text-sm shadow-theme-xs text-gray-800 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:focus:border-brand-800"
+                                required
+                              >
+                                <option value="">Select organization...</option>
+                                {organizations.map((org) => (
+                                  <option key={org.id} value={org.id}>
+                                    {org.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor={`role-${index}`}>
+                                Role <span className="text-error-500">*</span>
+                              </Label>
+                              <select
+                                id={`role-${index}`}
+                                value={assignment.role}
+                                onChange={(e) => updateTenantAssignment(index, 'role', e.target.value)}
+                                className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 pr-11 text-sm shadow-theme-xs text-gray-800 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:focus:border-brand-800"
+                                required
+                              >
+                                {roles.length === 0 ? (
+                                  <>
+                                    <option value="viewer">Viewer</option>
+                                    <option value="agent">Agent</option>
+                                    <option value="tenant_admin">Organization Admin</option>
+                                    <option value="super_admin">Super Admin</option>
+                                  </>
+                                ) : (
+                                  roles.map((role) => (
+                                    <option key={role.id} value={role.name}>
+                                      {role.display_name || role.name}
+                                    </option>
+                                  ))
+                                )}
+                              </select>
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor={`status-${index}`}>
+                                Status <span className="text-error-500">*</span>
+                              </Label>
+                              <select
+                                id={`status-${index}`}
+                                value={assignment.status}
+                                onChange={(e) => updateTenantAssignment(index, 'status', e.target.value)}
+                                className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 pr-11 text-sm shadow-theme-xs text-gray-800 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:focus:border-brand-800"
+                                required
+                              >
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="suspended">Suspended</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setEditingUser(null);
+                      setEditFormData({
+                        name: '',
+                        email: '',
+                        tenantAssignments: [],
+                      });
+                      setUpdateError(null);
+                      setUpdateSuccess(null);
+                    }}
+                    variant="outline"
+                    disabled={isUpdating}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isUpdating || !editFormData.name.trim() || !editFormData.email.trim()}
+                    variant="primary"
+                  >
+                    {isUpdating ? 'Updating...' : 'Update User'}
+                  </Button>
+                </div>
+              </div>
+            </Form>
+          </div>
         </Modal>
 
         {/* Summary Stats */}

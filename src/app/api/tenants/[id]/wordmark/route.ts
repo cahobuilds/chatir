@@ -23,7 +23,7 @@ export async function POST(
       .select('role')
       .eq('user_id', user.id)
       .eq('tenant_id', id)
-      .in('role', ['tenant_admin', 'super_admin', 'organization_admin'])
+      .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'system_admin'])
       .single();
 
     if (!userTenant) {
@@ -175,7 +175,7 @@ export async function DELETE(
       .select('role')
       .eq('user_id', user.id)
       .eq('tenant_id', id)
-      .in('role', ['tenant_admin', 'super_admin', 'organization_admin'])
+      .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'system_admin'])
       .single();
 
     if (!userTenant) {
@@ -187,7 +187,7 @@ export async function DELETE(
     // Use admin client for storage operations (permissions already verified)
     const adminSupabase = createAdminClient();
     
-    // List files in tenant folder to find wordmark
+    // List files in tenant folder to find wordmark files
     const { data: files, error: listError } = await adminSupabase.storage
       .from('tenant-logos')
       .list(id);
@@ -198,7 +198,7 @@ export async function DELETE(
       }, { status: 500 });
     }
 
-    // Delete wordmark files for this tenant
+    // Delete wordmark files for this tenant (filter for wordmark.* files)
     if (files && files.length > 0) {
       const wordmarkFiles = files.filter(file => file.name.startsWith('wordmark.'));
       if (wordmarkFiles.length > 0) {

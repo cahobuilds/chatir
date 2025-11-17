@@ -29,6 +29,7 @@ export interface Database {
           billing_plan: 'pay_as_you_go' | 'monthly' | 'annual';
           balance: number;
           retell_api_key: string | null;
+          is_reseller: boolean | null;
           created_at: string;
           updated_at: string;
         };
@@ -83,6 +84,8 @@ export interface Database {
           metadata: Json;
           billed: boolean;
           billing_record_id: string | null;
+          reseller_tenant_id: string | null;
+          cost_breakdown: Json;
           started_at: string;
           ended_at: string | null;
           created_at: string;
@@ -103,6 +106,8 @@ export interface Database {
           status: 'pending' | 'paid' | 'failed';
           payment_method: string | null;
           paid_at: string | null;
+          reseller_tenant_id: string | null;
+          cost_breakdown: Json;
           created_at: string;
           updated_at: string;
         };

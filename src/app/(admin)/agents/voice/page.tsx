@@ -30,12 +30,6 @@ export default function VoiceAgentManagement() {
 
       {/* Agent List */}
       <VoiceAgentList />
-
-      {/* Configuration Sections */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <AgentConfiguration />
-        <LLMConfiguration />
-      </div>
     </div>
   );
 }

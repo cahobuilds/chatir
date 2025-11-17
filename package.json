@@ -81,6 +81,7 @@
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.2.3",
     "recharts": "^2.13.0",
+    "retell-client-js-sdk": "^2.0.7",
     "retell-sdk": "^4.57.0",
     "simplebar-react": "^3.2.4",
     "swiper": "^11.0.5",

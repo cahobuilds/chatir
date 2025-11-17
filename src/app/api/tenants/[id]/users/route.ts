@@ -28,23 +28,35 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user has access to this tenant
-    const { data: userTenant } = await supabase
+    // Check if user is system_admin (can access any tenant's users)
+    const { data: systemAdminCheck } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
-      .eq('tenant_id', id)
-      .eq('status', 'active')
+      .in('role', ['system_admin'])
       .single();
 
-    if (!userTenant) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const isSystemAdmin = !!systemAdminCheck;
 
-    // Check if user has permission to view users (admin roles)
-    const canViewUsers = ['super_admin', 'tenant_admin', 'organization_admin', 'system_admin'].includes(userTenant.role);
-    if (!canViewUsers) {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    // If not system_admin, verify user has access to this tenant
+    if (!isSystemAdmin) {
+      const { data: userTenant } = await supabase
+        .from('user_tenants')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('tenant_id', id)
+        .eq('status', 'active')
+        .single();
+
+      if (!userTenant) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      // Check if user has permission to view users (admin roles)
+      const canViewUsers = ['super_admin', 'tenant_admin', 'organization_admin'].includes(userTenant.role);
+      if (!canViewUsers) {
+        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+      }
     }
 
     // Get all users for this tenant

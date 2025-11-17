@@ -47,25 +47,19 @@ const AppSidebar: React.FC = () => {
           const tenant = data.tenant;
           const branding = tenant?.branding;
           
-          let logoUrl = null;
-          let wordmarkUrl = null;
-          
+          let parsedBranding: any = {};
           if (branding && typeof branding === 'object') {
-            logoUrl = branding.logo_url || null;
-            wordmarkUrl = branding.wordmark_url || null;
+            parsedBranding = branding;
           } else if (branding && typeof branding === 'string') {
             try {
-              const parsed = JSON.parse(branding);
-              logoUrl = parsed.logo_url || null;
-              wordmarkUrl = parsed.wordmark_url || null;
+              parsedBranding = JSON.parse(branding);
             } catch {
-              logoUrl = null;
-              wordmarkUrl = null;
+              parsedBranding = {};
             }
           }
-          
-          setOrganizationLogo(logoUrl);
-          setOrganizationWordmark(wordmarkUrl);
+
+          setOrganizationLogo(parsedBranding.logo_url || null);
+          setOrganizationWordmark(parsedBranding.wordmark_url || null);
         } else {
           setOrganizationLogo(null);
           setOrganizationWordmark(null);
@@ -245,6 +239,16 @@ const AppSidebar: React.FC = () => {
                 {(isExpanded || isHovered || isMobileOpen) && (
                   <>
                     <span className="menu-item-text">{nav.name}</span>
+                    {nav.badge === "new" && (
+                      <Badge size="sm" color={isActive(nav.path) ? "primary" : "light"} variant="light" className="ml-auto">
+                        NEW
+                      </Badge>
+                    )}
+                    {nav.badge === "pro" && (
+                      <Badge size="sm" color={isActive(nav.path) ? "info" : "light"} variant="light" className="ml-auto">
+                        PRO
+                      </Badge>
+                    )}
                     {nav.type === "template" && (
                       <Badge size="sm" color="warning" variant="light" className="ml-auto">
                         Demo
@@ -353,68 +357,51 @@ const AppSidebar: React.FC = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`py-8 flex ${
+        className={`py-8 flex items-center gap-3 ${
           !isExpanded && !isHovered ? "xl:justify-center" : "justify-start"
         }`}
       >
-        <Link href="/">
-          {isExpanded || isHovered || isMobileOpen ? (
-            // When expanded: prefer wordmark, fallback to logo, then default
-            organizationWordmark ? (
-              <Image
-                src={organizationWordmark}
-                alt={currentOrganization?.name || "Organization Wordmark"}
-                width={150}
-                height={40}
-                className="h-10 w-auto object-contain max-w-[150px]"
-                unoptimized
-              />
-            ) : organizationLogo ? (
-              <Image
-                src={organizationLogo}
-                alt={currentOrganization?.name || "Organization Logo"}
-                width={150}
-                height={40}
-                className="h-10 w-auto object-contain max-w-[150px]"
-                unoptimized
-              />
-            ) : (
-              <>
-                <Image
-                  className="dark:hidden"
-                  src="/images/logo/logo.svg"
-                  alt="Logo"
-                  width={150}
-                  height={40}
-                />
-                <Image
-                  className="hidden dark:block"
-                  src="/images/logo/logo-dark.svg"
-                  alt="Logo"
-                  width={150}
-                  height={40}
-                />
-              </>
-            )
+        <Link href="/" className="flex items-center gap-3">
+          {/* Logo Icon - Always visible */}
+          {organizationLogo ? (
+            <Image
+              src={organizationLogo}
+              alt={currentOrganization?.name || "Organization Logo"}
+              width={isExpanded || isHovered || isMobileOpen ? 40 : 32}
+              height={isExpanded || isHovered || isMobileOpen ? 40 : 32}
+              className={`object-contain ${
+                isExpanded || isHovered || isMobileOpen ? "h-10 w-10" : "h-8 w-8"
+              }`}
+              unoptimized
+            />
           ) : (
-            // When collapsed: use logo icon (wordmarks are too wide for icon space)
-            organizationLogo ? (
-              <Image
-                src={organizationLogo}
-                alt={currentOrganization?.name || "Organization Logo"}
-                width={32}
-                height={32}
-                className="h-8 w-8 object-contain"
-                unoptimized
-              />
-            ) : (
-              <Image
-                src="/images/logo/logo-icon.svg"
-                alt="Logo"
-                width={32}
-                height={32}
-              />
-            )
+            <Image
+              src="/images/logo/logo-icon.svg"
+              alt="Logo"
+              width={isExpanded || isHovered || isMobileOpen ? 40 : 32}
+              height={isExpanded || isHovered || isMobileOpen ? 40 : 32}
+              className={isExpanded || isHovered || isMobileOpen ? "h-10 w-10" : "h-8 w-8"}
+            />
+          )}
+          
+          {/* Wordmark - Only visible when expanded */}
+          {(isExpanded || isHovered || isMobileOpen) && (
+            <>
+              {organizationWordmark ? (
+                <Image
+                  src={organizationWordmark}
+                  alt={currentOrganization?.name || "Organization Wordmark"}
+                  width={150}
+                  height={40}
+                  className="h-10 w-auto object-contain max-w-[150px]"
+                  unoptimized
+                />
+              ) : (
+                <span className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">
+                  {currentOrganization?.name || "TailAdmin"}
+                </span>
+              )}
+            </>
           )}
         </Link>
       </div>

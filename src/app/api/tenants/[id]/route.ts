@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { isReseller } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/tenants/[id] - Get tenant by ID
@@ -15,20 +16,35 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user has access to this tenant
-    const { data: userTenant } = await supabase
+    // Check if user is system_admin (can access any tenant)
+    const { data: systemAdminCheck } = await supabase
       .from('user_tenants')
-      .select('tenant_id, role')
+      .select('role')
       .eq('user_id', user.id)
-      .eq('tenant_id', id)
+      .in('role', ['system_admin'])
       .single();
 
-    if (!userTenant) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const isSystemAdmin = !!systemAdminCheck;
+
+    // If not system_admin, verify user has access to this tenant
+    if (!isSystemAdmin) {
+      const { data: userTenant } = await supabase
+        .from('user_tenants')
+        .select('tenant_id, role')
+        .eq('user_id', user.id)
+        .eq('tenant_id', id)
+        .single();
+
+      if (!userTenant) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
-    // Get tenant (RLS will ensure user can only access their tenant)
-    const { data: tenant, error: tenantError } = await supabase
+    // Use admin client for system admin to bypass RLS, regular client for others
+    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+
+    // Get tenant (RLS will ensure user can only access their tenant, unless system admin)
+    const { data: tenant, error: tenantError } = await clientToUse
       .from('tenants')
       .select('*')
       .eq('id', id)
@@ -58,21 +74,57 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user is tenant_admin or super_admin
-    const { data: userTenant } = await supabase
+    // Check if user is system_admin (can update any tenant)
+    const { data: systemAdminCheck } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
-      .eq('tenant_id', id)
-      .in('role', ['tenant_admin', 'super_admin'])
+      .in('role', ['system_admin'])
       .single();
 
-    if (!userTenant) {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    const isSystemAdmin = !!systemAdminCheck;
+
+    // If not system_admin, verify user is tenant_admin or super_admin for this specific tenant
+    if (!isSystemAdmin) {
+      const { data: userTenant } = await supabase
+        .from('user_tenants')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('tenant_id', id)
+        .in('role', ['tenant_admin', 'super_admin'])
+        .single();
+
+      if (!userTenant) {
+        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+      }
     }
 
     const body = await request.json();
-    const { name, subdomain, tier, settings, branding, retell_api_key } = body;
+    const { name, subdomain, tier, settings, branding, retell_api_key, is_reseller, parent_id } = body;
+
+    // System admins can update is_reseller and parent_id
+    // Regular admins cannot
+    if ((is_reseller !== undefined || parent_id !== undefined) && !isSystemAdmin) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only system admins can configure reseller settings' },
+        { status: 403 }
+      );
+    }
+
+    // Check if this tenant is a reseller (only resellers can update retell_api_key)
+    const tenantIsReseller = await isReseller(id);
+    
+    // If trying to update retell_api_key:
+    // - System admins can update it for any tenant (to configure resellers)
+    // - Regular admins can only update it if tenant is already a reseller
+    if (retell_api_key !== undefined) {
+      if (!isSystemAdmin && !tenantIsReseller) {
+        return NextResponse.json(
+          { error: 'Only resellers can configure Retell API keys. Organizations inherit Retell configuration from their reseller.' },
+          { status: 403 }
+        );
+      }
+    }
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
@@ -80,9 +132,23 @@ export async function PATCH(
     if (tier !== undefined) updateData.tier = tier;
     if (settings !== undefined) updateData.settings = settings;
     if (branding !== undefined) updateData.branding = branding;
-    if (retell_api_key !== undefined) updateData.retell_api_key = retell_api_key;
+    
+    // System admin can update reseller settings
+    if (isSystemAdmin) {
+      if (is_reseller !== undefined) updateData.is_reseller = is_reseller;
+      if (parent_id !== undefined) updateData.parent_id = parent_id || null;
+      if (retell_api_key !== undefined) updateData.retell_api_key = retell_api_key;
+    } else {
+      // Regular admins can only update retell_api_key if tenant is already a reseller
+      if (retell_api_key !== undefined && tenantIsReseller) {
+        updateData.retell_api_key = retell_api_key;
+      }
+    }
 
-    const { data: tenant, error: tenantError } = await supabase
+    // Use admin client for system admin operations to bypass RLS
+    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+
+    const { data: tenant, error: tenantError } = await clientToUse
       .from('tenants')
       .update(updateData)
       .eq('id', id)
@@ -90,7 +156,12 @@ export async function PATCH(
       .single();
 
     if (tenantError) {
+      console.error('Tenant update error:', tenantError);
       return NextResponse.json({ error: tenantError.message }, { status: 500 });
+    }
+
+    if (!tenant) {
+      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
     return NextResponse.json({ tenant });
