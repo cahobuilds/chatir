@@ -147,20 +147,6 @@ export async function PATCH(
             retellUpdatePayload.llm_websocket_url = llmConfig.llm_websocket_url;
           }
           
-          // Handle prompt/system instructions - Retell uses llm_websocket_url for custom LLM
-          // If prompt is updated, it should be handled via the LLM websocket endpoint
-          const prompt = config.prompt || 
-                        config.system_instructions || 
-                        config.systemPrompt ||
-                        llmConfig.system_instructions ||
-                        llmConfig.prompt;
-          
-          // Note: Prompt updates require updating the LLM websocket endpoint
-          // This is typically handled separately, but we log it for reference
-          if (prompt && configuration !== undefined) {
-            console.log(`Prompt updated for agent ${id}, ensure LLM websocket endpoint is updated`);
-          }
-          
           // Update other Retell-specific fields from configuration
           if (config.language) retellUpdatePayload.language = config.language;
           if (config.enable_transcription !== undefined) retellUpdatePayload.enable_transcription = config.enable_transcription;
@@ -177,6 +163,48 @@ export async function PATCH(
           // This ensures 2-way sync is maintained
           await retellClient.agent.update(retellAgentId, retellUpdatePayload);
           console.log(`Successfully synced agent ${id} (${retellAgentId}) to Retell AI with fields:`, Object.keys(retellUpdatePayload));
+          
+          // Handle prompt/system instructions sync
+          // For Retell LLM: Update the LLM's general_prompt
+          // For Custom LLM: Prompt is handled by the websocket endpoint (can't update directly)
+          // Only sync prompt if configuration was updated
+          if (configuration !== undefined) {
+            const prompt = config.prompt || 
+                          config.system_instructions || 
+                          config.systemPrompt ||
+                          llmConfig.system_instructions ||
+                          llmConfig.prompt;
+            
+            // Only sync if we have a prompt value (empty string means clear it)
+            if (prompt !== undefined && prompt !== null) {
+              try {
+                // Get the agent from Retell to find the LLM ID
+                const retellAgent = await retellClient.agent.retrieve(retellAgentId);
+                
+                // Check if agent uses Retell LLM (not custom LLM)
+                if (retellAgent.response_engine && 
+                    retellAgent.response_engine.type === 'retell-llm' &&
+                    'llm_id' in retellAgent.response_engine) {
+                  const llmId = retellAgent.response_engine.llm_id;
+                  
+                  // Update the LLM's general_prompt (empty string clears it)
+                  await retellClient.llm.update(llmId, {
+                    general_prompt: prompt || null, // null clears the prompt in Retell
+                  });
+                  
+                  console.log(`Successfully synced prompt to Retell LLM ${llmId} for agent ${id}`);
+                } else if (retellAgent.response_engine?.type === 'custom-llm') {
+                  console.log(`Agent ${id} uses custom LLM - prompt updates must be handled by the LLM websocket endpoint`);
+                }
+              } catch (promptError: any) {
+                console.error(`Failed to sync prompt to Retell LLM for agent ${id}:`, promptError);
+                // Don't fail the entire update if prompt sync fails
+              }
+            }
+          }
+          
+          // Note: Description field cannot be synced to Retell as it doesn't exist in Retell's agent model
+          // The description is only stored in our local database and is used for internal reference only
         } else {
           console.warn(`Retell API key not configured for tenant ${agent.tenant_id}, skipping Retell sync`);
         }
