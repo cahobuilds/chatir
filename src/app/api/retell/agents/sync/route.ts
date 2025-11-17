@@ -77,53 +77,35 @@ export async function POST(request: NextRequest) {
     for (const retellAgent of retellAgents) {
       try {
         // Determine agent type based on Retell agent configuration
-        // Priority: voice_id > response_engine type > default to chat
+        // Priority: llm_websocket_url (chat) > voice_id (voice) > response_engine type > default to chat
         let agentType: 'chat' | 'voice' = 'chat'; // Default to chat
         
-        // If voice_id exists, it's definitely a voice agent
-        if (retellAgent.voice_id) {
-          agentType = 'voice';
-        } else {
-          // No voice_id means it's likely a chat agent
-          // But check response_engine to be sure
-          if (retellAgent.response_engine) {
-            const responseEngine = retellAgent.response_engine;
-            
-            // If response_engine is an object
-            if (typeof responseEngine === 'object' && responseEngine !== null) {
-              // Check if it's a string (simple case)
-              if (typeof responseEngine === 'string') {
-                // String response_engine without voice_id is chat
-                agentType = 'chat';
-              } else {
-                // Object response_engine
-                const engine = responseEngine as any;
-                
-                // Check type property
-                if (engine.type === 'custom-llm') {
-                  // Custom LLM is typically chat (unless it has voice_id, which we already checked)
-                  agentType = 'chat';
-                } else if (engine.type === 'retell-llm') {
-                  // Retell LLM without voice_id is chat
-                  agentType = 'chat';
-                }
-                
-                // If it has llm_websocket_url, it's definitely chat
-                if (engine.llm_websocket_url) {
-                  agentType = 'chat';
-                }
-                
-                // If it has llm_id but no voice_id, it's chat
-                if (engine.llm_id && !retellAgent.voice_id) {
-                  agentType = 'chat';
-                }
-              }
-            }
-          }
+        const hasVoiceId = !!retellAgent.voice_id;
+        const responseEngine = retellAgent.response_engine;
+        
+        // Check response_engine first - chat agents with llm_websocket_url are chat even if they have voice_id
+        if (responseEngine && typeof responseEngine === 'object' && responseEngine !== null) {
+          const engine = responseEngine as any;
           
-          // Final check: if no voice_id and no clear voice indicators, it's chat
-          // This catches edge cases where response_engine might be missing or malformed
-          if (!retellAgent.voice_id) {
+          // If it has llm_websocket_url, it's definitely a chat agent
+          if (engine.llm_websocket_url) {
+            agentType = 'chat';
+          } else if (hasVoiceId) {
+            // Has voice_id and no llm_websocket_url = voice agent
+            agentType = 'voice';
+          } else if (engine.type === 'custom-llm' || engine.type === 'retell-llm') {
+            // Custom or Retell LLM without voice_id = chat
+            agentType = 'chat';
+          } else if (engine.llm_id && !hasVoiceId) {
+            // Has llm_id but no voice_id = chat
+            agentType = 'chat';
+          }
+        } else {
+          // No response_engine - check voice_id
+          if (hasVoiceId) {
+            agentType = 'voice';
+          } else {
+            // No voice_id and no response_engine = chat (default)
             agentType = 'chat';
           }
         }
