@@ -281,9 +281,11 @@ export default function AgentInteractionModal({
             });
 
             retellClient.on("call_ready", () => {
+              console.log("Retell call ready - engine connected and audio active");
               setSuccess("Connected - audio is active!");
               try {
                 retellClient.unmute();
+                console.log("Microphone unmuted - engine is ready to receive audio");
               } catch (e) {
                 console.warn("Could not unmute:", e);
               }
@@ -291,12 +293,53 @@ export default function AgentInteractionModal({
             });
 
             retellClient.on("call_ended", () => {
+              console.log("Retell call ended");
               setIsRecording(false);
               setIsListening(false);
+              
+              // Check if call ended before call_ready (indicates configuration issue)
+              if (!retellCallIdRef.current) {
+                setError("Call ended immediately. Please check agent configuration in Retell AI dashboard:\n1. Agent LLM must be configured\n2. Agent must have valid API keys\n3. Check Retell dashboard for agent status");
+              }
+              
               setTimeout(() => {
                 retellClientRef.current = null;
                 retellCallIdRef.current = null;
               }, 1000);
+            });
+
+            retellClient.on("error", (error: any) => {
+              console.error("Retell error:", error);
+              
+              // Handle PublishTrackError gracefully - this is often a timing issue
+              if (error?.message?.includes("PublishTrackError") || 
+                  error?.message?.includes("publishing rejected")) {
+                console.warn("PublishTrackError detected - engine may not be ready yet");
+                console.warn("This is usually a timing issue. The call may still work if engine connects soon.");
+                
+                // Don't show error to user immediately - wait to see if call_ready fires
+                // Only show error if call actually ends
+                return;
+              }
+              
+              // For other errors, show to user
+              const errorMessage = error?.message || error?.error || "Unknown error";
+              setError(`Retell error: ${errorMessage}. Check agent configuration in Retell AI dashboard.`);
+              setIsRecording(false);
+              setIsListening(false);
+              
+              // Only stop call if it's a critical error
+              if (error?.message?.includes("authentication") || 
+                  error?.message?.includes("unauthorized") ||
+                  error?.message?.includes("invalid")) {
+                try {
+                  retellClient.stopCall();
+                } catch (e) {
+                  console.error("Error stopping call:", e);
+                }
+                retellClientRef.current = null;
+                retellCallIdRef.current = null;
+              }
             });
 
             retellClient.on("update", (data: any) => {
@@ -354,14 +397,22 @@ export default function AgentInteractionModal({
               setIsSpeaking(false);
             });
 
+            // Start the call - this will connect to Retell
             await retellClient.startCall({
               accessToken: access_token,
             });
 
+            console.log("Call started, waiting for engine to be ready...");
+            
+            // CRITICAL: Immediately mute the microphone after startCall
+            // The SDK enables it automatically, but the engine isn't ready yet
+            // We'll unmute it when call_ready fires
             try {
               retellClient.mute();
-            } catch (e) {
-              console.warn("Could not mute:", e);
+              console.log("Microphone muted initially - will unmute when engine is ready");
+            } catch (muteError) {
+              console.warn("Could not mute microphone:", muteError);
+              // Continue anyway - might already be muted or SDK handles it differently
             }
 
             return;
