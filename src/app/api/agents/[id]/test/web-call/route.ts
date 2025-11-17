@@ -73,7 +73,7 @@ export async function POST(
     // Create web call via Retell AI
     const retellClient = createRetellClient(retellApiKey);
     const webCall = await retellClient.call.createWebCall({
-      override_agent_id: agent.retell_agent_id,
+      agent_id: agent.retell_agent_id,
       metadata: {
         test: true,
         test_user_id: user.id,
