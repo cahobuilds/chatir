@@ -109,6 +109,7 @@ export default function AgentInteractionModal({
   const retellClientRef = useRef<RetellWebClient | null>(null);
   const retellCallIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const isInitializingRef = useRef(false);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
