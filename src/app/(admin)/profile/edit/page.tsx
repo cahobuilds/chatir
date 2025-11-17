@@ -58,14 +58,37 @@ export default function ProfileEditPage() {
     fetchProfile();
   }, []);
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Show preview immediately
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatarPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // Upload to server
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/profile/avatar', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setAvatarPreview(data.avatar_url);
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Failed to upload avatar');
+        }
+      } catch (error) {
+        console.error('Failed to upload avatar:', error);
+        alert('Failed to upload avatar');
+      }
     }
   };
 
@@ -83,7 +106,7 @@ export default function ProfileEditPage() {
           name: formData.name,
           phone: formData.phone,
           bio: formData.bio,
-          avatar_url: avatarPreview,
+          avatar_url: avatarPreview, // This will be the URL if uploaded, or base64 if from preview
         }),
       });
 

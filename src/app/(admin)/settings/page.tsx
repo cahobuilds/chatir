@@ -7,6 +7,7 @@ import SystemConfiguration from "@/components/SystemConfiguration";
 import SecuritySettings from "@/components/SecuritySettings";
 import NotificationSettings from "@/components/NotificationSettings";
 import BackupSettings from "@/components/BackupSettings";
+import RetellIntegrationManagement from "@/components/RetellIntegrationManagement";
 
 export default function SettingsPage() {
   const generalSettingsRef = useRef<{ save: () => Promise<void> }>(null);
@@ -44,7 +45,7 @@ export default function SettingsPage() {
           <BackupSettings />
         </div>
         <div className="col-span-12 lg:col-span-6">
-          {/* Additional settings component can go here */}
+          <RetellIntegrationManagement />
         </div>
       </div>
     </div>
