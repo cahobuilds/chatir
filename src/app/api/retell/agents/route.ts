@@ -82,9 +82,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { tenant_id, agent_id, agent_name, voice_id, llm_websocket_url, ...retellConfig } = body;
 
-    if (!tenant_id || !agent_id || !agent_name || !voice_id) {
+    // Validate required fields
+    if (!tenant_id || !agent_id || !agent_name) {
       return NextResponse.json(
-        { error: 'tenant_id, agent_id, agent_name, and voice_id are required' },
+        { error: 'tenant_id, agent_id, and agent_name are required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate agent type: either voice_id (voice agent) or llm_websocket_url/llm_id (chat agent)
+    const hasVoiceId = !!voice_id;
+    const hasLLMConfig = !!(llm_websocket_url || retellConfig.llm_id || retellConfig.response_engine);
+    
+    if (!hasVoiceId && !hasLLMConfig) {
+      return NextResponse.json(
+        { error: 'Either voice_id (for voice agent) or llm_websocket_url/llm_id (for chat agent) is required' },
         { status: 400 }
       );
     }
@@ -122,9 +134,13 @@ export async function POST(request: NextRequest) {
     // Build agent creation payload with required response_engine
     const agentPayload: any = {
       agent_name,
-      voice_id,
       ...retellConfig,
     };
+    
+    // Only include voice_id if provided (for voice agents)
+    if (voice_id) {
+      agentPayload.voice_id = voice_id;
+    }
 
     // Handle response_engine - Retell API requires this field
     // Priority: 1) Explicit response_engine in retellConfig, 2) llm_websocket_url (custom LLM), 3) llm_id (Retell LLM), 4) Default LLM
