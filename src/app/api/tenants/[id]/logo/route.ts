@@ -85,37 +85,59 @@ export async function POST(
       .from('tenant-logos')
       .getPublicUrl(fileName);
 
-    // Update tenant branding with logo URL
-    const { data: tenant, error: updateError } = await supabase
+    // Update tenant branding with logo URL using admin client
+    // First, get current branding
+    const { data: tenant, error: fetchError } = await adminSupabase
       .from('tenants')
       .select('branding')
       .eq('id', id)
       .single();
 
-    if (updateError) {
+    if (fetchError) {
       return NextResponse.json({ 
-        error: `Failed to fetch tenant: ${updateError.message}` 
+        error: `Failed to fetch tenant: ${fetchError.message}` 
       }, { status: 500 });
     }
 
-    // Update branding JSONB
-    const currentBranding = (tenant.branding as any) || {};
+    // Update branding JSONB - merge with existing branding
+    // Ensure branding is always a valid object
+    let currentBranding: any = {};
+    if (tenant?.branding) {
+      if (typeof tenant.branding === 'string') {
+        try {
+          currentBranding = JSON.parse(tenant.branding);
+        } catch {
+          currentBranding = {};
+        }
+      } else if (typeof tenant.branding === 'object') {
+        currentBranding = tenant.branding;
+      }
+    }
+
     const updatedBranding = {
       ...currentBranding,
       logo_url: publicUrl,
       logo_updated_at: new Date().toISOString(),
     };
 
-    const { data: updatedTenant, error: brandingError } = await supabase
+    // Update using admin client to bypass RLS
+    const { data: updatedTenant, error: brandingError } = await adminSupabase
       .from('tenants')
       .update({ branding: updatedBranding })
       .eq('id', id)
-      .select()
+      .select('id, name, branding')
       .single();
 
     if (brandingError) {
+      console.error('Branding update error:', brandingError);
       return NextResponse.json({ 
         error: `Failed to update tenant branding: ${brandingError.message}` 
+      }, { status: 500 });
+    }
+
+    if (!updatedTenant) {
+      return NextResponse.json({ 
+        error: 'Failed to update tenant branding: No tenant returned' 
       }, { status: 500 });
     }
 
@@ -190,8 +212,8 @@ export async function DELETE(
       }
     }
 
-    // Remove logo_url from branding
-    const { data: tenant } = await supabase
+    // Remove logo_url from branding using admin client
+    const { data: tenant } = await adminSupabase
       .from('tenants')
       .select('branding')
       .eq('id', id)
@@ -201,10 +223,17 @@ export async function DELETE(
       const currentBranding = (tenant.branding as any) || {};
       const { logo_url, logo_updated_at, ...updatedBranding } = currentBranding;
 
-      await supabase
+      const { error: updateError } = await adminSupabase
         .from('tenants')
         .update({ branding: updatedBranding })
         .eq('id', id);
+
+      if (updateError) {
+        console.error('Branding update error:', updateError);
+        return NextResponse.json({ 
+          error: `Failed to update tenant branding: ${updateError.message}` 
+        }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ success: true });
