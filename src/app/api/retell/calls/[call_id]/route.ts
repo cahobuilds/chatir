@@ -64,20 +64,24 @@ export async function GET(
     console.log(`[Call Status API] Fetching call details for ${call_id}...`);
     const call = await retellClient.call.retrieve(call_id);
 
+    // Log available call properties (using type assertion since Retell SDK types may be incomplete)
+    const callData = call as any;
     console.log(`[Call Status API] Call details retrieved:`, {
-      call_id: call.call_id,
-      status: call.status,
-      direction: call.direction,
-      from_number: call.from_number,
-      to_number: call.to_number,
-      agent_id: call.agent_id,
-      start_timestamp: call.start_timestamp,
-      end_timestamp: call.end_timestamp,
-      duration: call.duration,
+      call_id: callData.call_id,
+      direction: callData.direction,
+      from_number: callData.from_number,
+      to_number: callData.to_number,
+      agent_id: callData.agent_id,
+      start_timestamp: callData.start_timestamp,
+      end_timestamp: callData.end_timestamp,
+      duration: callData.duration,
+      // Include any other properties that might exist
+      ...(callData.status && { status: callData.status }),
+      ...(callData.end_reason && { end_reason: callData.end_reason }),
     });
 
     return NextResponse.json({
-      call,
+      call: callData,
       interaction,
     });
   } catch (error: any) {
