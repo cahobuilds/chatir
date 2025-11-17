@@ -316,16 +316,17 @@ export default function AgentInteractionModal({
       if (agent.retell_agent_id) {
         try {
           // CRITICAL: Request microphone access BEFORE startCall
-          // The SDK may require microphone access to be granted before it can initialize
-          // We'll create a muted track to prevent premature publishing
+          // The SDK requires tracks to be ENABLED to publish them, but we'll mute them
+          // until call_ready fires to prevent premature audio transmission
           console.log("Requesting microphone access before starting Retell call...");
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           mediaStreamRef.current = stream;
           
-          // Immediately mute all tracks to prevent SDK from publishing before engine is ready
+          // Keep tracks ENABLED (required for SDK to publish) but they'll be muted via retellClient.mute()
+          // The SDK needs enabled tracks to establish the WebRTC connection
           stream.getAudioTracks().forEach(track => {
-            track.enabled = false; // Disable track (muted)
-            console.log("Microphone track disabled - will enable after call_ready");
+            track.enabled = true; // Keep enabled - SDK needs this to publish tracks
+            console.log("Microphone track enabled - will be muted via retellClient.mute() until call_ready");
           });
 
           const webCallResponse = await fetch(`/api/agents/${agent.id}/test/web-call`, {
@@ -390,18 +391,10 @@ export default function AgentInteractionModal({
               setInitializationStartTime(null);
               setSuccess("Connected - audio is active!");
               
-              // CRITICAL: Enable microphone tracks IMMEDIATELY when call_ready fires
+              // CRITICAL: Unmute microphone IMMEDIATELY when call_ready fires
+              // Tracks are already enabled, we just need to unmute them
               // This ensures audio can be sent as soon as the engine is ready
               // If we wait, Retell may timeout waiting for user audio input
-              if (mediaStreamRef.current) {
-                mediaStreamRef.current.getAudioTracks().forEach(track => {
-                  track.enabled = true; // Enable track immediately
-                  console.log("Microphone track enabled - engine is ready");
-                });
-              }
-              
-              // Unmute immediately (no delay) - engine is ready, we need to send audio ASAP
-              // The 1 second delay was causing Retell to timeout waiting for audio
               try {
                 retellClient.unmute();
                 console.log("Microphone unmuted immediately - engine is ready to receive audio");
@@ -620,17 +613,24 @@ export default function AgentInteractionModal({
             });
 
             // Start the call - this will connect to Retell
-            // NOTE: Microphone access is already granted but tracks are disabled
-            // This allows the SDK to initialize properly while preventing premature track publishing
+            // NOTE: Tracks are enabled but we'll mute them until call_ready fires
+            // The SDK needs enabled tracks to publish them to the WebRTC connection
             await retellClient.startCall({
               accessToken: access_token,
             });
 
+            // Immediately mute to prevent audio transmission until engine is ready
+            // Tracks are enabled so SDK can publish them, but muted so no audio is sent
+            try {
+              retellClient.mute();
+              console.log("Call started - microphone muted until call_ready fires");
+            } catch (muteError) {
+              console.warn("Could not mute immediately (may not be supported yet):", muteError);
+              // This is okay - we'll mute in call_ready if needed
+            }
+
             console.log("Call started, waiting for engine to initialize (this may take up to 2 minutes)...");
-            console.log("Microphone tracks are disabled - will enable after call_ready fires");
-            
-            // The SDK can now initialize properly with microphone access granted
-            // but tracks are disabled so it can't publish until we enable them after call_ready
+            console.log("Microphone tracks are enabled but muted - will unmute after call_ready fires");
             
             // Set a timeout to show warning if initialization takes too long
             setTimeout(() => {
