@@ -304,6 +304,16 @@ export default function AgentTestModal({
             console.log("Retell call ready - engine connected and audio active");
             setSuccess("Connected to Retell AI - audio is now active!");
             
+            // CRITICAL: Now that engine is ready, unmute the microphone
+            // This ensures tracks are only published when the engine can accept them
+            try {
+              retellClient.unmute();
+              console.log("Microphone unmuted - engine is ready to receive audio");
+            } catch (unmuteError) {
+              console.warn("Could not unmute microphone:", unmuteError);
+              // Continue anyway - might already be unmuted
+            }
+            
             // Audio playback should already be initialized, but ensure it's active
             // This is a safety check for browsers that require it after connection
             try {
@@ -445,14 +455,22 @@ export default function AgentTestModal({
           // Start the call - this will connect to Retell
           // The SDK will automatically enable microphone after connection
           // We need to wait for call_ready before the engine is fully ready
-          // Add a small delay to ensure audio context is ready
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
           await retellClient.startCall({
             accessToken: access_token,
           });
 
           console.log("Call started, waiting for engine to be ready...");
+          
+          // CRITICAL: Immediately mute the microphone after startCall
+          // The SDK enables it automatically, but the engine isn't ready yet
+          // We'll unmute it when call_ready fires
+          try {
+            retellClient.mute();
+            console.log("Microphone muted initially - will unmute when engine is ready");
+          } catch (muteError) {
+            console.warn("Could not mute microphone:", muteError);
+            // Continue anyway
+          }
           
           // Note: startAudioPlayback() must be called AFTER startCall() 
           // because it requires the room to exist. We'll call it in call_ready handler.
