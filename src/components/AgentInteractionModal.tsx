@@ -374,14 +374,10 @@ export default function AgentInteractionModal({
               setIsRecording(true);
               setIsListening(false); // Don't set listening until call_ready
               
-              // Mute AFTER call_started to ensure connection is established
-              // The SDK needs unmuted tracks during startCall to establish WebRTC connection
-              try {
-                retellClient.mute();
-                console.log("Microphone muted after call_started - will unmute on call_ready");
-              } catch (muteError) {
-                console.warn("Could not mute after call_started:", muteError);
-              }
+              // DO NOT MUTE - The SDK needs unmuted tracks throughout initialization
+              // Muting during initialization causes the call to end prematurely
+              // We'll only mute if needed AFTER call_ready fires
+              console.log("Call started - keeping microphone unmuted during initialization");
               
               // Show initialization message
               setMessages([{
@@ -400,29 +396,10 @@ export default function AgentInteractionModal({
               setInitializationStartTime(null);
               setSuccess("Connected - audio is active!");
               
-              // CRITICAL: Unmute microphone IMMEDIATELY when call_ready fires
-              // Tracks are already enabled, we just need to unmute them
-              // This ensures audio can be sent as soon as the engine is ready
-              // If we wait, Retell may timeout waiting for user audio input
-              try {
-                retellClient.unmute();
-                console.log("Microphone unmuted immediately - engine is ready to receive audio");
-                setIsListening(true);
-              } catch (unmuteError) {
-                console.warn("Could not unmute microphone immediately:", unmuteError);
-                // Retry unmuting after a very short delay (200ms)
-                setTimeout(() => {
-                  try {
-                    retellClient.unmute();
-                    setIsListening(true);
-                    console.log("Microphone unmuted after retry");
-                  } catch (e) {
-                    console.error("Failed to unmute after retry:", e);
-                    // If unmute fails, the call may still work but log the error
-                    setError("Warning: Could not enable microphone. Call may end if no audio is detected.");
-                  }
-                }, 200); // Very short delay for retry
-              }
+              // Microphone is already unmuted (we never muted it)
+              // Just mark as listening now that engine is ready
+              console.log("Call ready - microphone is active and ready to receive audio");
+              setIsListening(true);
               
               // Ensure audio playback is active
               try {
@@ -622,15 +599,15 @@ export default function AgentInteractionModal({
             });
 
             // Start the call - this will connect to Retell
-            // NOTE: Tracks are enabled and NOT muted during startCall
-            // The SDK needs unmuted tracks to establish the WebRTC connection
-            // We'll mute AFTER call_started event fires to ensure connection is established
+            // CRITICAL: Do NOT mute during initialization
+            // The SDK needs unmuted tracks throughout the entire initialization process
+            // Muting at any point before call_ready causes the call to end prematurely
             await retellClient.startCall({
               accessToken: access_token,
             });
 
             console.log("Call started, waiting for engine to initialize (this may take up to 2 minutes)...");
-            console.log("Microphone tracks are enabled - will mute after call_started, unmute on call_ready");
+            console.log("Microphone tracks are enabled and unmuted - SDK will handle audio flow");
             
             // Set a timeout to show warning if initialization takes too long
             setTimeout(() => {
