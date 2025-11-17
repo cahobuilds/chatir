@@ -47,8 +47,11 @@ export async function GET(request: NextRequest) {
         .order('created_at', { ascending: false });
 
       if (agentsError) {
+        console.error(`[Agents API] Error fetching agents (system admin):`, agentsError);
         return NextResponse.json({ error: agentsError.message }, { status: 500 });
       }
+
+      console.log(`[Agents API] System admin found ${agents?.length || 0} agents (type: ${typeFilter || 'all'}, folder: ${folderId || 'all'})`);
 
       // Fetch folder information separately if agents have folder_id
       if (agents && agents.length > 0) {
@@ -86,11 +89,14 @@ export async function GET(request: NextRequest) {
       .eq('status', 'active');
 
     if (!userTenants || userTenants.length === 0) {
+      console.log(`[Agents API] User ${user.id} has no active tenant access`);
       return NextResponse.json({ agents: [] });
     }
 
     const tenantIds = userTenants.map(ut => ut.tenant_id);
     const userRoles = userTenants.map(ut => ut.role);
+    
+    console.log(`[Agents API] User ${user.id} has access to tenants:`, tenantIds, 'with roles:', userRoles);
     
     // Check if user is admin (tenant_admin, super_admin, organization_admin)
     const isAdmin = userRoles.some(role => 
@@ -137,8 +143,11 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (agentsError) {
+      console.error(`[Agents API] Error fetching agents:`, agentsError);
       return NextResponse.json({ error: agentsError.message }, { status: 500 });
     }
+
+    console.log(`[Agents API] Found ${agents?.length || 0} agents for user ${user.id} (type: ${typeFilter || 'all'}, folder: ${folderId || 'all'})`);
 
     // Fetch folder information separately if agents have folder_id
     if (agents && agents.length > 0) {
