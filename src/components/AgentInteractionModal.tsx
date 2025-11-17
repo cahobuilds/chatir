@@ -315,7 +315,7 @@ export default function AgentInteractionModal({
       // Try Retell first if agent has retell_agent_id
       if (agent.retell_agent_id) {
         try {
-          // Get access token FIRST (matches test page pattern)
+          // EXACT PATTERN FROM WORKING TEST PAGE
           console.log("Requesting web call from API...");
           const webCallResponse = await fetch(`/api/agents/${agent.id}/test/web-call`, {
             method: "POST",
@@ -324,34 +324,15 @@ export default function AgentInteractionModal({
 
           if (!webCallResponse.ok) {
             const errorData = await webCallResponse.json();
-            console.error('[AgentInteractionModal] Web call API error:', {
-              status: webCallResponse.status,
-              statusText: webCallResponse.statusText,
-              error: errorData.error,
-              details: errorData.details,
-            });
-            
-            // Provide specific error messages based on status code
-            if (webCallResponse.status === 401) {
-              throw new Error(`Authentication failed: ${errorData.error || 'Invalid or expired Retell API key. Please check reseller configuration.'}`);
-            } else if (webCallResponse.status === 403) {
-              throw new Error(`Permission denied: ${errorData.error || 'Retell API key lacks required permissions. Please check API key permissions in Retell dashboard.'}`);
-            } else if (webCallResponse.status === 404) {
-              throw new Error(`Agent not found: ${errorData.error || 'Agent does not exist in Retell. Please sync agents.'}`);
-            } else {
-              throw new Error(errorData.error || `Failed to create web call (${webCallResponse.status})`);
-            }
+            throw new Error(errorData.error || `API error: ${webCallResponse.status}`);
           }
 
           const { access_token, call_id } = await webCallResponse.json();
-          console.log('[AgentInteractionModal] Web call created successfully:', {
-            call_id,
-            access_token_length: access_token?.length || 0,
-            access_token_prefix: access_token?.substring(0, 20) || 'N/A',
-          });
           retellCallIdRef.current = call_id;
+          console.log(`Web call created: ${call_id}`);
+          console.log(`Access token received (length: ${access_token.length})`);
 
-          // Request microphone access AFTER getting access token (matches test page pattern)
+          // Request microphone access BEFORE creating client (matches test page exactly)
           console.log("Requesting microphone access...");
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           mediaStreamRef.current = stream;
@@ -361,263 +342,151 @@ export default function AgentInteractionModal({
           const retellClient = new RetellWebClient();
           retellClientRef.current = retellClient;
 
-            retellClient.on("call_started", () => {
-              console.log("Retell call started - waiting for engine to initialize...");
-              setIsInitializing(true);
-              isInitializingRef.current = true;
-              setInitializationStartTime(Date.now());
-              setIsRecording(true);
-              setIsListening(false); // Don't set listening until call_ready
-              
-              // DO NOT MUTE - The SDK needs unmuted tracks throughout initialization
-              // Muting during initialization causes the call to end prematurely
-              // We'll only mute if needed AFTER call_ready fires
-              console.log("Call started - keeping microphone unmuted during initialization");
-              
-              // Show initialization message
-              setMessages([{
-                id: 'init',
-                type: 'agent' as const, // Use 'agent' type since 'system' doesn't exist
-                text: 'Initializing agent... Please wait while the engine connects.',
-                timestamp: new Date(),
-              }]);
-            });
+          // Set up ALL event listeners BEFORE startCall (matches test page exactly)
+          retellClient.on("call_started", () => {
+            console.log("✅ call_started event fired");
+            setIsInitializing(true);
+            isInitializingRef.current = true;
+            setInitializationStartTime(Date.now());
+            setIsRecording(true);
+            setIsListening(false);
+            setMessages([{
+              id: 'init',
+              type: 'agent' as const,
+              text: 'Initializing agent... Please wait while the engine connects.',
+              timestamp: new Date(),
+            }]);
+          });
 
-            retellClient.on("call_ready", () => {
-              const initTime = initializationStartTime ? Date.now() - initializationStartTime : 0;
-              console.log(`Retell call ready - engine connected and audio active (took ${initTime}ms)`);
-              setIsInitializing(false);
-              isInitializingRef.current = false;
-              setInitializationStartTime(null);
-              setSuccess("Connected - audio is active!");
-              
-              // Microphone is already unmuted (we never muted it)
-              // Just mark as listening now that engine is ready
-              console.log("Call ready - microphone is active and ready to receive audio");
-              setIsListening(true);
-              
-              // Ensure audio playback is active
-              try {
-                retellClient.startAudioPlayback?.();
-                console.log("Audio playback confirmed active");
-              } catch (e) {
-                console.warn("Could not start audio playback (may already be started):", e);
-              }
-              
-              // Clear initialization message - agent will speak first
-              setMessages([]);
-            });
+          retellClient.on("call_ready", () => {
+            const initTime = initializationStartTime ? Date.now() - initializationStartTime : 0;
+            console.log(`✅✅ call_ready event fired - ENGINE IS READY! (took ${initTime}ms)`);
+            setIsInitializing(false);
+            isInitializingRef.current = false;
+            setInitializationStartTime(null);
+            setSuccess("Connected - audio is active!");
+            setIsListening(true);
+            setMessages([]);
+          });
 
-            retellClient.on("call_ended", (data: any) => {
-              console.log("Retell call ended", {
-                call_id: retellCallIdRef.current,
-                data: data,
-                was_initializing: isInitializingRef.current,
-                initialization_duration: initializationStartTime 
-                  ? `${Math.floor((Date.now() - initializationStartTime) / 1000)}s`
-                  : 'unknown',
-              });
-              
-              setIsInitializing(false);
-              isInitializingRef.current = false;
-              setInitializationStartTime(null);
+          retellClient.on("call_ended", (data: any) => {
+            console.log(`❌ call_ended event fired: ${JSON.stringify(data)}`);
+            setIsInitializing(false);
+            isInitializingRef.current = false;
+            setInitializationStartTime(null);
+            setIsRecording(false);
+            setIsListening(false);
+            
+            if (isInitializingRef.current) {
+              const duration = initializationStartTime 
+                ? Math.floor((Date.now() - initializationStartTime) / 1000)
+                : 0;
+              setError(`Call ended during initialization after ${duration}s. Check Retell dashboard for call ${retellCallIdRef.current}`);
+            }
+            
+            setTimeout(() => {
+              retellClientRef.current = null;
+              retellCallIdRef.current = null;
+            }, 1000);
+          });
+
+          retellClient.on("error", (error: any) => {
+            console.error(`❌ ERROR event: ${error?.message || JSON.stringify(error)}`);
+            // Only show critical errors
+            if (error?.message?.includes("authentication") || 
+                error?.message?.includes("unauthorized") ||
+                error?.message?.includes("invalid")) {
+              setError(`Retell error: ${error?.message || 'Unknown error'}`);
               setIsRecording(false);
               setIsListening(false);
-              
-              // Check if call ended before call_ready (indicates configuration issue)
-              if (isInitializingRef.current) {
-                const duration = initializationStartTime 
-                  ? Math.floor((Date.now() - initializationStartTime) / 1000)
-                  : 0;
-                console.error(`[AgentInteractionModal] Call ended during initialization after ${duration}s`);
-                setError(`Call ended during initialization after ${duration}s. The agent may need more time to initialize or there may be a configuration issue. Check Retell dashboard for call ${retellCallIdRef.current}`);
-              } else if (!retellCallIdRef.current) {
-                console.error("[AgentInteractionModal] Call ended immediately - no call_id");
-                setError("Call ended immediately. Please check agent configuration in Retell AI dashboard:\n1. Agent LLM must be configured\n2. Agent must have valid API keys\n3. Check Retell dashboard for agent status");
-              } else {
-                console.log(`[AgentInteractionModal] Call ${retellCallIdRef.current} ended normally`);
-              }
-              
-              setTimeout(() => {
-                retellClientRef.current = null;
-                retellCallIdRef.current = null;
-              }, 1000);
-            });
+              setIsInitializing(false);
+              isInitializingRef.current = false;
+            }
+          });
 
-            retellClient.on("error", (error: any) => {
-              console.error("Retell error:", error);
-              
-              // Handle PublishTrackError gracefully - this often happens after call ends
-              // If it happens during initialization, it's usually because call ended prematurely
-              if (error?.message?.includes("PublishTrackError") || 
-                  error?.message?.includes("publishing rejected") ||
-                  error?.message?.includes("engine not connected")) {
-                console.warn("PublishTrackError detected");
-                
-                // If we're still initializing, this might indicate the call ended
-                if (isInitializingRef.current) {
-                  console.warn("PublishTrackError during initialization - call may have ended prematurely");
-                  // Don't show error to user - call_ended will handle it
-                  return;
-                }
-                
-                // If not initializing, log but don't interfere
-                console.warn("PublishTrackError after initialization - may be cleanup related");
-                return;
-              }
-              
-              // For other errors, show to user
-              const errorMessage = error?.message || error?.error || "Unknown error";
-              
-              // Don't show error if we're still initializing (might be transient)
-              if (!isInitializingRef.current) {
-                setError(`Retell error: ${errorMessage}. Check agent configuration in Retell AI dashboard.`);
-              }
-              
-              // Only stop call if it's a critical error
-              if (error?.message?.includes("authentication") || 
-                  error?.message?.includes("unauthorized") ||
-                  error?.message?.includes("invalid")) {
-                setIsRecording(false);
-                setIsListening(false);
-                setIsInitializing(false);
-                isInitializingRef.current = false;
-                try {
-                  retellClient.stopCall();
-                } catch (e) {
-                  console.error("Error stopping call:", e);
-                }
-                retellClientRef.current = null;
-                retellCallIdRef.current = null;
-              }
-            });
-
-            retellClient.on("update", (data: any) => {
-              // Handle different data formats from Retell
-              // Sometimes data comes as {transcript: "...", response: "..."}
-              // Sometimes as {role: "user", content: "..."} or {role: "agent", content: "..."}
-              
-              // CRITICAL: Ensure we always extract strings, never objects
-              let transcript: string | null = null;
-              let response: string | null = null;
-              
-              // Extract transcript - ensure it's a string
-              if (data.transcript) {
-                transcript = typeof data.transcript === 'string' ? data.transcript : String(data.transcript);
-              } else if (data.role === 'user' && data.content) {
-                transcript = typeof data.content === 'string' ? data.content : String(data.content);
-              }
-              
-              // Extract response - ensure it's a string
-              if (data.response) {
-                response = typeof data.response === 'string' ? data.response : String(data.response);
-              } else if (data.role === 'agent' && data.content) {
-                response = typeof data.content === 'string' ? data.content : String(data.content);
-              }
-              
-              // Clear initialization message once we get real updates
-              if (transcript || response) {
-                setIsInitializing(false);
-                isInitializingRef.current = false;
-                setMessages((prev) => prev.filter(msg => msg.id !== 'init'));
-              }
-              
-              if (transcript) {
-                setTranscription(transcript);
-                setMessages((prev) => {
-                  const lastMessage = prev[prev.length - 1];
-                  if (lastMessage && lastMessage.type === 'user' && !lastMessage.finalized) {
-                    return prev.map((msg, idx) => 
-                      idx === prev.length - 1 
-                        ? { ...msg, text: transcript!, finalized: false }
-                        : msg
-                    );
-                  } else {
-                    return [...prev, {
-                      id: `user-${Date.now()}`,
-                      type: 'user' as const,
-                      text: transcript!,
-                      timestamp: new Date(),
-                      finalized: false,
-                    }];
-                  }
-                });
-              }
-              
-              if (response) {
-                setMessages((prev) => {
-                  const withoutTyping = prev.filter(msg => !msg.isTyping && msg.id !== 'init');
-                  const lastMessage = withoutTyping[withoutTyping.length - 1];
-                  
-                  if (lastMessage && lastMessage.type === 'agent' && !lastMessage.finalized) {
-                    return withoutTyping.map((msg, idx) => 
-                      idx === withoutTyping.length - 1 
-                        ? { ...msg, text: response!, finalized: true }
-                        : msg
-                    );
-                  } else {
-                    return [...withoutTyping, {
-                      id: `agent-${Date.now()}`,
-                      type: 'agent' as const,
-                      text: response!,
-                      timestamp: new Date(),
-                      finalized: true,
-                    }];
-                  }
-                });
-              }
-            });
-
-            retellClient.on("agent_start_talking", () => {
-              setIsSpeaking(true);
-            });
-
-            retellClient.on("agent_stop_talking", () => {
-              setIsSpeaking(false);
-            });
-
-            // Start the call - this will connect to Retell
-            // CRITICAL: Do NOT mute during initialization
-            // The SDK needs unmuted tracks throughout the entire initialization process
-            // Muting at any point before call_ready causes the call to end prematurely
-            await retellClient.startCall({
-              accessToken: access_token,
-            });
-
-            console.log("Call started, waiting for engine to initialize (this may take up to 2 minutes)...");
-            console.log("Microphone tracks are enabled and unmuted - SDK will handle audio flow");
+          retellClient.on("update", (data: any) => {
+            // Simple handling like test page - extract strings safely
+            let transcript: string | null = null;
+            let response: string | null = null;
             
-            // Set a timeout to show warning if initialization takes too long
-            setTimeout(() => {
-              if (isInitializingRef.current && retellClientRef.current) {
-                console.warn("Initialization taking longer than expected - agent may still connect");
-                setMessages((prev) => {
-                  const hasInitMsg = prev.some(msg => msg.id === 'init');
-                  if (hasInitMsg) {
-                    return prev.map(msg => 
-                      msg.id === 'init' 
-                        ? { ...msg, text: 'Initializing agent... This may take up to 2 minutes. Please wait...' }
-                        : msg
-                    );
-                  }
-                  return prev;
-                });
-              }
-            }, 30000); // Show warning after 30 seconds
+            if (data.transcript) {
+              transcript = typeof data.transcript === 'string' ? data.transcript : JSON.stringify(data.transcript);
+            }
+            if (data.response) {
+              response = typeof data.response === 'string' ? data.response : JSON.stringify(data.response);
+            }
             
-            // Set a longer timeout to give up if initialization takes too long (3 minutes)
-            setTimeout(() => {
-              if (isInitializingRef.current && retellClientRef.current) {
-                console.error("Initialization timeout - agent failed to initialize after 3 minutes");
-                setError("Agent initialization timed out. Please check agent configuration in Retell AI dashboard or try again.");
-                setIsInitializing(false);
-                isInitializingRef.current = false;
-                setIsRecording(false);
-                setIsListening(false);
-              }
-            }, 180000); // 3 minutes timeout
+            if (transcript || response) {
+              setIsInitializing(false);
+              isInitializingRef.current = false;
+              setMessages((prev) => prev.filter(msg => msg.id !== 'init'));
+            }
+            
+            if (transcript) {
+              setTranscription(transcript);
+              setMessages((prev) => {
+                const lastMessage = prev[prev.length - 1];
+                if (lastMessage && lastMessage.type === 'user' && !lastMessage.finalized) {
+                  return prev.map((msg, idx) => 
+                    idx === prev.length - 1 
+                      ? { ...msg, text: transcript!, finalized: false }
+                      : msg
+                  );
+                } else {
+                  return [...prev, {
+                    id: `user-${Date.now()}`,
+                    type: 'user' as const,
+                    text: transcript!,
+                    timestamp: new Date(),
+                    finalized: false,
+                  }];
+                }
+              });
+            }
+            
+            if (response) {
+              setMessages((prev) => {
+                const withoutTyping = prev.filter(msg => !msg.isTyping && msg.id !== 'init');
+                const lastMessage = withoutTyping[withoutTyping.length - 1];
+                
+                if (lastMessage && lastMessage.type === 'agent' && !lastMessage.finalized) {
+                  return withoutTyping.map((msg, idx) => 
+                    idx === withoutTyping.length - 1 
+                      ? { ...msg, text: response!, finalized: true }
+                      : msg
+                  );
+                } else {
+                  return [...withoutTyping, {
+                    id: `agent-${Date.now()}`,
+                    type: 'agent' as const,
+                    text: response!,
+                    timestamp: new Date(),
+                    finalized: true,
+                  }];
+                }
+              });
+            }
+          });
 
-            return;
+          retellClient.on("agent_start_talking", () => {
+            console.log("🎤 Agent started talking");
+            setIsSpeaking(true);
+          });
+
+          retellClient.on("agent_stop_talking", () => {
+            console.log("🔇 Agent stopped talking");
+            setIsSpeaking(false);
+          });
+
+          // Start the call - NO MUTING, let SDK handle everything (matches test page exactly)
+          console.log("Starting Retell call...");
+          await retellClient.startCall({
+            accessToken: access_token,
+          });
+
+          console.log("startCall() completed - waiting for events...");
+
+          return;
         } catch (retellError: any) {
           console.error("Retell setup error:", retellError);
           setError(`Retell unavailable: ${retellError.message}. Using browser TTS.`);
