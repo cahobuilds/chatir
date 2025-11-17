@@ -54,7 +54,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   const contentClasses = isFullscreen
     ? "w-full h-full"
-    : "relative w-full max-h-[90vh] rounded-3xl bg-white dark:bg-gray-900 overflow-y-auto";
+    : "relative w-full max-h-[90vh] rounded-3xl bg-white dark:bg-gray-900 flex flex-col";
 
   return (
     <div className="fixed inset-0 flex items-center justify-center overflow-y-auto py-4 z-[9999]">
@@ -91,11 +91,11 @@ export const Modal: React.FC<ModalProps> = ({
           </button>
         )}
         {title && (
-          <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="px-6 pt-6 pb-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h2>
           </div>
         )}
-        <div>{children}</div>
+        <div className="overflow-y-auto flex-1 min-h-0">{children}</div>
       </div>
     </div>
   );
