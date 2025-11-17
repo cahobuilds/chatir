@@ -435,10 +435,13 @@ export default function AgentTestModal({
           };
 
           utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
-            console.error("Speech synthesis error:", event.error, event);
+            // "canceled" is expected when we cancel previous speech - don't log as error
+            if (event.error !== 'canceled') {
+              console.error("Speech synthesis error:", event.error, event);
+            }
             setIsSpeaking(false);
             currentUtteranceRef.current = null;
-            // Don't show error to user, just log it
+            // Don't show error to user, just log non-canceled errors
           };
 
           // Get voices and speak
