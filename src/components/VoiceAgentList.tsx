@@ -15,6 +15,8 @@ import Form from "./form/Form";
 import Input from "./form/input/InputField";
 import Label from "./form/Label";
 import Select from "./form/Select";
+import { useOrganization } from "@/context/OrganizationContext";
+import Alert from "./ui/alert/Alert";
 import TextArea from "./form/input/TextArea";
 
 interface Agent {
@@ -32,10 +34,14 @@ interface Agent {
 }
 
 export default function VoiceAgentList() {
+  const { currentOrganization } = useOrganization();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     type: "voice" as "voice" | "chat",
@@ -108,21 +114,27 @@ export default function VoiceAgentList() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      // Get user's first tenant (in a real app, you'd have tenant selection)
-      const tenantsResponse = await fetch("/api/tenants");
-      if (!tenantsResponse.ok) {
-        alert("Failed to get tenant information");
-        return;
-      }
-      const tenantsData = await tenantsResponse.json();
-      const tenantId = tenantsData.tenants?.[0]?.id || tenantsData[0]?.id;
-      
-      if (!tenantId) {
-        alert("No tenant found. Please create a tenant first.");
-        return;
-      }
+    setError(null);
+    setSuccess(null);
 
+    if (!currentOrganization?.id) {
+      setError("No organization selected. Please select an organization first.");
+      return;
+    }
+
+    if (!formData.name.trim()) {
+      setError("Agent name is required");
+      return;
+    }
+
+    if (!formData.voice_id.trim()) {
+      setError("Voice ID is required");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
       const url = editingAgent
         ? `/api/agents/${editingAgent.id}`
         : "/api/agents";
@@ -132,8 +144,8 @@ export default function VoiceAgentList() {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tenant_id: tenantId,
-          name: formData.name,
+          tenant_id: currentOrganization.id,
+          name: formData.name.trim(),
           type: formData.type,
           is_active: formData.is_active,
           configuration: {
@@ -144,15 +156,31 @@ export default function VoiceAgentList() {
       });
 
       if (response.ok) {
+        const data = await response.json();
+        setSuccess(editingAgent ? "Agent updated successfully!" : "Agent created successfully!");
         setIsModalOpen(false);
-        fetchAgents();
+        await fetchAgents();
+        
+        // Reset form
+        setFormData({
+          name: "",
+          type: "voice",
+          is_active: true,
+          voice_id: "",
+          language: "en-US",
+        });
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccess(null), 3000);
       } else {
-        const error = await response.json();
-        alert(error.error || "Failed to save agent");
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to save agent");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save agent:", error);
-      alert("Failed to save agent");
+      setError(error.message || "Failed to save agent");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -301,11 +329,36 @@ export default function VoiceAgentList() {
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="p-6">
-          <h3 className="mb-6 text-xl font-semibold text-gray-900 dark:text-white">
-            {editingAgent ? "Edit Agent" : "Create Voice Agent"}
-          </h3>
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => {
+          setIsModalOpen(false);
+          setError(null);
+          setSuccess(null);
+        }}
+        title={editingAgent ? "Edit Voice Agent" : "Create Voice Agent"}
+      >
+        <div className="px-6 py-4">
+          {error && (
+            <div className="mb-4">
+              <Alert
+                variant="error"
+                title="Error"
+                message={error}
+              />
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-4">
+              <Alert
+                variant="success"
+                title="Success"
+                message={success}
+              />
+            </div>
+          )}
+
           <Form onSubmit={handleSubmit}>
             <div className="space-y-4">
               <div>
@@ -315,11 +368,12 @@ export default function VoiceAgentList() {
                   id="name"
                   name="name"
                   placeholder="Enter agent name"
-                  defaultValue={formData.name}
+                  value={formData.name}
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
                   required
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -332,6 +386,7 @@ export default function VoiceAgentList() {
                   onChange={(value) =>
                     setFormData({ ...formData, voice_id: value })
                   }
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -344,6 +399,7 @@ export default function VoiceAgentList() {
                   onChange={(value) =>
                     setFormData({ ...formData, language: value })
                   }
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -362,6 +418,7 @@ export default function VoiceAgentList() {
                       is_active: value === "true",
                     })
                   }
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -369,12 +426,33 @@ export default function VoiceAgentList() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setError(null);
+                    setSuccess(null);
+                    if (!editingAgent) {
+                      setFormData({
+                        name: "",
+                        type: "voice",
+                        is_active: true,
+                        voice_id: "",
+                        language: "en-US",
+                      });
+                    }
+                  }}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" size="sm">
-                  {editingAgent ? "Update" : "Create"}
+                <Button 
+                  type="submit" 
+                  size="sm"
+                  disabled={isSubmitting || !formData.name.trim() || !formData.voice_id.trim()}
+                >
+                  {isSubmitting 
+                    ? (editingAgent ? "Updating..." : "Creating...") 
+                    : (editingAgent ? "Update" : "Create")
+                  }
                 </Button>
               </div>
             </div>

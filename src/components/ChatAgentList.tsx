@@ -16,6 +16,8 @@ import Input from "./form/input/InputField";
 import Label from "./form/Label";
 import Select from "./form/Select";
 import TextArea from "./form/input/TextArea";
+import { useOrganization } from "@/context/OrganizationContext";
+import Alert from "./ui/alert/Alert";
 
 interface Agent {
   id: string;
@@ -33,10 +35,14 @@ interface Agent {
 }
 
 export default function ChatAgentList() {
+  const { currentOrganization } = useOrganization();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -112,21 +118,22 @@ export default function ChatAgentList() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      // Get user's first tenant (in a real app, you'd have tenant selection)
-      const tenantsResponse = await fetch("/api/tenants");
-      if (!tenantsResponse.ok) {
-        alert("Failed to get tenant information");
-        return;
-      }
-      const tenantsData = await tenantsResponse.json();
-      const tenantId = tenantsData.tenants?.[0]?.id || tenantsData[0]?.id;
-      
-      if (!tenantId) {
-        alert("No tenant found. Please create a tenant first.");
-        return;
-      }
+    setError(null);
+    setSuccess(null);
 
+    if (!currentOrganization?.id) {
+      setError("No organization selected. Please select an organization first.");
+      return;
+    }
+
+    if (!formData.name.trim()) {
+      setError("Agent name is required");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
       const url = editingAgent
         ? `/api/agents/${editingAgent.id}`
         : "/api/agents";
@@ -136,9 +143,9 @@ export default function ChatAgentList() {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tenant_id: tenantId,
-          name: formData.name,
-          description: formData.description,
+          tenant_id: currentOrganization.id,
+          name: formData.name.trim(),
+          description: formData.description.trim() || null,
           type: formData.type,
           is_active: formData.is_active,
           configuration: {
@@ -149,15 +156,32 @@ export default function ChatAgentList() {
       });
 
       if (response.ok) {
+        const data = await response.json();
+        setSuccess(editingAgent ? "Agent updated successfully!" : "Agent created successfully!");
         setIsModalOpen(false);
-        fetchAgents();
+        await fetchAgents();
+        
+        // Reset form
+        setFormData({
+          name: "",
+          description: "",
+          type: "chat",
+          is_active: true,
+          model: "gpt-4",
+          language: "en-US",
+        });
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccess(null), 3000);
       } else {
-        const error = await response.json();
-        alert(error.error || "Failed to save agent");
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to save agent");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save agent:", error);
-      alert("Failed to save agent");
+      setError(error.message || "Failed to save agent");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -312,11 +336,36 @@ export default function ChatAgentList() {
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-        <div className="p-6">
-          <h3 className="mb-6 text-xl font-semibold text-gray-900 dark:text-white">
-            {editingAgent ? "Edit Agent" : "Create Chat Agent"}
-          </h3>
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => {
+          setIsModalOpen(false);
+          setError(null);
+          setSuccess(null);
+        }}
+        title={editingAgent ? "Edit Chat Agent" : "Create Chat Agent"}
+      >
+        <div className="px-6 py-4">
+          {error && (
+            <div className="mb-4">
+              <Alert
+                variant="error"
+                title="Error"
+                message={error}
+              />
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-4">
+              <Alert
+                variant="success"
+                title="Success"
+                message={success}
+              />
+            </div>
+          )}
+
           <Form onSubmit={handleSubmit}>
             <div className="space-y-4">
               <div>
@@ -326,11 +375,12 @@ export default function ChatAgentList() {
                   id="name"
                   name="name"
                   placeholder="Enter agent name"
-                  defaultValue={formData.name}
+                  value={formData.name}
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
                   required
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -343,6 +393,7 @@ export default function ChatAgentList() {
                   onChange={(value: string) =>
                     setFormData({ ...formData, description: value })
                   }
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -355,6 +406,7 @@ export default function ChatAgentList() {
                   onChange={(value) =>
                     setFormData({ ...formData, model: value })
                   }
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -367,6 +419,7 @@ export default function ChatAgentList() {
                   onChange={(value) =>
                     setFormData({ ...formData, language: value })
                   }
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -385,6 +438,7 @@ export default function ChatAgentList() {
                       is_active: value === "true",
                     })
                   }
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -392,12 +446,34 @@ export default function ChatAgentList() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setError(null);
+                    setSuccess(null);
+                    if (!editingAgent) {
+                      setFormData({
+                        name: "",
+                        description: "",
+                        type: "chat",
+                        is_active: true,
+                        model: "gpt-4",
+                        language: "en-US",
+                      });
+                    }
+                  }}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" size="sm">
-                  {editingAgent ? "Update" : "Create"}
+                <Button 
+                  type="submit" 
+                  size="sm"
+                  disabled={isSubmitting || !formData.name.trim()}
+                >
+                  {isSubmitting 
+                    ? (editingAgent ? "Updating..." : "Creating...") 
+                    : (editingAgent ? "Update" : "Create")
+                  }
                 </Button>
               </div>
             </div>
