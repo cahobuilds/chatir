@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/tenants/[id]/logo - Upload tenant logo
@@ -9,6 +9,7 @@ export async function POST(
   try {
     const { id } = await params;
     const supabase = await createClient();
+    const adminSupabase = createAdminClient();
     
     // Verify authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -22,7 +23,7 @@ export async function POST(
       .select('role')
       .eq('user_id', user.id)
       .eq('tenant_id', id)
-      .in('role', ['tenant_admin', 'super_admin'])
+      .in('role', ['tenant_admin', 'super_admin', 'organization_admin'])
       .single();
 
     if (!userTenant) {
@@ -63,8 +64,9 @@ export async function POST(
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    // Upload to Supabase Storage using admin client to bypass RLS
+    // (We've already verified permissions above)
+    const { data: uploadData, error: uploadError } = await adminSupabase.storage
       .from('tenant-logos')
       .upload(fileName, buffer, {
         contentType: file.type,
@@ -79,7 +81,7 @@ export async function POST(
     }
 
     // Get public URL
-    const { data: { publicUrl } } = supabase.storage
+    const { data: { publicUrl } } = adminSupabase.storage
       .from('tenant-logos')
       .getPublicUrl(fileName);
 
@@ -151,7 +153,7 @@ export async function DELETE(
       .select('role')
       .eq('user_id', user.id)
       .eq('tenant_id', id)
-      .in('role', ['tenant_admin', 'super_admin'])
+      .in('role', ['tenant_admin', 'super_admin', 'organization_admin'])
       .single();
 
     if (!userTenant) {
@@ -160,8 +162,11 @@ export async function DELETE(
       }, { status: 403 });
     }
 
+    // Use admin client for storage operations (permissions already verified)
+    const adminSupabase = createAdminClient();
+    
     // List files in tenant folder
-    const { data: files, error: listError } = await supabase.storage
+    const { data: files, error: listError } = await adminSupabase.storage
       .from('tenant-logos')
       .list(id);
 
@@ -174,7 +179,7 @@ export async function DELETE(
     // Delete all logo files for this tenant
     if (files && files.length > 0) {
       const filePaths = files.map(file => `${id}/${file.name}`);
-      const { error: deleteError } = await supabase.storage
+      const { error: deleteError } = await adminSupabase.storage
         .from('tenant-logos')
         .remove(filePaths);
 
