@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { isReseller } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -40,8 +40,11 @@ export async function GET(
       }
     }
 
-    // Get tenant (RLS will ensure user can only access their tenant)
-    const { data: tenant, error: tenantError } = await supabase
+    // Use admin client for system admin to bypass RLS, regular client for others
+    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+
+    // Get tenant (RLS will ensure user can only access their tenant, unless system admin)
+    const { data: tenant, error: tenantError } = await clientToUse
       .from('tenants')
       .select('*')
       .eq('id', id)
@@ -142,7 +145,10 @@ export async function PATCH(
       }
     }
 
-    const { data: tenant, error: tenantError } = await supabase
+    // Use admin client for system admin operations to bypass RLS
+    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+
+    const { data: tenant, error: tenantError } = await clientToUse
       .from('tenants')
       .update(updateData)
       .eq('id', id)
@@ -150,7 +156,12 @@ export async function PATCH(
       .single();
 
     if (tenantError) {
+      console.error('Tenant update error:', tenantError);
       return NextResponse.json({ error: tenantError.message }, { status: 500 });
+    }
+
+    if (!tenant) {
+      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
     return NextResponse.json({ tenant });
