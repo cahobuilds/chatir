@@ -312,10 +312,10 @@ export default function AgentInteractionModal({
     setMessages([]);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
-
       // Try Retell first if agent has retell_agent_id
+      // NOTE: We DON'T request microphone access yet for Retell calls
+      // The SDK will handle microphone access internally, and we'll only
+      // request it after call_ready fires to prevent premature track publishing
       if (agent.retell_agent_id) {
         try {
           const webCallResponse = await fetch(`/api/agents/${agent.id}/test/web-call`, {
@@ -355,35 +355,47 @@ export default function AgentInteractionModal({
               setInitializationStartTime(null);
               setSuccess("Connected - audio is active!");
               
-              // Add a small delay before unmuting to ensure engine is fully ready
-              setTimeout(() => {
-                // CRITICAL: Now that engine is ready, unmute the microphone
-                // This ensures tracks are only published when the engine can accept them
-                try {
-                  retellClient.unmute();
-                  console.log("Microphone unmuted - engine is ready to receive audio");
-                  setIsListening(true);
-                } catch (unmuteError) {
-                  console.warn("Could not unmute microphone:", unmuteError);
-                  // Retry unmuting after a delay
+              // Now request microphone access - only after engine is ready
+              // This prevents the SDK from trying to publish tracks before the engine is ready
+              navigator.mediaDevices.getUserMedia({ audio: true })
+                .then((stream) => {
+                  mediaStreamRef.current = stream;
+                  console.log("Microphone access granted after call_ready");
+                  
+                  // Add a delay before unmuting to ensure engine is fully ready
                   setTimeout(() => {
+                    // CRITICAL: Now that engine is ready AND we have microphone access, unmute
                     try {
                       retellClient.unmute();
+                      console.log("Microphone unmuted - engine is ready to receive audio");
                       setIsListening(true);
-                    } catch (e) {
-                      console.error("Failed to unmute after retry:", e);
+                    } catch (unmuteError) {
+                      console.warn("Could not unmute microphone:", unmuteError);
+                      // Retry unmuting after a delay
+                      setTimeout(() => {
+                        try {
+                          retellClient.unmute();
+                          setIsListening(true);
+                        } catch (e) {
+                          console.error("Failed to unmute after retry:", e);
+                        }
+                      }, 1000);
                     }
-                  }, 1000);
-                }
-                
-                // Audio playback should already be initialized, but ensure it's active
-                // This is a safety check for browsers that require it after connection
-                try {
-                  retellClient.startAudioPlayback?.();
-                } catch (e) {
-                  console.warn("Could not start audio playback (may already be started):", e);
-                }
-              }, 500); // Wait 500ms after call_ready before unmuting
+                    
+                    // Audio playback should already be initialized, but ensure it's active
+                    try {
+                      retellClient.startAudioPlayback?.();
+                    } catch (e) {
+                      console.warn("Could not start audio playback (may already be started):", e);
+                    }
+                  }, 1000); // Wait 1 second after getting microphone access before unmuting
+                })
+                .catch((error) => {
+                  console.error("Failed to get microphone access:", error);
+                  setError("Microphone access denied. Please allow microphone access and try again.");
+                  setIsRecording(false);
+                  setIsListening(false);
+                });
               
               // Clear initialization message - agent will speak first
               setMessages([]);
@@ -536,22 +548,18 @@ export default function AgentInteractionModal({
             });
 
             // Start the call - this will connect to Retell
+            // NOTE: We haven't requested microphone access yet - this prevents
+            // the SDK from trying to publish tracks before the engine is ready
             await retellClient.startCall({
               accessToken: access_token,
             });
 
             console.log("Call started, waiting for engine to initialize (this may take up to 2 minutes)...");
+            console.log("Microphone access will be requested after call_ready fires");
             
-            // CRITICAL: Immediately mute the microphone after startCall
-            // The SDK enables it automatically, but the engine isn't ready yet
-            // We'll unmute it when call_ready fires (after a delay to ensure engine is fully ready)
-            try {
-              retellClient.mute();
-              console.log("Microphone muted initially - will unmute when engine is ready");
-            } catch (muteError) {
-              console.warn("Could not mute microphone:", muteError);
-              // Continue anyway - might already be muted or SDK handles it differently
-            }
+            // The SDK might try to enable microphone automatically, but since we haven't
+            // granted access yet, it won't be able to publish tracks prematurely
+            // We'll request microphone access in the call_ready handler
             
             // Set a timeout to show warning if initialization takes too long
             setTimeout(() => {
