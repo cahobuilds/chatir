@@ -7,6 +7,7 @@ import Input from "./form/input/InputField";
 import Label from "./form/Label";
 import Alert from "./ui/alert/Alert";
 import { MicrophoneIcon, ChatBubbleLeftRightIcon, StopIcon, PhoneIcon } from "@heroicons/react/24/outline";
+import { RetellWebClient } from "retell-client-js-sdk";
 
 interface Agent {
   id: string;
@@ -99,10 +100,13 @@ export default function AgentTestModal({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [useRetellAudio, setUseRetellAudio] = useState(true); // Toggle between Retell and browser TTS
   const recognitionRef = useRef<SpeechRecognitionInterface | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const synthesisRef = useRef<SpeechSynthesis | null>(null);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const retellClientRef = useRef<RetellWebClient | null>(null);
+  const retellCallIdRef = useRef<string | null>(null);
 
   // Initialize Web Speech API and Speech Synthesis
   useEffect(() => {
@@ -187,6 +191,15 @@ export default function AgentTestModal({
     }
 
     return () => {
+      if (retellClientRef.current) {
+        try {
+          retellClientRef.current.stopCall();
+        } catch (error) {
+          console.error("Error stopping Retell call on cleanup:", error);
+        }
+        retellClientRef.current = null;
+        retellCallIdRef.current = null;
+      }
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
@@ -214,6 +227,15 @@ export default function AgentTestModal({
       setIsListening(false);
     } else if (!isOpen) {
       // Clean up when modal closes
+      if (retellClientRef.current) {
+        try {
+          retellClientRef.current.stopCall();
+        } catch (error) {
+          console.error("Error stopping Retell call on close:", error);
+        }
+        retellClientRef.current = null;
+        retellCallIdRef.current = null;
+      }
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
@@ -241,6 +263,86 @@ export default function AgentTestModal({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
+      // Check if agent is linked to Retell and use Retell audio if available
+      if (agent.retell_agent_id && useRetellAudio) {
+        try {
+          // Create web call to get access token
+          const webCallResponse = await fetch(`/api/agents/${agent.id}/test/web-call`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          if (!webCallResponse.ok) {
+            const errorData = await webCallResponse.json();
+            throw new Error(errorData.error || "Failed to create web call");
+          }
+
+          const { access_token, call_id } = await webCallResponse.json();
+          retellCallIdRef.current = call_id;
+
+          // Initialize Retell Web Client
+          const retellClient = new RetellWebClient();
+          retellClientRef.current = retellClient;
+
+          // Set up event handlers
+          retellClient.on("call_started", () => {
+            console.log("Retell call started");
+            setIsRecording(true);
+            setIsListening(true);
+            setSuccess("Connected to Retell AI - audio is now active!");
+          });
+
+          retellClient.on("call_ended", () => {
+            console.log("Retell call ended");
+            setIsRecording(false);
+            setIsListening(false);
+            retellClientRef.current = null;
+            retellCallIdRef.current = null;
+          });
+
+          retellClient.on("error", (error: any) => {
+            console.error("Retell error:", error);
+            setError(`Retell error: ${error.message || "Unknown error"}`);
+            setIsRecording(false);
+            setIsListening(false);
+            retellClient.stopCall();
+            retellClientRef.current = null;
+            retellCallIdRef.current = null;
+          });
+
+          retellClient.on("transcript", (data: any) => {
+            // Handle real-time transcripts from Retell
+            if (data.transcript) {
+              setTranscription(data.transcript);
+            }
+          });
+
+          // Start the call
+          await retellClient.startCall({
+            accessToken: access_token,
+          });
+
+          // Add welcome message
+          const welcomeText = `Connected to ${agent.name}. You can now speak naturally and hear the agent's voice in real-time.`;
+          const welcomeMessage: Message = {
+            id: Date.now().toString(),
+            type: "agent",
+            text: welcomeText,
+            timestamp: new Date(),
+          };
+          setMessages([welcomeMessage]);
+
+          return; // Exit early, Retell handles everything
+        } catch (retellError: any) {
+          console.error("Retell setup error:", retellError);
+          // Fall back to browser-based testing
+          setError(`Retell audio unavailable: ${retellError.message}. Falling back to browser TTS.`);
+          setUseRetellAudio(false);
+          // Continue with browser-based approach below
+        }
+      }
+
+      // Browser-based fallback (original approach)
       // Check if Speech Recognition is available
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SpeechRecognition) {
@@ -267,7 +369,7 @@ export default function AgentTestModal({
       };
       setMessages([welcomeMessage]);
       
-      // Speak the welcome message
+      // Speak the welcome message (browser TTS)
       speakText(welcomeText);
     } catch (error: any) {
       console.error("Microphone access error:", error);
@@ -280,6 +382,17 @@ export default function AgentTestModal({
   const handleStopAudioTest = () => {
     setIsRecording(false);
     setIsListening(false);
+
+    // Stop Retell call if active
+    if (retellClientRef.current) {
+      try {
+        retellClientRef.current.stopCall();
+      } catch (error) {
+        console.error("Error stopping Retell call:", error);
+      }
+      retellClientRef.current = null;
+      retellCallIdRef.current = null;
+    }
 
     // Stop speech recognition
     if (recognitionRef.current) {
@@ -308,6 +421,20 @@ export default function AgentTestModal({
       return;
     }
 
+    // If Retell is active, it handles responses automatically - just add to chat
+    if (retellClientRef.current && retellCallIdRef.current) {
+      // Retell handles audio automatically, just add user message to chat
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        type: "user",
+        text: userInput.trim(),
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      return;
+    }
+
+    // Fallback to API-based response (browser TTS mode)
     try {
       // Call the agent test API
       const response = await fetch(`/api/agents/${agent.id}/test`, {
@@ -332,7 +459,7 @@ export default function AgentTestModal({
         };
         setMessages((prev) => [...prev, agentMessage]);
 
-        // Convert agent response to speech and play it
+        // Convert agent response to speech and play it (browser TTS)
         speakText(agentResponse);
       } else {
         const errorData = await response.json();
