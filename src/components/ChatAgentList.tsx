@@ -18,7 +18,7 @@ import Select from "./form/Select";
 import TextArea from "./form/input/TextArea";
 import { useOrganization } from "@/context/OrganizationContext";
 import Alert from "./ui/alert/Alert";
-import { ArrowPathIcon, PencilIcon, TrashIcon, PlayIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, PencilIcon, TrashIcon, PlayIcon, CodeBracketIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import AgentEditModal from "./AgentEditModal";
 import AgentTestModal from "./AgentTestModal";
 
@@ -50,6 +50,9 @@ export default function ChatAgentList() {
   const [testingAgent, setTestingAgent] = useState<Agent | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [isEmbedModalOpen, setIsEmbedModalOpen] = useState(false);
+  const [embeddingAgent, setEmbeddingAgent] = useState<Agent | null>(null);
+  const [embedCodeCopied, setEmbedCodeCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -150,6 +153,32 @@ export default function ChatAgentList() {
   const handleTest = (agent: Agent) => {
     setTestingAgent(agent);
     setIsTestModalOpen(true);
+  };
+
+  const handleEmbed = (agent: Agent) => {
+    setEmbeddingAgent(agent);
+    setIsEmbedModalOpen(true);
+    setEmbedCodeCopied(false);
+  };
+
+  const getEmbedCode = (agent: Agent) => {
+    const baseUrl = typeof window !== 'undefined' 
+      ? window.location.origin 
+      : process.env.NEXT_PUBLIC_APP_URL || 'https://your-domain.com';
+    const scriptUrl = `${baseUrl}/api/widget/chat.js?agent_id=${agent.id}`;
+    
+    return `<script src="${scriptUrl}"></script>`;
+  };
+
+  const copyEmbedCode = async (agent: Agent) => {
+    const code = getEmbedCode(agent);
+    try {
+      await navigator.clipboard.writeText(code);
+      setEmbedCodeCopied(true);
+      setTimeout(() => setEmbedCodeCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -491,6 +520,14 @@ export default function ChatAgentList() {
                         <Button
                           size="sm"
                           variant="outline"
+                          onClick={() => handleEmbed(agent)}
+                          title="Get Embed Code"
+                        >
+                          <CodeBracketIcon className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
                           onClick={() => handleEdit(agent)}
                           title="Edit Prompt"
                         >
@@ -536,6 +573,72 @@ export default function ChatAgentList() {
           setTestingAgent(null);
         }}
       />
+
+      {/* Embed Code Modal */}
+      <Modal
+        isOpen={isEmbedModalOpen}
+        onClose={() => {
+          setIsEmbedModalOpen(false);
+          setEmbeddingAgent(null);
+          setEmbedCodeCopied(false);
+        }}
+        title="Embed Chat Widget"
+      >
+        {embeddingAgent && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Copy and paste this code into your website to embed the chat widget for <strong>{embeddingAgent.name}</strong>.
+              </p>
+              
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-start justify-between mb-2">
+                  <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Embed Code
+                  </label>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => copyEmbedCode(embeddingAgent)}
+                    className="flex items-center gap-1"
+                  >
+                    <ClipboardDocumentIcon className="w-4 h-4" />
+                    {embedCodeCopied ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
+                <pre className="text-xs text-gray-800 dark:text-gray-200 overflow-x-auto">
+                  <code>{getEmbedCode(embeddingAgent)}</code>
+                </pre>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
+                Installation Instructions
+              </h4>
+              <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-decimal list-inside">
+                <li>Copy the embed code above</li>
+                <li>Paste it before the closing <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">&lt;/body&gt;</code> tag of your HTML</li>
+                <li>The chat widget will appear as a button in the bottom-right corner of your website</li>
+                <li>Visitors can click the button to start chatting with your agent</li>
+              </ol>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsEmbedModalOpen(false);
+                  setEmbeddingAgent(null);
+                  setEmbedCodeCopied(false);
+                }}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Create Agent Modal */}
       <Modal 
