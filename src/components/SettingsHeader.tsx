@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { 
   CogIcon,
   ShieldCheckIcon,
@@ -8,7 +8,26 @@ import {
   CloudArrowUpIcon
 } from "@heroicons/react/24/outline";
 
-export default function SettingsHeader() {
+interface SettingsHeaderProps {
+  onSave?: () => Promise<void>;
+}
+
+export default function SettingsHeader({ onSave }: SettingsHeaderProps) {
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!onSave) return;
+    
+    try {
+      setSaving(true);
+      await onSave();
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-center justify-between">
@@ -31,9 +50,13 @@ export default function SettingsHeader() {
             <CloudArrowUpIcon className="w-4 h-4 mr-2" />
             Export Config
           </button>
-          <button className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+          <button 
+            onClick={handleSave}
+            disabled={saving || !onSave}
+            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <CogIcon className="w-4 h-4 mr-2" />
-            Save Changes
+            {saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </div>
