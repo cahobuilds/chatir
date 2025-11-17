@@ -971,7 +971,7 @@ export default function TenantManagement() {
                   )}
                   {selectedTenant.is_reseller && (
                     <div>
-                      <Label>Retell API Key Configured</Label>
+                      <Label>API Key Configured</Label>
                       <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
                         {selectedTenant.retell_api_key ? (
                           <Badge size="sm" color="success" variant="light">
@@ -1132,7 +1132,7 @@ export default function TenantManagement() {
                   <span>Mark as Reseller / White Label Client</span>
                 </Label>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Resellers can configure Retell API keys and have organizations assigned to them.
+                  Resellers can configure API keys and have organizations assigned to them.
                 </p>
               </div>
 
@@ -1164,15 +1164,15 @@ export default function TenantManagement() {
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Assign this organization to a reseller. Organizations inherit Retell configuration from their parent reseller.
+                    Assign this organization to a reseller. Organizations inherit API configuration from their parent reseller.
                   </p>
                 </div>
               )}
 
-              {/* Retell API Key (only show if IS a reseller) */}
+              {/* API Key (only show if IS a reseller) */}
               {editFormData.is_reseller && (
                 <div>
-                  <Label htmlFor="retell_api_key">Retell AI API Key</Label>
+                  <Label htmlFor="retell_api_key">API Key</Label>
                   <div className="mt-1.5 relative">
                     <Input
                       id="retell_api_key"
@@ -1182,7 +1182,7 @@ export default function TenantManagement() {
                         ...editFormData,
                         retell_api_key: e.target.value,
                       })}
-                      placeholder="Enter Retell AI API key"
+                      placeholder="Enter API key"
                       className="pr-10"
                     />
                     <button
@@ -1206,7 +1206,7 @@ export default function TenantManagement() {
                     </button>
                   </div>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Organizations under this reseller will inherit this Retell API key configuration.
+                    Organizations under this reseller will inherit this API key configuration.
                   </p>
                 </div>
               )}

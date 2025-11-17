@@ -162,7 +162,7 @@ export default function AgentEditModal({
             setDynamicVariables(config.dynamic_variables || []);
 
             // Prompt - check multiple possible locations
-            // Retell agents store prompt in different places:
+            // Agents store prompt in different places:
             // - llm_websocket_url (for custom LLM)
             // - system_instructions (common field)
             // - prompt (direct field)

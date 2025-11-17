@@ -73,8 +73,10 @@ export default function VoiceAgentList() {
   }, [currentOrganization]);
 
   useEffect(() => {
-    fetchAgents();
-  }, [currentOrganization, selectedFolder]);
+    if (currentOrganization?.id) {
+      fetchAgents();
+    }
+  }, [currentOrganization?.id, selectedFolder]);
 
   const fetchFolders = async () => {
     if (!currentOrganization?.id) return;
@@ -90,7 +92,7 @@ export default function VoiceAgentList() {
     }
   };
 
-  const handleSyncFromRetell = async () => {
+  const handleSyncAgents = async () => {
     if (!currentOrganization?.id) {
       setError("No organization selected");
       return;
@@ -115,7 +117,7 @@ export default function VoiceAgentList() {
       }
 
       const data = await response.json();
-      setSuccess(`Successfully synced ${data.synced} agent(s) from Retell AI!${data.errors > 0 ? ` (${data.errors} error(s))` : ''}`);
+      setSuccess(`Successfully synced ${data.synced} agent(s)!${data.errors > 0 ? ` (${data.errors} error(s))` : ''}`);
       
       // Refresh agents after sync
       await fetchAgents();
@@ -124,13 +126,19 @@ export default function VoiceAgentList() {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       console.error("Sync error:", err);
-      setError(err.message || 'Failed to sync agents from Retell AI');
+      setError(err.message || 'Failed to sync agents');
     } finally {
       setSyncing(false);
     }
   };
 
   const fetchAgents = async () => {
+    if (!currentOrganization?.id) {
+      setAgents([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       // Use type filter in API call instead of filtering client-side
@@ -143,10 +151,16 @@ export default function VoiceAgentList() {
       if (response.ok) {
         const data = await response.json();
         // API already filters by type, so use directly
+        console.log(`Fetched ${data.agents?.length || 0} voice agents for tenant ${currentOrganization.id}`);
         setAgents(data.agents || []);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Failed to fetch agents:", response.status, errorData);
+        setError(errorData.error || 'Failed to fetch agents');
       }
     } catch (error) {
       console.error("Failed to fetch agents:", error);
+      setError('Failed to fetch agents');
     } finally {
       setLoading(false);
     }
@@ -355,13 +369,13 @@ export default function VoiceAgentList() {
           </h2>
           <div className="flex items-center gap-2">
             <Button 
-              onClick={handleSyncFromRetell} 
+              onClick={handleSyncAgents} 
               size="sm"
               variant="outline"
               disabled={syncing || !currentOrganization?.id}
             >
               <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? "Syncing..." : "Sync from Retell"}
+              {syncing ? "Syncing..." : "Sync Agents"}
             </Button>
             <Button onClick={handleCreate} size="sm">
               Create Agent
@@ -461,13 +475,13 @@ export default function VoiceAgentList() {
                       </p>
                       <div className="flex items-center justify-center gap-2">
                         <Button 
-                          onClick={handleSyncFromRetell} 
+                          onClick={handleSyncAgents} 
                           size="sm"
                           variant="outline"
                           disabled={syncing || !currentOrganization?.id}
                         >
                           <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                          {syncing ? "Syncing..." : "Sync Agents from Retell"}
+                          {syncing ? "Syncing..." : "Sync Agents"}
                         </Button>
                         <span className="text-gray-400 dark:text-gray-500">or</span>
                         <Button onClick={handleCreate} size="sm">

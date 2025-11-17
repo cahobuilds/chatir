@@ -344,7 +344,7 @@ export default function TenantConfiguration() {
     }
   };
 
-  const handleSaveRetellApiKey = async () => {
+  const handleSaveApiKey = async () => {
     if (!tenant) {
       setError("No organization found");
       return;
@@ -370,7 +370,7 @@ export default function TenantConfiguration() {
 
       const data = await response.json();
       setTenant(data.tenant);
-      setSuccess("Retell API key saved successfully!");
+      setSuccess("API key saved successfully!");
     } catch (err: any) {
       console.error("Update error:", err);
       setError(err.message);
@@ -379,14 +379,14 @@ export default function TenantConfiguration() {
     }
   };
 
-  const handleSyncRetellAgents = async () => {
+  const handleSyncAgents = async () => {
     if (!tenant) {
       setError("No organization found");
       return;
     }
 
     if (!retellApiKey.trim()) {
-      setError("Please configure your Retell API key first");
+      setError("Please configure your API key first");
       return;
     }
 
@@ -409,7 +409,7 @@ export default function TenantConfiguration() {
       }
 
       const data = await response.json();
-      setSuccess(`Successfully synced ${data.synced} agent(s) from Retell AI!${data.errors > 0 ? ` (${data.errors} error(s))` : ''}`);
+      setSuccess(`Successfully synced ${data.synced} agent(s)!${data.errors > 0 ? ` (${data.errors} error(s))` : ''}`);
       
       // Refresh the page or refetch agents after a short delay
       setTimeout(() => {
@@ -782,27 +782,27 @@ export default function TenantConfiguration() {
           </div>
         </div>
 
-        {/* Retell AI Integration - Only visible to resellers */}
+        {/* AI Provider Integration - Only visible to resellers */}
         {isResellerTenant && (
           <div>
             <div className="flex items-center space-x-2 mb-4">
               <KeyIcon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
               <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                Retell AI Integration
+                AI Provider Integration
               </h4>
             </div>
             
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Retell API Key
+                  API Key
                 </label>
                 <div className="flex items-center space-x-2">
                   <input
                     type={showRetellApiKey ? "text" : "password"}
                     value={retellApiKey}
                     onChange={(e) => setRetellApiKey(e.target.value)}
-                    placeholder="Enter your Retell AI API key"
+                    placeholder="Enter your API key"
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
                   />
                   <button
@@ -818,37 +818,26 @@ export default function TenantConfiguration() {
                     )}
                   </button>
                   <button
-                    onClick={handleSaveRetellApiKey}
+                    onClick={handleSaveApiKey}
                     disabled={saving || retellApiKey === ((tenant as any)?.retell_api_key || "")}
                     className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {saving ? "Saving..." : "Save Key"}
                   </button>
                 </div>
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  Get your API key from{" "}
-                  <a
-                    href="https://retellai.com/dashboard/api-keys"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-indigo-600 dark:text-indigo-400 hover:underline"
-                  >
-                    Retell AI Dashboard
-                  </a>
-                </p>
               </div>
 
               <div>
                 <button
-                  onClick={handleSyncRetellAgents}
+                  onClick={handleSyncAgents}
                   disabled={syncing || !retellApiKey.trim()}
                   className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                  {syncing ? "Syncing..." : "Sync Agents from Retell AI"}
+                  {syncing ? "Syncing..." : "Sync Agents"}
                 </button>
                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  Import all agents from your Retell AI account. Existing agents will be updated, new ones will be created.
+                  Import all agents from your account. Existing agents will be updated, new ones will be created.
                 </p>
               </div>
             </div>

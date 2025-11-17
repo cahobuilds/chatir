@@ -22,11 +22,28 @@ export async function GET(request: NextRequest) {
 
     const isSystemAdmin = !!systemAdminCheck;
 
+    // Get query parameters for filtering
+    const { searchParams } = new URL(request.url);
+    const typeFilter = searchParams.get('type'); // 'voice' or 'chat'
+    const folderId = searchParams.get('folder_id'); // Filter by folder
+
     // If system admin, get all agents using admin client to bypass RLS
     if (isSystemAdmin) {
-      const { data: agents, error: agentsError } = await adminSupabase
+      let agentsQuery = adminSupabase
         .from('agents')
-        .select('*')
+        .select('*, agent_folders(id, name)');
+
+      // Apply type filter if provided
+      if (typeFilter && ['voice', 'chat'].includes(typeFilter)) {
+        agentsQuery = agentsQuery.eq('type', typeFilter);
+      }
+
+      // Apply folder filter if provided
+      if (folderId) {
+        agentsQuery = agentsQuery.eq('folder_id', folderId);
+      }
+
+      const { data: agents, error: agentsError } = await agentsQuery
         .order('created_at', { ascending: false });
 
       if (agentsError) {
@@ -35,11 +52,6 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ agents: agents || [] });
     }
-
-    // Get query parameters for filtering
-    const { searchParams } = new URL(request.url);
-    const typeFilter = searchParams.get('type'); // 'voice' or 'chat'
-    const folderId = searchParams.get('folder_id'); // Filter by folder
 
     // For regular users, get their tenant IDs and check roles
     const { data: userTenants } = await supabase
