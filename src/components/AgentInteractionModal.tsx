@@ -390,42 +390,45 @@ export default function AgentInteractionModal({
               setInitializationStartTime(null);
               setSuccess("Connected - audio is active!");
               
-              // Now enable the microphone tracks and unmute
-              // The tracks were disabled before startCall to prevent premature publishing
+              // CRITICAL: Enable microphone tracks IMMEDIATELY when call_ready fires
+              // This ensures audio can be sent as soon as the engine is ready
+              // If we wait, Retell may timeout waiting for user audio input
               if (mediaStreamRef.current) {
                 mediaStreamRef.current.getAudioTracks().forEach(track => {
-                  track.enabled = true; // Enable track
+                  track.enabled = true; // Enable track immediately
                   console.log("Microphone track enabled - engine is ready");
                 });
               }
               
-              // Add a delay before unmuting to ensure engine is fully ready
-              setTimeout(() => {
-                // CRITICAL: Now that engine is ready, unmute the SDK
-                try {
-                  retellClient.unmute();
-                  console.log("Microphone unmuted - engine is ready to receive audio");
-                  setIsListening(true);
-                } catch (unmuteError) {
-                  console.warn("Could not unmute microphone:", unmuteError);
-                  // Retry unmuting after a delay
-                  setTimeout(() => {
-                    try {
-                      retellClient.unmute();
-                      setIsListening(true);
-                    } catch (e) {
-                      console.error("Failed to unmute after retry:", e);
-                    }
-                  }, 1000);
-                }
-                
-                // Audio playback should already be initialized, but ensure it's active
-                try {
-                  retellClient.startAudioPlayback?.();
-                } catch (e) {
-                  console.warn("Could not start audio playback (may already be started):", e);
-                }
-              }, 1000); // Wait 1 second after call_ready before unmuting
+              // Unmute immediately (no delay) - engine is ready, we need to send audio ASAP
+              // The 1 second delay was causing Retell to timeout waiting for audio
+              try {
+                retellClient.unmute();
+                console.log("Microphone unmuted immediately - engine is ready to receive audio");
+                setIsListening(true);
+              } catch (unmuteError) {
+                console.warn("Could not unmute microphone immediately:", unmuteError);
+                // Retry unmuting after a very short delay (200ms)
+                setTimeout(() => {
+                  try {
+                    retellClient.unmute();
+                    setIsListening(true);
+                    console.log("Microphone unmuted after retry");
+                  } catch (e) {
+                    console.error("Failed to unmute after retry:", e);
+                    // If unmute fails, the call may still work but log the error
+                    setError("Warning: Could not enable microphone. Call may end if no audio is detected.");
+                  }
+                }, 200); // Very short delay for retry
+              }
+              
+              // Ensure audio playback is active
+              try {
+                retellClient.startAudioPlayback?.();
+                console.log("Audio playback confirmed active");
+              } catch (e) {
+                console.warn("Could not start audio playback (may already be started):", e);
+              }
               
               // Clear initialization message - agent will speak first
               setMessages([]);
