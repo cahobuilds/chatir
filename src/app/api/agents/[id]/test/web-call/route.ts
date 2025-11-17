@@ -74,8 +74,12 @@ export async function POST(
 
     console.log(`[Web Call API] Retell API key retrieved (length: ${retellApiKey.length}, prefix: ${retellApiKey.substring(0, 10)}...)`);
 
-    // Create web call via Retell AI
-    const retellClient = createRetellClient(retellApiKey);
+    // Create Retell client with enhanced configuration for web calls
+    // Longer timeout (45s) and more retries (3) for web call creation
+    const retellClient = createRetellClient(retellApiKey, {
+      timeout: 45 * 1000, // 45 seconds for web call creation
+      maxRetries: 3, // More retries for transient failures
+    });
     
     // First, verify the agent exists and is properly configured in Retell
     console.log(`[Web Call API] Validating agent ${agent.retell_agent_id} in Retell...`);

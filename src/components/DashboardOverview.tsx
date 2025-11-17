@@ -382,9 +382,9 @@ export default function DashboardOverview() {
                 </Table>
               </div>
               <div className="border-t border-gray-200 dark:border-white/[0.05] px-4 py-3">
-                <Link href="/tenants">
+                <Link href="/users">
                   <Button variant="outline" size="sm" className="w-full">
-                    View All Tenants
+                    View All Organizations
                   </Button>
                 </Link>
               </div>

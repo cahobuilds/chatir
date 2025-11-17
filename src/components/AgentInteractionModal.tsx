@@ -457,7 +457,8 @@ export default function AgentInteractionModal({
               
               // Handle PublishTrackError gracefully - this is often a timing issue during initialization
               if (error?.message?.includes("PublishTrackError") || 
-                  error?.message?.includes("publishing rejected")) {
+                  error?.message?.includes("publishing rejected") ||
+                  error?.message?.includes("engine not connected")) {
                 console.warn("PublishTrackError detected - engine may not be ready yet");
                 console.warn("This is usually a timing issue during initialization. Waiting for call_ready...");
                 
@@ -468,18 +469,26 @@ export default function AgentInteractionModal({
                 }
                 
                 // If not initializing, try to retry unmuting after a delay
-                setTimeout(() => {
-                  if (retellClientRef.current && retellCallIdRef.current) {
-                    try {
-                      retellClient.unmute();
-                      console.log("Retried unmuting after PublishTrackError");
-                    } catch (e) {
-                      console.warn("Retry unmute failed:", e);
+                // Use exponential backoff: 2s, 4s, 8s
+                const retryCount = (error.retryCount || 0) + 1;
+                if (retryCount <= 3) {
+                  const delay = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
+                  setTimeout(() => {
+                    if (retellClientRef.current && retellCallIdRef.current) {
+                      try {
+                        retellClient.unmute();
+                        console.log(`Retried unmuting after PublishTrackError (attempt ${retryCount})`);
+                      } catch (e) {
+                        console.warn("Retry unmute failed:", e);
+                      }
                     }
-                  }
-                }, 2000); // Wait 2 seconds before retry
+                  }, delay);
+                  return; // Don't show error to user, let it retry
+                }
                 
-                return; // Don't show error to user, let it retry
+                // After 3 retries, show a warning but don't stop the call
+                console.warn("PublishTrackError persisted after retries - call may still work");
+                return;
               }
               
               // For other errors, show to user
@@ -513,8 +522,23 @@ export default function AgentInteractionModal({
               // Sometimes data comes as {transcript: "...", response: "..."}
               // Sometimes as {role: "user", content: "..."} or {role: "agent", content: "..."}
               
-              let transcript = data.transcript || (data.role === 'user' ? data.content : null);
-              let response = data.response || (data.role === 'agent' ? data.content : null);
+              // CRITICAL: Ensure we always extract strings, never objects
+              let transcript: string | null = null;
+              let response: string | null = null;
+              
+              // Extract transcript - ensure it's a string
+              if (data.transcript) {
+                transcript = typeof data.transcript === 'string' ? data.transcript : String(data.transcript);
+              } else if (data.role === 'user' && data.content) {
+                transcript = typeof data.content === 'string' ? data.content : String(data.content);
+              }
+              
+              // Extract response - ensure it's a string
+              if (data.response) {
+                response = typeof data.response === 'string' ? data.response : String(data.response);
+              } else if (data.role === 'agent' && data.content) {
+                response = typeof data.content === 'string' ? data.content : String(data.content);
+              }
               
               // Clear initialization message once we get real updates
               if (transcript || response) {
@@ -530,14 +554,14 @@ export default function AgentInteractionModal({
                   if (lastMessage && lastMessage.type === 'user' && !lastMessage.finalized) {
                     return prev.map((msg, idx) => 
                       idx === prev.length - 1 
-                        ? { ...msg, text: transcript, finalized: false }
+                        ? { ...msg, text: transcript!, finalized: false }
                         : msg
                     );
                   } else {
                     return [...prev, {
                       id: `user-${Date.now()}`,
                       type: 'user' as const,
-                      text: transcript,
+                      text: transcript!,
                       timestamp: new Date(),
                       finalized: false,
                     }];
@@ -553,14 +577,14 @@ export default function AgentInteractionModal({
                   if (lastMessage && lastMessage.type === 'agent' && !lastMessage.finalized) {
                     return withoutTyping.map((msg, idx) => 
                       idx === withoutTyping.length - 1 
-                        ? { ...msg, text: response, finalized: true }
+                        ? { ...msg, text: response!, finalized: true }
                         : msg
                     );
                   } else {
                     return [...withoutTyping, {
                       id: `agent-${Date.now()}`,
                       type: 'agent' as const,
-                      text: response,
+                      text: response!,
                       timestamp: new Date(),
                       finalized: true,
                     }];
@@ -966,7 +990,7 @@ export default function AgentInteractionModal({
                               <p className={`text-sm whitespace-pre-wrap ${
                                 message.finalized === false ? 'opacity-70 italic' : ''
                               }`}>
-                                {message.text}
+                                {typeof message.text === 'string' ? message.text : String(message.text || '')}
                               </p>
                               {message.finalized === false && (
                                 <div className="flex items-center gap-1 mt-1">
