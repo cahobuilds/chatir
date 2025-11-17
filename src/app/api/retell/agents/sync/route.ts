@@ -119,6 +119,22 @@ export async function POST(request: NextRequest) {
         
         console.log(`[Sync] Processing agent ${retellAgent.agent_id} (${retellAgent.agent_name}): type=${agentType}, voice_id=${retellAgent.voice_id || 'none'}, response_engine=${JSON.stringify(retellAgent.response_engine)}`);
 
+        // Check for duplicate agent_id (Retell sometimes returns duplicates)
+        // Use a combination of agent_id + agent_name to create unique identifier
+        const agentUniqueKey = `${retellAgent.agent_id}_${retellAgent.agent_name || 'unnamed'}`;
+        
+        // Check if we've already processed this exact agent in this sync batch
+        const alreadyProcessed = syncedAgents.some((a: any) => 
+          a.agent?.retell_agent_id === retellAgent.agent_id && 
+          a.agent?.name === (retellAgent.agent_name || `Retell Agent ${retellAgent.agent_id}`)
+        );
+        
+        if (alreadyProcessed) {
+          console.log(`[Sync] Skipping duplicate agent ${retellAgent.agent_id} (${retellAgent.agent_name}) - already processed in this sync`);
+          skippedByType++;
+          continue;
+        }
+
         if (existingRetellIds.has(retellAgent.agent_id)) {
           // Update existing agent (including type in case it changed)
           const existingAgent = existingAgents?.find(a => a.retell_agent_id === retellAgent.agent_id);

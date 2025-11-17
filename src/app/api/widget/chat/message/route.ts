@@ -99,17 +99,53 @@ export async function POST(request: NextRequest) {
           // Get agent details from Retell
           const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
           
-          // Simple response generation (in production, use Retell's chat API)
           const config = typeof agent.configuration === 'string' 
             ? JSON.parse(agent.configuration) 
             : agent.configuration || {};
           
-          const prompt = config.prompt || config.system_instructions || 
-                        'You are a helpful assistant.';
+          const responseEngine = retellAgent.response_engine;
+          const hasWebSocketUrl = responseEngine && 
+            typeof responseEngine === 'object' && 
+            responseEngine !== null &&
+            (responseEngine as any).llm_websocket_url;
           
-          // For now, return a placeholder response
-          // In production, integrate with Retell's chat API or your LLM service
-          const agentResponse = `Thank you for your message: "${message}". I'm processing your request.`;
+          // If agent uses custom LLM WebSocket, we need to connect to it
+          // For now, use the agent's system prompt to generate a contextual response
+          const systemPrompt = config.prompt || 
+                              config.system_instructions || 
+                              (retellAgent as any).prompt ||
+                              'You are a helpful assistant.';
+          
+          // Build conversation context from transcript
+          const conversationContext = transcript
+            .slice(-10) // Last 10 messages for context
+            .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+            .join('\n');
+          
+          // Generate a more contextual response based on the agent's prompt
+          // Note: This is a temporary solution. For production, integrate with the LLM WebSocket
+          let agentResponse: string;
+          
+          if (hasWebSocketUrl) {
+            // Agent uses custom LLM WebSocket - indicate this requires WebSocket connection
+            agentResponse = `I received your message: "${message}". This agent is configured to use a custom LLM via WebSocket. For real-time chat, please use the WebSocket connection.`;
+          } else {
+            // Try to generate a contextual response based on the prompt
+            // This is a simplified version - in production, you'd call the actual LLM
+            const userMessageLower = message.toLowerCase();
+            
+            // Check if it's a greeting
+            if (userMessageLower.match(/^(hi|hello|hey|greetings)/)) {
+              agentResponse = systemPrompt.includes('helpful') 
+                ? `Hello! ${systemPrompt.includes('customer') ? 'How can I help you today?' : 'How can I assist you?'}`
+                : `Hello! How can I help you?`;
+            } else if (userMessageLower.match(/(thank|thanks|appreciate)/)) {
+              agentResponse = `You're welcome! Is there anything else I can help you with?`;
+            } else {
+              // Generic contextual response based on system prompt
+              agentResponse = `Based on your message "${message}", I understand you're looking for assistance. ${systemPrompt.includes('support') ? 'I\'m here to help with your support needs.' : 'How can I assist you further?'}`;
+            }
+          }
           
           // Add agent response to transcript
           transcript.push({
