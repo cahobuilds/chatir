@@ -1,7 +1,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
-// POST /api/tenants/[id]/logo - Upload tenant logo
+// POST /api/tenants/[id]/wordmark - Upload tenant wordmark
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -58,7 +58,7 @@ export async function POST(
 
     // Get file extension
     const fileExt = file.name.split('.').pop() || 'png';
-    const fileName = `${id}/logo.${fileExt}`;
+    const fileName = `${id}/wordmark.${fileExt}`;
 
     // Convert File to ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
@@ -70,7 +70,7 @@ export async function POST(
       .from('tenant-logos')
       .upload(fileName, buffer, {
         contentType: file.type,
-        upsert: true, // Replace existing logo
+        upsert: true, // Replace existing wordmark
       });
 
     if (uploadError) {
@@ -85,7 +85,7 @@ export async function POST(
       .from('tenant-logos')
       .getPublicUrl(fileName);
 
-    // Update tenant branding with logo URL using admin client
+    // Update tenant branding with wordmark URL using admin client
     // First, get current branding
     const { data: tenant, error: fetchError } = await adminSupabase
       .from('tenants')
@@ -116,8 +116,8 @@ export async function POST(
 
     const updatedBranding = {
       ...currentBranding,
-      logo_url: publicUrl,
-      logo_updated_at: new Date().toISOString(),
+      wordmark_url: publicUrl,
+      wordmark_updated_at: new Date().toISOString(),
     };
 
     // Update using admin client to bypass RLS
@@ -143,18 +143,18 @@ export async function POST(
 
     return NextResponse.json({ 
       success: true,
-      logo_url: publicUrl,
+      wordmark_url: publicUrl,
       tenant: updatedTenant
     });
   } catch (error: any) {
-    console.error('Logo upload error:', error);
+    console.error('Wordmark upload error:', error);
     return NextResponse.json({ 
       error: error.message || 'Internal server error' 
     }, { status: 500 });
   }
 }
 
-// DELETE /api/tenants/[id]/logo - Delete tenant logo
+// DELETE /api/tenants/[id]/wordmark - Delete tenant wordmark
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -187,7 +187,7 @@ export async function DELETE(
     // Use admin client for storage operations (permissions already verified)
     const adminSupabase = createAdminClient();
     
-    // List files in tenant folder
+    // List files in tenant folder to find wordmark files
     const { data: files, error: listError } = await adminSupabase.storage
       .from('tenant-logos')
       .list(id);
@@ -198,21 +198,24 @@ export async function DELETE(
       }, { status: 500 });
     }
 
-    // Delete all logo files for this tenant
+    // Delete wordmark files for this tenant (filter for wordmark.* files)
     if (files && files.length > 0) {
-      const filePaths = files.map(file => `${id}/${file.name}`);
-      const { error: deleteError } = await adminSupabase.storage
-        .from('tenant-logos')
-        .remove(filePaths);
+      const wordmarkFiles = files.filter(file => file.name.startsWith('wordmark.'));
+      if (wordmarkFiles.length > 0) {
+        const filePaths = wordmarkFiles.map(file => `${id}/${file.name}`);
+        const { error: deleteError } = await adminSupabase.storage
+          .from('tenant-logos')
+          .remove(filePaths);
 
-      if (deleteError) {
-        return NextResponse.json({ 
-          error: `Failed to delete logo: ${deleteError.message}` 
-        }, { status: 500 });
+        if (deleteError) {
+          return NextResponse.json({ 
+            error: `Failed to delete wordmark: ${deleteError.message}` 
+          }, { status: 500 });
+        }
       }
     }
 
-    // Remove logo_url from branding using admin client
+    // Remove wordmark_url from branding using admin client
     const { data: tenant } = await adminSupabase
       .from('tenants')
       .select('branding')
@@ -221,7 +224,7 @@ export async function DELETE(
 
     if (tenant) {
       const currentBranding = (tenant.branding as any) || {};
-      const { logo_url, logo_updated_at, ...updatedBranding } = currentBranding;
+      const { wordmark_url, wordmark_updated_at, ...updatedBranding } = currentBranding;
 
       const { error: updateError } = await adminSupabase
         .from('tenants')
@@ -238,7 +241,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Logo delete error:', error);
+    console.error('Wordmark delete error:', error);
     return NextResponse.json({ 
       error: error.message || 'Internal server error' 
     }, { status: 500 });

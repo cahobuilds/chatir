@@ -38,6 +38,7 @@ export default function TenantConfiguration() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [tenantName, setTenantName] = useState("");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [wordmarkPreview, setWordmarkPreview] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
   const [retellApiKey, setRetellApiKey] = useState("");
   const [showRetellApiKey, setShowRetellApiKey] = useState(false);
@@ -97,6 +98,7 @@ export default function TenantConfiguration() {
       setTenant(tenantData);
       setTenantName(tenantData.name);
       setLogoPreview((tenantData.branding as any)?.logo_url || null);
+      setWordmarkPreview((tenantData.branding as any)?.wordmark_url || null);
       
       // Only show Retell API key if this tenant is a reseller
       // Organizations should NOT see Retell settings
@@ -216,6 +218,86 @@ export default function TenantConfiguration() {
 
       setLogoPreview(null);
       setSuccess("Logo deleted successfully!");
+      
+      // Refresh tenant data
+      await fetchTenantData();
+    } catch (err: any) {
+      console.error("Delete error:", err);
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleWordmarkUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !tenant) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
+      setError("Invalid file type. Allowed: JPEG, PNG, GIF, WebP, SVG");
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError("File size exceeds 5MB limit");
+      return;
+    }
+
+    try {
+      setUploading(true);
+      setError(null);
+      setSuccess(null);
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`/api/tenants/${tenant.id}/wordmark`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      const data = await response.json();
+      setWordmarkPreview(data.wordmark_url);
+      setSuccess("Wordmark uploaded successfully!");
+      
+      // Refresh tenant data
+      await fetchTenantData();
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteWordmark = async () => {
+    if (!tenant) return;
+
+    if (!confirm("Are you sure you want to delete the wordmark?")) return;
+
+    try {
+      setUploading(true);
+      setError(null);
+
+      const response = await fetch(`/api/tenants/${tenant.id}/wordmark`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Delete failed');
+      }
+
+      setWordmarkPreview(null);
+      setSuccess("Wordmark deleted successfully!");
       
       // Refresh tenant data
       await fetchTenantData();
@@ -556,6 +638,63 @@ export default function TenantConfiguration() {
                 </div>
               </div>
             </div>
+
+            {/* Wordmark Upload */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Organization Wordmark
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Wordmark appears next to the logo when the sidebar is expanded. Use a horizontal text-based logo or brand name image.
+              </p>
+              <div className="flex items-start space-x-4">
+                {/* Wordmark Preview */}
+                <div className="flex-shrink-0">
+                  {wordmarkPreview ? (
+                    <div className="relative">
+                      <img
+                        src={wordmarkPreview}
+                        alt="Tenant wordmark"
+                        className="h-12 w-auto max-w-[200px] object-contain border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 p-2"
+                      />
+                      <button
+                        onClick={handleDeleteWordmark}
+                        disabled={uploading}
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50"
+                        title="Delete wordmark"
+                      >
+                        <XMarkIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-12 w-48 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center bg-gray-50 dark:bg-gray-700">
+                      <PhotoIcon className="w-6 h-6 text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                
+                {/* Upload Button */}
+                <div className="flex-1">
+                  <label className="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600">
+                    <PhotoIcon className="w-5 h-5 mr-2 text-gray-600 dark:text-gray-400" />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {uploading ? "Uploading..." : wordmarkPreview ? "Change Wordmark" : "Upload Wordmark"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+                      onChange={handleWordmarkUpload}
+                      disabled={uploading}
+                      className="hidden"
+                    />
+                  </label>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    Supported formats: JPEG, PNG, GIF, WebP, SVG. Max size: 5MB. Recommended: Horizontal layout, transparent background.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

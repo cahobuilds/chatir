@@ -25,16 +25,18 @@ const AppSidebar: React.FC = () => {
   const pathname = usePathname();
   const [searchQuery, setSearchQuery] = useState("");
   const [organizationLogo, setOrganizationLogo] = useState<string | null>(null);
+  const [organizationWordmark, setOrganizationWordmark] = useState<string | null>(null);
   // Track multiple open submenus using Set of keys
   const [openSubmenus, setOpenSubmenus] = useState<Set<string>>(new Set());
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Fetch organization logo when organization changes
+  // Fetch organization logo and wordmark when organization changes
   useEffect(() => {
-    const fetchOrganizationLogo = async () => {
+    const fetchOrganizationBranding = async () => {
       if (!currentOrganization?.id) {
         setOrganizationLogo(null);
+        setOrganizationWordmark(null);
         return;
       }
 
@@ -45,28 +47,31 @@ const AppSidebar: React.FC = () => {
           const tenant = data.tenant;
           const branding = tenant?.branding;
           
-          if (branding && typeof branding === 'object' && branding.logo_url) {
-            setOrganizationLogo(branding.logo_url);
+          let parsedBranding: any = {};
+          if (branding && typeof branding === 'object') {
+            parsedBranding = branding;
           } else if (branding && typeof branding === 'string') {
             try {
-              const parsed = JSON.parse(branding);
-              setOrganizationLogo(parsed.logo_url || null);
+              parsedBranding = JSON.parse(branding);
             } catch {
-              setOrganizationLogo(null);
+              parsedBranding = {};
             }
-          } else {
-            setOrganizationLogo(null);
           }
+
+          setOrganizationLogo(parsedBranding.logo_url || null);
+          setOrganizationWordmark(parsedBranding.wordmark_url || null);
         } else {
           setOrganizationLogo(null);
+          setOrganizationWordmark(null);
         }
       } catch (error) {
-        console.error('Failed to fetch organization logo:', error);
+        console.error('Failed to fetch organization branding:', error);
         setOrganizationLogo(null);
+        setOrganizationWordmark(null);
       }
     };
 
-    fetchOrganizationLogo();
+    fetchOrganizationBranding();
   }, [currentOrganization?.id]);
 
   // Filter navigation based on search
@@ -369,11 +374,24 @@ const AppSidebar: React.FC = () => {
             />
           )}
           
-          {/* Wordmark Text - Only visible when expanded */}
+          {/* Wordmark - Only visible when expanded */}
           {(isExpanded || isHovered || isMobileOpen) && (
-            <span className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">
-              {currentOrganization?.name || "TailAdmin"}
-            </span>
+            <>
+              {organizationWordmark ? (
+                <Image
+                  src={organizationWordmark}
+                  alt={currentOrganization?.name || "Organization Wordmark"}
+                  width={150}
+                  height={40}
+                  className="h-10 w-auto object-contain max-w-[150px]"
+                  unoptimized
+                />
+              ) : (
+                <span className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">
+                  {currentOrganization?.name || "TailAdmin"}
+                </span>
+              )}
+            </>
           )}
         </Link>
       </div>
