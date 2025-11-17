@@ -315,20 +315,8 @@ export default function AgentInteractionModal({
       // Try Retell first if agent has retell_agent_id
       if (agent.retell_agent_id) {
         try {
-          // CRITICAL: Request microphone access BEFORE startCall
-          // The SDK requires tracks to be ENABLED to publish them, but we'll mute them
-          // until call_ready fires to prevent premature audio transmission
-          console.log("Requesting microphone access before starting Retell call...");
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaStreamRef.current = stream;
-          
-          // Keep tracks ENABLED (required for SDK to publish) but they'll be muted via retellClient.mute()
-          // The SDK needs enabled tracks to establish the WebRTC connection
-          stream.getAudioTracks().forEach(track => {
-            track.enabled = true; // Keep enabled - SDK needs this to publish tracks
-            console.log("Microphone track enabled - will be muted via retellClient.mute() until call_ready");
-          });
-
+          // Get access token FIRST (matches test page pattern)
+          console.log("Requesting web call from API...");
           const webCallResponse = await fetch(`/api/agents/${agent.id}/test/web-call`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -363,8 +351,15 @@ export default function AgentInteractionModal({
           });
           retellCallIdRef.current = call_id;
 
-            const retellClient = new RetellWebClient();
-            retellClientRef.current = retellClient;
+          // Request microphone access AFTER getting access token (matches test page pattern)
+          console.log("Requesting microphone access...");
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaStreamRef.current = stream;
+          console.log("Microphone access granted");
+
+          // Create Retell client
+          const retellClient = new RetellWebClient();
+          retellClientRef.current = retellClient;
 
             retellClient.on("call_started", () => {
               console.log("Retell call started - waiting for engine to initialize...");
@@ -452,39 +447,22 @@ export default function AgentInteractionModal({
             retellClient.on("error", (error: any) => {
               console.error("Retell error:", error);
               
-              // Handle PublishTrackError gracefully - this is often a timing issue during initialization
+              // Handle PublishTrackError gracefully - this often happens after call ends
+              // If it happens during initialization, it's usually because call ended prematurely
               if (error?.message?.includes("PublishTrackError") || 
                   error?.message?.includes("publishing rejected") ||
                   error?.message?.includes("engine not connected")) {
-                console.warn("PublishTrackError detected - engine may not be ready yet");
-                console.warn("This is usually a timing issue during initialization. Waiting for call_ready...");
+                console.warn("PublishTrackError detected");
                 
-                // If we're still initializing, don't show error - wait for call_ready
+                // If we're still initializing, this might indicate the call ended
                 if (isInitializingRef.current) {
-                  console.log("Still initializing - ignoring PublishTrackError, waiting for call_ready");
+                  console.warn("PublishTrackError during initialization - call may have ended prematurely");
+                  // Don't show error to user - call_ended will handle it
                   return;
                 }
                 
-                // If not initializing, try to retry unmuting after a delay
-                // Use exponential backoff: 2s, 4s, 8s
-                const retryCount = (error.retryCount || 0) + 1;
-                if (retryCount <= 3) {
-                  const delay = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
-                  setTimeout(() => {
-                    if (retellClientRef.current && retellCallIdRef.current) {
-                      try {
-                        retellClient.unmute();
-                        console.log(`Retried unmuting after PublishTrackError (attempt ${retryCount})`);
-                      } catch (e) {
-                        console.warn("Retry unmute failed:", e);
-                      }
-                    }
-                  }, delay);
-                  return; // Don't show error to user, let it retry
-                }
-                
-                // After 3 retries, show a warning but don't stop the call
-                console.warn("PublishTrackError persisted after retries - call may still work");
+                // If not initializing, log but don't interfere
+                console.warn("PublishTrackError after initialization - may be cleanup related");
                 return;
               }
               
