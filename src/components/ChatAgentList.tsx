@@ -60,6 +60,7 @@ export default function ChatAgentList() {
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -294,6 +295,17 @@ export default function ChatAgentList() {
   const filteredAndSortedAgents = useMemo(() => {
     let filtered = [...agents];
 
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((agent) =>
+        agent.name.toLowerCase().includes(query) ||
+        agent.description?.toLowerCase().includes(query) ||
+        agent.retell_agent_id?.toLowerCase().includes(query) ||
+        agent.id.toLowerCase().includes(query)
+      );
+    }
+
     // Apply status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter((agent) =>
@@ -329,7 +341,7 @@ export default function ChatAgentList() {
     });
 
     return filtered;
-  }, [agents, statusFilter, sortField, sortDirection]);
+  }, [agents, statusFilter, sortField, sortDirection, searchQuery]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -382,14 +394,6 @@ export default function ChatAgentList() {
           </h2>
           <div className="flex items-center gap-2">
             <Button 
-              onClick={() => handleSearchAgent('agent_845973dd68ec8e7a53e0b1d46a')} 
-              size="sm"
-              variant="outline"
-              title="Search for agent_845973dd68ec8e7a53e0b1d46a"
-            >
-              Search Agent
-            </Button>
-            <Button 
               onClick={handleSyncAgents} 
               size="sm"
               variant="outline"
@@ -406,20 +410,33 @@ export default function ChatAgentList() {
 
         {/* Filters and Sorting */}
         <div className="mb-4 flex items-center justify-between gap-4 px-6">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="status-filter" className="text-sm">Status:</Label>
-            <Select
-              id="status-filter"
-              options={[
-                { value: "all", label: "All" },
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
-              ]}
-              value={statusFilter}
-              onChange={(value) => setStatusFilter(value as StatusFilter)}
-            />
+          <div className="flex items-center gap-4 flex-1">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="status-filter" className="text-sm">Status:</Label>
+              <Select
+                id="status-filter"
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "active", label: "Active" },
+                  { value: "inactive", label: "Inactive" },
+                ]}
+                value={statusFilter}
+                onChange={(value) => setStatusFilter(value as StatusFilter)}
+              />
+            </div>
+            <div className="flex items-center gap-2 flex-1 max-w-md">
+              <Label htmlFor="search" className="text-sm">Search:</Label>
+              <Input
+                id="search"
+                type="text"
+                placeholder="Search by name, description, or ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1"
+              />
+            </div>
           </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
+          <div className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
             Showing {filteredAndSortedAgents.length} of {agents.length} agents
           </div>
         </div>
