@@ -8,6 +8,10 @@ import {
   CogIcon
 } from "@heroicons/react/24/outline";
 
+interface UsersHeaderProps {
+  onAddUser?: () => void;
+}
+
 interface Stats {
   totalUsers: number;
   activeUsers: number;
@@ -15,7 +19,7 @@ interface Stats {
   totalRoles: number;
 }
 
-export default function UsersHeader() {
+export default function UsersHeader({ onAddUser }: UsersHeaderProps) {
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
     activeUsers: 0,
@@ -90,7 +94,20 @@ export default function UsersHeader() {
             <CogIcon className="w-4 h-4 mr-2" />
             Settings
           </button>
-          <button className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Add User button clicked in UsersHeader', { onAddUser: !!onAddUser });
+              if (onAddUser) {
+                onAddUser();
+              } else {
+                console.warn('onAddUser callback is not provided');
+              }
+            }}
+            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer"
+          >
             <UserPlusIcon className="w-4 h-4 mr-2" />
             Add User
           </button>

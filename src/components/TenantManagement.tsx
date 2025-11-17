@@ -489,10 +489,10 @@ export default function TenantManagement() {
             setCreateError(null);
             setCreateSuccess(null);
           }}
-          className="max-w-4xl mx-4"
+          className="max-w-4xl mx-4 my-4"
           title="Create New Organization"
         >
-          <div className="px-6 py-6">
+          <div className="px-6 py-4">
             {createError && (
               <div className="mb-6">
                 <Alert
@@ -757,21 +757,21 @@ export default function TenantManagement() {
                     <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
                       {selectedTenant.name}
                     </p>
-                  </div>
-                  <div>
+              </div>
+              <div>
                     <Label>Tier</Label>
                     <div className="mt-1.5">
-                      <Badge
-                        size="sm"
-                        color={getTierColor(selectedTenant.tier)}
-                        variant="light"
-                      >
+                <Badge
+                  size="sm"
+                  color={getTierColor(selectedTenant.tier)}
+                  variant="light"
+                >
                         {selectedTenant.tier.charAt(0).toUpperCase() + selectedTenant.tier.slice(1)}
-                      </Badge>
+                </Badge>
                     </div>
-                  </div>
-                  {selectedTenant.subdomain && (
-                    <div>
+              </div>
+              {selectedTenant.subdomain && (
+                <div>
                       <Label>Subdomain</Label>
                       <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
                         {selectedTenant.subdomain}
@@ -790,9 +790,9 @@ export default function TenantManagement() {
                       <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
                         {selectedTenant.domain}
                       </p>
-                    </div>
-                  )}
-                  <div>
+                </div>
+              )}
+              <div>
                     <Label>Created</Label>
                     <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
                       {selectedTenant.created_at 
@@ -805,78 +805,78 @@ export default function TenantManagement() {
                     </p>
                   </div>
                 </div>
-              </div>
+            </div>
 
-              {/* Users Section */}
-              <div>
+            {/* Users Section */}
+            <div>
                 <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-6 pb-3 border-b border-gray-200 dark:border-gray-700">
-                  Users with Access ({selectedTenant.users.length})
+                Users with Access ({selectedTenant.users.length})
                 </h3>
-                {selectedTenant.users.length === 0 ? (
+              {selectedTenant.users.length === 0 ? (
                   <div className="text-center py-8">
                     <p className="text-sm text-gray-500 dark:text-gray-400">No users found for this organization.</p>
                   </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
-                        <TableRow>
-                          <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                            User
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                      <TableRow>
+                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                          User
+                        </TableCell>
+                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                          Role
+                        </TableCell>
+                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                          Status
+                        </TableCell>
+                        <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                          Last Login
+                        </TableCell>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                      {selectedTenant.users.map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell className="px-4 py-3 text-start">
+                            <div>
+                              <div className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                                {user.name}
+                              </div>
+                              <div className="text-gray-500 text-theme-xs dark:text-gray-400">
+                                {user.email}
+                              </div>
+                            </div>
                           </TableCell>
-                          <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                            Role
+                          <TableCell className="px-4 py-3 text-start">
+                            <Badge
+                              size="sm"
+                              color={getRoleBadgeColor(user.role)}
+                              variant="light"
+                            >
+                              {getRoleDisplayName(user.role)}
+                            </Badge>
                           </TableCell>
-                          <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                            Status
+                          <TableCell className="px-4 py-3 text-start">
+                            <Badge
+                              size="sm"
+                              color={user.status === 'active' ? 'success' : 'error'}
+                              variant="light"
+                            >
+                              {user.status}
+                            </Badge>
                           </TableCell>
-                          <TableCell isHeader className="px-4 py-2 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                            Last Login
+                          <TableCell className="px-4 py-3 text-start text-gray-500 text-theme-sm dark:text-gray-400">
+                            {user.last_login 
+                              ? new Date(user.last_login).toLocaleDateString()
+                              : 'Never'}
                           </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                        {selectedTenant.users.map((user) => (
-                          <TableRow key={user.id}>
-                            <TableCell className="px-4 py-3 text-start">
-                              <div>
-                                <div className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                                  {user.name}
-                                </div>
-                                <div className="text-gray-500 text-theme-xs dark:text-gray-400">
-                                  {user.email}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="px-4 py-3 text-start">
-                              <Badge
-                                size="sm"
-                                color={getRoleBadgeColor(user.role)}
-                                variant="light"
-                              >
-                                {getRoleDisplayName(user.role)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="px-4 py-3 text-start">
-                              <Badge
-                                size="sm"
-                                color={user.status === 'active' ? 'success' : 'error'}
-                                variant="light"
-                              >
-                                {user.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="px-4 py-3 text-start text-gray-500 text-theme-sm dark:text-gray-400">
-                              {user.last_login 
-                                ? new Date(user.last_login).toLocaleDateString()
-                                : 'Never'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
               </div>
             </div>
           </div>

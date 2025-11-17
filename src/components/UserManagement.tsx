@@ -10,9 +10,17 @@ import {
   ShieldCheckIcon,
   ClockIcon,
   CheckCircleIcon,
-  XCircleIcon
+  XCircleIcon,
+  BuildingOfficeIcon
 } from "@heroicons/react/24/outline";
 import { getRoleDisplayName } from "@/lib/roles-client";
+import { Modal } from "./ui/modal";
+import Form from "./form/Form";
+import Label from "./form/Label";
+import Input from "./form/input/InputField";
+import Alert from "./ui/alert/Alert";
+import Button from "./ui/button/Button";
+import { useOrganization } from "@/context/OrganizationContext";
 
 interface User {
   id: string;
@@ -27,17 +35,148 @@ interface User {
   permissions: string[];
 }
 
-export default function UserManagement() {
+interface Organization {
+  id: string;
+  name: string;
+}
+
+interface Role {
+  id: string;
+  name: string;
+  display_name: string;
+}
+
+interface UserManagementProps {
+  onAddUserClick?: () => void;
+  externalShowModal?: boolean;
+  onModalClose?: () => void;
+}
+
+export default function UserManagement({ onAddUserClick, externalShowModal, onModalClose }: UserManagementProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [showNewUser, setShowNewUser] = useState(false);
+  
+  // Sync with external modal state if provided
+  useEffect(() => {
+    if (externalShowModal !== undefined) {
+      console.log('External modal state changed:', externalShowModal);
+      setShowNewUser(externalShowModal);
+    }
+  }, [externalShowModal]);
+
+  // Debug: Log when showNewUser changes
+  useEffect(() => {
+    console.log('showNewUser state changed:', showNewUser);
+  }, [showNewUser]);
   const [filter, setFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // User creation form state
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    role: 'viewer',
+    organizationIds: [] as string[],
+  });
+  
+  const { currentOrganization } = useOrganization();
 
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (showNewUser) {
+      fetchOrganizations();
+      fetchRoles();
+    }
+  }, [showNewUser, currentOrganization]);
+
+  const fetchOrganizations = async () => {
+    try {
+      console.log('Fetching organizations from /api/tenants');
+      const response = await fetch('/api/tenants', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store', // Prevent Next.js from caching
+      });
+      
+      console.log('Tenants API response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Tenants API response data:', data);
+        
+        // Handle different response structures
+        const tenantsList = data.tenants || [];
+        const orgs: Organization[] = tenantsList
+          .map((t: any) => {
+            // Handle nested structure: { tenant_id, tenants: { id, name } }
+            if (t.tenants) {
+              return {
+                id: t.tenant_id || (t.tenants as any)?.id,
+                name: (t.tenants as any)?.name,
+              };
+            }
+            // Handle flat structure: { id, name }
+            return {
+              id: t.id || t.tenant_id,
+              name: t.name,
+            };
+          })
+          .filter((o: Organization) => o.id && o.name); // Filter out invalid entries
+        
+        console.log('Parsed organizations:', orgs);
+        setOrganizations(orgs);
+        
+        // Pre-select current organization if available and no orgs are selected yet
+        if (currentOrganization && orgs.find((o: Organization) => o.id === currentOrganization.id)) {
+          setFormData(prev => {
+            // Only set if no organizations are currently selected
+            if (prev.organizationIds.length === 0) {
+              return {
+                ...prev,
+                organizationIds: [currentOrganization.id],
+              };
+            }
+            return prev;
+          });
+        }
+      } else {
+        const errorText = await response.text();
+        console.error('Failed to fetch organizations:', response.status, response.statusText, errorText);
+        setCreateError(`Failed to load organizations: ${response.statusText}. Please refresh the page and try again.`);
+        setOrganizations([]);
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch organizations:', error);
+      setCreateError(`Error loading organizations: ${error.message}. Please check your connection and try again.`);
+      setOrganizations([]);
+    }
+  };
+
+  const fetchRoles = async () => {
+    try {
+      const response = await fetch('/api/roles?simple=true');
+      if (response.ok) {
+        const data = await response.json();
+        setRoles(data.roles || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch roles:', error);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -163,6 +302,95 @@ export default function UserManagement() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+    setCreateSuccess(null);
+
+    // Validation
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password) {
+      setCreateError('Name, email, and password are required');
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setCreateError('Password must be at least 8 characters');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setCreateError('Passwords do not match');
+      return;
+    }
+
+    if (formData.organizationIds.length === 0) {
+      setCreateError('Please select at least one organization');
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          tenant_ids: formData.organizationIds,
+          role: formData.role,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create user');
+      }
+
+      const data = await response.json();
+      setCreateSuccess(`User "${data.user.name}" created successfully and added to ${data.user.tenants.length} organization(s)!`);
+      
+      // Reset form
+      setFormData({
+        name: '',
+        email: '',
+        password: '',
+        confirmPassword: '',
+        role: 'viewer',
+        organizationIds: currentOrganization ? [currentOrganization.id] : [],
+      });
+
+      // Refresh users list
+      await fetchUsers();
+
+      // Close modal after a short delay
+      setTimeout(() => {
+        setShowNewUser(false);
+        onModalClose?.();
+        setCreateSuccess(null);
+      }, 2000);
+    } catch (error: any) {
+      setCreateError(error.message || 'Failed to create user');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const toggleOrganization = (orgId: string) => {
+    setFormData(prev => {
+      const isSelected = prev.organizationIds.includes(orgId);
+      return {
+        ...prev,
+        organizationIds: isSelected
+          ? prev.organizationIds.filter(id => id !== orgId)
+          : [...prev.organizationIds, orgId],
+      };
+    });
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
       <div className="p-6 border-b border-gray-200 dark:border-gray-700">
@@ -174,8 +402,17 @@ export default function UserManagement() {
             </h3>
           </div>
           <button 
-            onClick={() => setShowNewUser(true)}
-            className="inline-flex items-center px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Add User button clicked in UserManagement');
+              setShowNewUser(true);
+              if (onAddUserClick) {
+                onAddUserClick();
+              }
+            }}
+            className="inline-flex items-center px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer"
           >
             <UserPlusIcon className="w-4 h-4 mr-1" />
             Add User
@@ -325,74 +562,225 @@ export default function UserManagement() {
           )}
         </div>
 
-        {/* New User Form */}
-        {showNewUser && (
-          <div className="mt-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700">
-            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">
-              Add New User
-            </h4>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter full name"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white"
+        {/* Create User Modal */}
+        <Modal
+          isOpen={showNewUser}
+          onClose={() => {
+            console.log('Modal onClose called');
+            setShowNewUser(false);
+            onModalClose?.();
+            setFormData({
+              name: '',
+              email: '',
+              password: '',
+              confirmPassword: '',
+              role: 'viewer',
+              organizationIds: currentOrganization ? [currentOrganization.id] : [],
+            });
+            setCreateError(null);
+            setCreateSuccess(null);
+          }}
+          className="max-w-2xl mx-4 my-4"
+          title="Create New User"
+        >
+            <div className="px-6 py-4">
+              {createError && (
+                <div className="mb-6">
+                  <Alert
+                    variant="error"
+                    title="Error"
+                    message={createError}
                   />
                 </div>
+              )}
+
+              {createSuccess && (
+                <div className="mb-6">
+                  <Alert
+                    variant="success"
+                    title="Success"
+                    message={createSuccess}
+                  />
+                </div>
+              )}
+
+              <Form onSubmit={handleCreateUser}>
+                <div className="space-y-6">
+                  {/* Basic Information */}
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                      Basic Information
+                    </h3>
+                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                      <div>
+                        <Label htmlFor="user-name">
+                          Full Name <span className="text-error-500">*</span>
+                        </Label>
+                        <Input
+                          id="user-name"
+                          type="text"
+                          required
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          placeholder="John Doe"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="user-email">
+                          Email Address <span className="text-error-500">*</span>
+                        </Label>
+                        <Input
+                          id="user-email"
+                          type="email"
+                          required
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          placeholder="john@example.com"
+                        />
+                      </div>
+                </div>
+              </div>
+
+                  {/* Password */}
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                      Password
+                    </h3>
+                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="Enter email address"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white"
+                        <Label htmlFor="user-password">
+                          Password <span className="text-error-500">*</span>
+                        </Label>
+                        <Input
+                          id="user-password"
+                          type="password"
+                          required
+                          value={formData.password}
+                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                          placeholder="Minimum 8 characters"
+                          hint="Password must be at least 8 characters"
+                        />
+                </div>
+                <div>
+                        <Label htmlFor="user-confirm-password">
+                          Confirm Password <span className="text-error-500">*</span>
+                        </Label>
+                        <Input
+                          id="user-confirm-password"
+                          type="password"
+                          required
+                          value={formData.confirmPassword}
+                          onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                          placeholder="Re-enter password"
+                          error={formData.confirmPassword !== '' && formData.password !== formData.confirmPassword}
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Role
-                  </label>
-                  <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white">
-                    <option value="">Select a role</option>
-                    <option value="Admin">Admin</option>
-                    <option value="Manager">Manager</option>
-                    <option value="Agent">Agent</option>
-                    <option value="Analyst">Analyst</option>
-                    <option value="Viewer">Viewer</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Department
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter department"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white"
-                  />
-                </div>
+                  </div>
+
+                  {/* Organization Selection */}
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                      Organizations <span className="text-error-500">*</span>
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                      Select one or more organizations to associate this user with:
+                    </p>
+                    <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                      {organizations.length === 0 ? (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                          Loading organizations...
+                        </p>
+                      ) : (
+                        organizations.map((org) => (
+                          <label
+                            key={org.id}
+                            className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={formData.organizationIds.includes(org.id)}
+                              onChange={() => toggleOrganization(org.id)}
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            />
+                            <BuildingOfficeIcon className="w-5 h-5 text-gray-400" />
+                            <span className="flex-1 text-sm font-medium text-gray-900 dark:text-white">
+                              {org.name}
+                            </span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Role Selection */}
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-800 dark:text-white/90 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                      Role
+                    </h3>
+                    <div>
+                      <Label htmlFor="user-role">Role</Label>
+                      <div className="relative">
+                        <select
+                          id="user-role"
+                          value={formData.role}
+                          onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                          className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 pr-11 text-sm shadow-theme-xs text-gray-800 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:focus:border-brand-800"
+                        >
+                          {roles.length === 0 ? (
+                            <option value="viewer">Viewer</option>
+                          ) : (
+                            roles.map((role) => (
+                              <option key={role.id} value={role.name}>
+                                {role.display_name || role.name}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                        <span className="absolute text-gray-500 -translate-y-1/2 pointer-events-none right-3 top-1/2 dark:text-gray-400">
+                          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setShowNewUser(false);
+                        onModalClose?.();
+                        setFormData({
+                          name: '',
+                          email: '',
+                          password: '',
+                          confirmPassword: '',
+                          role: 'viewer',
+                          organizationIds: currentOrganization ? [currentOrganization.id] : [],
+                        });
+                        setCreateError(null);
+                        setCreateSuccess(null);
+                      }}
+                      variant="outline"
+                      disabled={isCreating}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={isCreating || !formData.name.trim() || !formData.email.trim() || !formData.password || formData.organizationIds.length === 0}
+                      variant="primary"
+                    >
+                      {isCreating ? 'Creating...' : 'Create User'}
+                    </Button>
+                  </div>
               </div>
-              <div className="flex space-x-3">
-                <button className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                  Create User
-                </button>
-                <button 
-                  onClick={() => setShowNewUser(false)}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                >
-                  Cancel
-                </button>
-              </div>
+              </Form>
             </div>
-          </div>
-        )}
+        </Modal>
 
         {/* Summary Stats */}
         <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
