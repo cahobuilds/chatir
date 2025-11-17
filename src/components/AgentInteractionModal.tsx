@@ -113,10 +113,13 @@ export default function AgentInteractionModal({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Fetch agent configuration when modal opens
+  // Fetch agent configuration and prompt from Retell when modal opens
   useEffect(() => {
     if (isOpen && agent) {
       fetchAgentConfig();
+      if (agent.retell_agent_id) {
+        fetchRetellAgentPrompt();
+      }
     }
   }, [isOpen, agent]);
 
@@ -131,6 +134,55 @@ export default function AgentInteractionModal({
       }
     } catch (error) {
       console.error("Failed to fetch agent config:", error);
+    }
+  };
+
+  const fetchRetellAgentPrompt = async () => {
+    if (!agent?.retell_agent_id) return;
+
+    try {
+      // Fetch Retell agent details
+      const retellResponse = await fetch(`/api/retell/agents/${agent.id}`);
+      if (retellResponse.ok) {
+        const retellData = await retellResponse.json();
+        const retellAgent = retellData.retell_agent;
+        
+        // If agent uses Retell LLM, fetch the LLM details to get the prompt
+        if (retellAgent?.response_engine?.type === 'retell-llm') {
+          const llmId = retellAgent.response_engine.llm_id;
+          if (llmId) {
+            // Fetch LLM details to get the prompt
+            const llmResponse = await fetch(`/api/retell/llms/${llmId}?agent_id=${agent.id}`);
+            if (llmResponse.ok) {
+              const llmData = await llmResponse.json();
+              const prompt = llmData.llm?.general_prompt || llmData.general_prompt;
+              if (prompt) {
+                setAgentConfig((prev: any) => ({
+                  ...prev,
+                  retell_prompt: prompt,
+                  retell_agent: retellAgent,
+                }));
+              }
+            }
+          }
+        } else if (retellAgent?.response_engine?.type === 'custom-llm') {
+          // For custom LLM, prompt is handled by the websocket endpoint
+          // Store the agent details anyway
+          setAgentConfig((prev: any) => ({
+            ...prev,
+            retell_agent: retellAgent,
+            retell_prompt: 'Custom LLM - prompt managed by websocket endpoint',
+          }));
+        }
+        
+        // Store Retell agent details
+        setAgentConfig((prev: any) => ({
+          ...prev,
+          retell_agent: retellAgent,
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch Retell agent prompt:", error);
     }
   };
 
@@ -283,12 +335,26 @@ export default function AgentInteractionModal({
             retellClient.on("call_ready", () => {
               console.log("Retell call ready - engine connected and audio active");
               setSuccess("Connected - audio is active!");
+              
+              // CRITICAL: Now that engine is ready, unmute the microphone
+              // This ensures tracks are only published when the engine can accept them
               try {
                 retellClient.unmute();
                 console.log("Microphone unmuted - engine is ready to receive audio");
-              } catch (e) {
-                console.warn("Could not unmute:", e);
+              } catch (unmuteError) {
+                console.warn("Could not unmute microphone:", unmuteError);
+                // Continue anyway - might already be unmuted
               }
+              
+              // Audio playback should already be initialized, but ensure it's active
+              // This is a safety check for browsers that require it after connection
+              try {
+                retellClient.startAudioPlayback?.();
+              } catch (e) {
+                console.warn("Could not start audio playback (may already be started):", e);
+              }
+              
+              // Clear any welcome messages - agent will speak first
               setMessages([]);
             });
 
@@ -507,19 +573,27 @@ export default function AgentInteractionModal({
     }
   };
 
-  // Extract prompt from configuration
+  // Extract prompt from Retell or local configuration
   const getAgentPrompt = () => {
-    if (!agentConfig?.configuration) return "No prompt configured";
+    // Priority 1: Retell LLM prompt (from Retell API)
+    if (agentConfig?.retell_prompt) {
+      return agentConfig.retell_prompt;
+    }
     
-    const config = typeof agentConfig.configuration === 'string' 
-      ? JSON.parse(agentConfig.configuration) 
-      : agentConfig.configuration;
+    // Priority 2: Local configuration prompt
+    if (agentConfig?.configuration) {
+      const config = typeof agentConfig.configuration === 'string' 
+        ? JSON.parse(agentConfig.configuration) 
+        : agentConfig.configuration;
+      
+      return config.prompt || 
+             config.system_instructions || 
+             config.systemPrompt || 
+             config.llmConfig?.system_instructions ||
+             null;
+    }
     
-    return config.prompt || 
-           config.system_instructions || 
-           config.systemPrompt || 
-           config.llmConfig?.system_instructions ||
-           "No prompt found";
+    return "No prompt configured. Fetching from Retell...";
   };
 
   if (!agent) return null;
