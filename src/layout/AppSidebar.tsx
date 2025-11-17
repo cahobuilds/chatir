@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
+import { useOrganization } from "../context/OrganizationContext";
 import {
   ChevronDownIcon,
   HorizontaLDots,
@@ -20,12 +21,53 @@ import Badge from "../components/ui/badge/Badge";
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
+  const { currentOrganization } = useOrganization();
   const pathname = usePathname();
   const [searchQuery, setSearchQuery] = useState("");
+  const [organizationLogo, setOrganizationLogo] = useState<string | null>(null);
   // Track multiple open submenus using Set of keys
   const [openSubmenus, setOpenSubmenus] = useState<Set<string>>(new Set());
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Fetch organization logo when organization changes
+  useEffect(() => {
+    const fetchOrganizationLogo = async () => {
+      if (!currentOrganization?.id) {
+        setOrganizationLogo(null);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/tenants/${currentOrganization.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          const tenant = data.tenant;
+          const branding = tenant?.branding;
+          
+          if (branding && typeof branding === 'object' && branding.logo_url) {
+            setOrganizationLogo(branding.logo_url);
+          } else if (branding && typeof branding === 'string') {
+            try {
+              const parsed = JSON.parse(branding);
+              setOrganizationLogo(parsed.logo_url || null);
+            } catch {
+              setOrganizationLogo(null);
+            }
+          } else {
+            setOrganizationLogo(null);
+          }
+        } else {
+          setOrganizationLogo(null);
+        }
+      } catch (error) {
+        console.error('Failed to fetch organization logo:', error);
+        setOrganizationLogo(null);
+      }
+    };
+
+    fetchOrganizationLogo();
+  }, [currentOrganization?.id]);
 
   // Filter navigation based on search
   const filteredNavigation = useMemo(() => {
@@ -306,29 +348,51 @@ const AppSidebar: React.FC = () => {
       >
         <Link href="/">
           {isExpanded || isHovered || isMobileOpen ? (
-            <>
+            organizationLogo ? (
               <Image
-                className="dark:hidden"
-                src="/images/logo/logo.svg"
-                alt="Logo"
+                src={organizationLogo}
+                alt={currentOrganization?.name || "Organization Logo"}
                 width={150}
                 height={40}
+                className="h-10 w-auto object-contain max-w-[150px]"
+                unoptimized
               />
-              <Image
-                className="hidden dark:block"
-                src="/images/logo/logo-dark.svg"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-            </>
+            ) : (
+              <>
+                <Image
+                  className="dark:hidden"
+                  src="/images/logo/logo.svg"
+                  alt="Logo"
+                  width={150}
+                  height={40}
+                />
+                <Image
+                  className="hidden dark:block"
+                  src="/images/logo/logo-dark.svg"
+                  alt="Logo"
+                  width={150}
+                  height={40}
+                />
+              </>
+            )
           ) : (
-            <Image
-              src="/images/logo/logo-icon.svg"
-              alt="Logo"
-              width={32}
-              height={32}
-            />
+            organizationLogo ? (
+              <Image
+                src={organizationLogo}
+                alt={currentOrganization?.name || "Organization Logo"}
+                width={32}
+                height={32}
+                className="h-8 w-8 object-contain"
+                unoptimized
+              />
+            ) : (
+              <Image
+                src="/images/logo/logo-icon.svg"
+                alt="Logo"
+                width={32}
+                height={32}
+              />
+            )
           )}
         </Link>
       </div>
