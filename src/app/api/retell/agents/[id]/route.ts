@@ -141,13 +141,37 @@ export async function PATCH(
       maxRetries: 3, // More retries for critical write operations
     });
 
-    // Update Retell AI agent using reseller's API key
-    const retellAgent = await retellClient.agent.update(agent.retell_agent_id, {
-      agent_name,
-      voice_id,
-      llm_websocket_url,
-      ...retellConfig,
+    // Build update payload - only include fields that are provided
+    const updatePayload: any = {};
+    if (agent_name !== undefined) updatePayload.agent_name = agent_name;
+    if (voice_id !== undefined) updatePayload.voice_id = voice_id;
+    
+    // Handle response_engine updates if provided
+    if (retellConfig.response_engine) {
+      updatePayload.response_engine = retellConfig.response_engine;
+    } else if (llm_websocket_url !== undefined) {
+      // Update to custom LLM via websocket
+      updatePayload.response_engine = {
+        type: 'custom-llm',
+        llm_websocket_url: llm_websocket_url,
+      };
+    } else if (retellConfig.llm_id !== undefined) {
+      // Update to Retell LLM via llm_id
+      updatePayload.response_engine = {
+        type: 'retell-llm',
+        llm_id: retellConfig.llm_id,
+      };
+    }
+    
+    // Add other retellConfig fields (excluding response_engine, llm_id, llm_websocket_url which are handled above)
+    Object.keys(retellConfig).forEach(key => {
+      if (key !== 'response_engine' && key !== 'llm_id' && key !== 'llm_websocket_url') {
+        updatePayload[key] = retellConfig[key];
+      }
     });
+
+    // Update Retell AI agent using reseller's API key
+    const retellAgent = await retellClient.agent.update(agent.retell_agent_id, updatePayload);
 
     // Update local agent configuration
     const { data: updatedAgent } = await supabase

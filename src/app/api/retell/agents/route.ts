@@ -119,13 +119,60 @@ export async function POST(request: NextRequest) {
       maxRetries: 3, // More retries for critical write operations
     });
     
-    // Create Retell AI agent using reseller's API key
-    const retellAgent = await retellClient.agent.create({
+    // Build agent creation payload with required response_engine
+    const agentPayload: any = {
       agent_name,
       voice_id,
-      llm_websocket_url: llm_websocket_url || undefined,
       ...retellConfig,
-    });
+    };
+
+    // Handle response_engine - Retell API requires this field
+    // Priority: 1) Explicit response_engine in retellConfig, 2) llm_websocket_url (custom LLM), 3) llm_id (Retell LLM), 4) Default LLM
+    if (retellConfig.response_engine) {
+      // Use explicitly provided response_engine
+      agentPayload.response_engine = retellConfig.response_engine;
+    } else if (llm_websocket_url) {
+      // Custom LLM via websocket
+      agentPayload.response_engine = {
+        type: 'custom-llm',
+        llm_websocket_url: llm_websocket_url,
+      };
+    } else if (retellConfig.llm_id) {
+      // Retell LLM via llm_id
+      agentPayload.response_engine = {
+        type: 'retell-llm',
+        llm_id: retellConfig.llm_id,
+      };
+    } else {
+      // Default: Fetch available LLMs and use the first one
+      try {
+        const llms = await retellClient.llm.list();
+        if (!llms || llms.length === 0) {
+          return NextResponse.json(
+            { error: 'No LLMs available. Please configure an LLM or provide llm_id/llm_websocket_url.' },
+            { status: 400 }
+          );
+        }
+        const firstLLM = llms[0];
+        const llmId = typeof firstLLM === 'string' ? firstLLM : (firstLLM as any).llm_id || (firstLLM as any).id;
+        agentPayload.response_engine = {
+          type: 'retell-llm',
+          llm_id: llmId,
+        };
+      } catch (llmError: any) {
+        logRetellError(llmError, 'LLM List (for default)');
+        return NextResponse.json(
+          { error: `Failed to fetch available LLMs: ${formatRetellError(llmError)}. Please provide llm_id or llm_websocket_url.` },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Remove llm_websocket_url from payload if it's in retellConfig (already handled in response_engine)
+    delete agentPayload.llm_websocket_url;
+    
+    // Create Retell AI agent using reseller's API key
+    const retellAgent = await retellClient.agent.create(agentPayload);
 
     // Update agent record with Retell agent ID
     const { data: updatedAgent, error: updateError } = await supabase
