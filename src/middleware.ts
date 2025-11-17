@@ -51,6 +51,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Allow forgot-password page without authentication
+  if (request.nextUrl.pathname.startsWith('/auth/forgot-password')) {
+    return supabaseResponse;
+  }
+
   return supabaseResponse;
 }
 
