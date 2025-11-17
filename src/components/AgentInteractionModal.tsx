@@ -333,9 +333,34 @@ export default function AgentInteractionModal({
             headers: { "Content-Type": "application/json" },
           });
 
-          if (webCallResponse.ok) {
-            const { access_token, call_id } = await webCallResponse.json();
-            retellCallIdRef.current = call_id;
+          if (!webCallResponse.ok) {
+            const errorData = await webCallResponse.json();
+            console.error('[AgentInteractionModal] Web call API error:', {
+              status: webCallResponse.status,
+              statusText: webCallResponse.statusText,
+              error: errorData.error,
+              details: errorData.details,
+            });
+            
+            // Provide specific error messages based on status code
+            if (webCallResponse.status === 401) {
+              throw new Error(`Authentication failed: ${errorData.error || 'Invalid or expired Retell API key. Please check reseller configuration.'}`);
+            } else if (webCallResponse.status === 403) {
+              throw new Error(`Permission denied: ${errorData.error || 'Retell API key lacks required permissions. Please check API key permissions in Retell dashboard.'}`);
+            } else if (webCallResponse.status === 404) {
+              throw new Error(`Agent not found: ${errorData.error || 'Agent does not exist in Retell. Please sync agents.'}`);
+            } else {
+              throw new Error(errorData.error || `Failed to create web call (${webCallResponse.status})`);
+            }
+          }
+
+          const { access_token, call_id } = await webCallResponse.json();
+          console.log('[AgentInteractionModal] Web call created successfully:', {
+            call_id,
+            access_token_length: access_token?.length || 0,
+            access_token_prefix: access_token?.substring(0, 20) || 'N/A',
+          });
+          retellCallIdRef.current = call_id;
 
             const retellClient = new RetellWebClient();
             retellClientRef.current = retellClient;
