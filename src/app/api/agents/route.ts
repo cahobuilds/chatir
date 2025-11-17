@@ -36,10 +36,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ agents: agents || [] });
     }
 
-    // For regular users, get their tenant IDs
+    // Get query parameters for filtering
+    const { searchParams } = new URL(request.url);
+    const typeFilter = searchParams.get('type'); // 'voice' or 'chat'
+    const folderId = searchParams.get('folder_id'); // Filter by folder
+
+    // For regular users, get their tenant IDs and check roles
     const { data: userTenants } = await supabase
       .from('user_tenants')
-      .select('tenant_id')
+      .select('tenant_id, role')
       .eq('user_id', user.id)
       .eq('status', 'active');
 
@@ -48,12 +53,50 @@ export async function GET(request: NextRequest) {
     }
 
     const tenantIds = userTenants.map(ut => ut.tenant_id);
+    const userRoles = userTenants.map(ut => ut.role);
+    
+    // Check if user is admin (tenant_admin, super_admin, organization_admin)
+    const isAdmin = userRoles.some(role => 
+      ['tenant_admin', 'super_admin', 'organization_admin'].includes(role)
+    );
 
-    // Get agents for user's tenants (RLS will filter automatically)
-    const { data: agents, error: agentsError } = await supabase
+    let agentsQuery = supabase
       .from('agents')
-      .select('*')
-      .in('tenant_id', tenantIds)
+      .select('*, agent_folders(id, name)');
+
+    // Apply tenant filter
+    agentsQuery = agentsQuery.in('tenant_id', tenantIds);
+
+    // Apply type filter if provided
+    if (typeFilter && ['voice', 'chat'].includes(typeFilter)) {
+      agentsQuery = agentsQuery.eq('type', typeFilter);
+    }
+
+    // Apply folder filter if provided
+    if (folderId) {
+      agentsQuery = agentsQuery.eq('folder_id', folderId);
+    }
+
+    // For non-admin users, filter by user_agents assignments
+    if (!isAdmin) {
+      // Get agent IDs the user has access to
+      const { data: userAgentAssignments } = await supabase
+        .from('user_agents')
+        .select('agent_id')
+        .eq('user_id', user.id)
+        .in('tenant_id', tenantIds);
+
+      const accessibleAgentIds = userAgentAssignments?.map(ua => ua.agent_id) || [];
+      
+      if (accessibleAgentIds.length === 0) {
+        return NextResponse.json({ agents: [] });
+      }
+
+      agentsQuery = agentsQuery.in('id', accessibleAgentIds);
+    }
+
+    // Execute query
+    const { data: agents, error: agentsError } = await agentsQuery
       .order('created_at', { ascending: false });
 
     if (agentsError) {

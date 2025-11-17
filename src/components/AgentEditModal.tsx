@@ -136,10 +136,6 @@ export default function AgentEditModal({
               }
             }
 
-            console.log('Agent data:', agentData);
-            console.log('Parsed config:', config);
-            console.log('Prompt from config:', config.prompt);
-
             // Agent Configuration
             setAgentName(agentData.name || "");
             setAgentType(agentData.type || "voice");
@@ -157,7 +153,7 @@ export default function AgentEditModal({
             setLanguage(voiceConfig.language || "en-US");
 
             // LLM Configuration
-            const llmConfig = config.llm || {};
+            const llmConfig = config.llm_config || config.llm || {};
             setLlmProvider(llmConfig.provider || "openai");
             setLlmModel(llmConfig.model || "gpt-4");
             setLlmTemperature(llmConfig.temperature ?? 0.7);
@@ -166,8 +162,22 @@ export default function AgentEditModal({
             setDynamicVariables(config.dynamic_variables || []);
 
             // Prompt - check multiple possible locations
-            const promptValue = config.prompt || config.system_instructions || config.systemPrompt || "";
-            console.log('Setting prompt to:', promptValue);
+            // Retell agents store prompt in different places:
+            // - llm_websocket_url (for custom LLM)
+            // - system_instructions (common field)
+            // - prompt (direct field)
+            // - systemPrompt (alternative naming)
+            // - llm_config.system_instructions (nested)
+            const promptValue = 
+              config.prompt || 
+              config.system_instructions || 
+              config.systemPrompt ||
+              llmConfig.system_instructions ||
+              llmConfig.prompt ||
+              config.llm_websocket_url || // Sometimes used for custom prompts
+              "";
+            
+            console.log('Config structure:', { config, llmConfig, promptValue });
             setPrompt(promptValue);
           } else {
             const errorData = await response.json();
@@ -190,8 +200,10 @@ export default function AgentEditModal({
     }
   }, [agent, isOpen]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e && 'preventDefault' in e) {
+      e.preventDefault();
+    }
     setError(null);
     setSuccess(null);
 
@@ -268,62 +280,78 @@ export default function AgentEditModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Edit Agent: ${agent.name}`}>
-      <div className="px-6 py-4">
-        {error && (
-          <div className="mb-4">
-            <Alert variant="error" title="Error" message={error} />
-          </div>
-        )}
-
-        {success && (
-          <div className="mb-4">
-            <Alert variant="success" title="Success" message={success} />
+      <div className="flex flex-col h-full max-h-[80vh]">
+        {/* Alerts */}
+        {(error || success) && (
+          <div className="px-6 pt-4 flex-shrink-0">
+            {error && (
+              <div className="mb-4">
+                <Alert variant="error" title="Error" message={error} />
+              </div>
+            )}
+            {success && (
+              <div className="mb-4">
+                <Alert variant="success" title="Success" message={success} />
+              </div>
+            )}
           </div>
         )}
 
         {/* Tabs */}
-        <div className="mb-6 flex border-b border-gray-200 dark:border-gray-700">
+        <div className="px-6 pt-4 flex border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <button
             onClick={() => setActiveTab("agent")}
-            className={`px-4 py-2 font-medium transition-colors ${
+            className={`px-4 py-3 font-medium text-sm transition-colors relative ${
               activeTab === "agent"
-                ? "border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400"
+                ? "text-indigo-600 dark:text-indigo-400"
                 : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             }`}
           >
             Agent Configuration
+            {activeTab === "agent" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400"></span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab("llm")}
-            className={`px-4 py-2 font-medium transition-colors ${
+            className={`px-4 py-3 font-medium text-sm transition-colors relative ${
               activeTab === "llm"
-                ? "border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400"
+                ? "text-indigo-600 dark:text-indigo-400"
                 : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             }`}
           >
             LLM Configuration
+            {activeTab === "llm" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400"></span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab("prompt")}
-            className={`px-4 py-2 font-medium transition-colors ${
+            className={`px-4 py-3 font-medium text-sm transition-colors relative ${
               activeTab === "prompt"
-                ? "border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400"
+                ? "text-indigo-600 dark:text-indigo-400"
                 : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             }`}
           >
             Prompt
+            {activeTab === "prompt" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400"></span>
+            )}
           </button>
         </div>
 
-        {isLoading ? (
-          <div className="py-8 text-center">
-            <p className="text-gray-500 dark:text-gray-400">Loading agent data...</p>
-          </div>
-        ) : (
-          <Form onSubmit={handleSubmit}>
-            {/* Agent Configuration Tab */}
-            {activeTab === "agent" && (
-              <div className="space-y-6">
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+
+          {isLoading ? (
+            <div className="py-12 text-center">
+              <p className="text-gray-500 dark:text-gray-400">Loading agent data...</p>
+            </div>
+          ) : (
+            <Form onSubmit={handleSubmit}>
+              {/* Agent Configuration Tab */}
+              {activeTab === "agent" && (
+                <div className="space-y-5">
                 <div>
                   <Label htmlFor="agent-name">Agent Name</Label>
                   <Input
@@ -393,9 +421,14 @@ export default function AgentEditModal({
                     </div>
 
                     <div>
-                      <Label htmlFor="voice-temperature">
-                        Voice Temperature: {voiceTemperature.toFixed(1)}
-                      </Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="voice-temperature" className="mb-0">
+                          Voice Temperature
+                        </Label>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {voiceTemperature.toFixed(1)}
+                        </span>
+                      </div>
                       <input
                         type="range"
                         id="voice-temperature"
@@ -405,17 +438,22 @@ export default function AgentEditModal({
                         value={voiceTemperature}
                         onChange={(e) => setVoiceTemperature(parseFloat(e.target.value))}
                         disabled={isSubmitting}
-                        className="w-full"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
                       />
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                         Controls voice naturalness (0 = robotic, 1 = very natural)
                       </p>
                     </div>
 
                     <div>
-                      <Label htmlFor="voice-speed">
-                        Voice Speed: {voiceSpeed.toFixed(1)}x
-                      </Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="voice-speed" className="mb-0">
+                          Voice Speed
+                        </Label>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {voiceSpeed.toFixed(1)}x
+                        </span>
+                      </div>
                       <input
                         type="range"
                         id="voice-speed"
@@ -425,12 +463,19 @@ export default function AgentEditModal({
                         value={voiceSpeed}
                         onChange={(e) => setVoiceSpeed(parseFloat(e.target.value))}
                         disabled={isSubmitting}
-                        className="w-full"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="volume">Volume: {volume}%</Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="volume" className="mb-0">
+                          Volume
+                        </Label>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {volume}%
+                        </span>
+                      </div>
                       <input
                         type="range"
                         id="volume"
@@ -440,14 +485,19 @@ export default function AgentEditModal({
                         value={volume}
                         onChange={(e) => setVolume(parseInt(e.target.value))}
                         disabled={isSubmitting}
-                        className="w-full"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="responsiveness">
-                        Responsiveness: {responsiveness.toFixed(1)}
-                      </Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="responsiveness" className="mb-0">
+                          Responsiveness
+                        </Label>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {responsiveness.toFixed(1)}
+                        </span>
+                      </div>
                       <input
                         type="range"
                         id="responsiveness"
@@ -457,17 +507,22 @@ export default function AgentEditModal({
                         value={responsiveness}
                         onChange={(e) => setResponsiveness(parseFloat(e.target.value))}
                         disabled={isSubmitting}
-                        className="w-full"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
                       />
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                         How quickly the agent responds to customer input
                       </p>
                     </div>
 
                     <div>
-                      <Label htmlFor="interruption-sensitivity">
-                        Interruption Sensitivity: {interruptionSensitivity.toFixed(1)}
-                      </Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="interruption-sensitivity" className="mb-0">
+                          Interruption Sensitivity
+                        </Label>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {interruptionSensitivity.toFixed(1)}
+                        </span>
+                      </div>
                       <input
                         type="range"
                         id="interruption-sensitivity"
@@ -479,9 +534,9 @@ export default function AgentEditModal({
                           setInterruptionSensitivity(parseFloat(e.target.value))
                         }
                         disabled={isSubmitting}
-                        className="w-full"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
                       />
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                         How easily customers can interrupt the agent
                       </p>
                     </div>
@@ -507,10 +562,10 @@ export default function AgentEditModal({
               </div>
             )}
 
-            {/* LLM Configuration Tab */}
-            {activeTab === "llm" && (
-              <div className="space-y-6">
-                <div>
+              {/* LLM Configuration Tab */}
+              {activeTab === "llm" && (
+                <div className="space-y-5">
+                  <div>
                   <Label htmlFor="llm-provider">LLM Provider</Label>
                   <Select
                     id="llm-provider"
@@ -546,9 +601,14 @@ export default function AgentEditModal({
                 </div>
 
                 <div>
-                  <Label htmlFor="llm-temperature">
-                    Temperature: {llmTemperature.toFixed(1)}
-                  </Label>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label htmlFor="llm-temperature" className="mb-0">
+                      Temperature
+                    </Label>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {llmTemperature.toFixed(1)}
+                    </span>
+                  </div>
                   <input
                     type="range"
                     id="llm-temperature"
@@ -558,17 +618,22 @@ export default function AgentEditModal({
                     value={llmTemperature}
                     onChange={(e) => setLlmTemperature(parseFloat(e.target.value))}
                     disabled={isSubmitting}
-                    className="w-full"
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
                   />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                     Controls randomness (0 = deterministic, 2 = very creative)
                   </p>
                 </div>
 
                 <div>
-                  <Label htmlFor="max-tokens">
-                    Max Response Tokens: {maxTokens}
-                  </Label>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label htmlFor="max-tokens" className="mb-0">
+                      Max Response Tokens
+                    </Label>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {maxTokens}
+                    </span>
+                  </div>
                   <input
                     type="range"
                     id="max-tokens"
@@ -578,9 +643,9 @@ export default function AgentEditModal({
                     value={maxTokens}
                     onChange={(e) => setMaxTokens(parseInt(e.target.value))}
                     disabled={isSubmitting}
-                    className="w-full"
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
                   />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                     Maximum length of AI responses
                   </p>
                 </div>
@@ -628,42 +693,53 @@ export default function AgentEditModal({
               </div>
             )}
 
-            {/* Prompt Tab */}
-            {activeTab === "prompt" && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="prompt">System Instructions</Label>
-                  <TextArea
-                    id="prompt"
-                    placeholder="Enter the agent's system prompt..."
-                    rows={12}
-                    value={prompt}
-                    onChange={(value: string) => setPrompt(value)}
-                    disabled={isSubmitting}
-                    className="font-mono text-sm"
-                  />
-                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    Define the agent's personality, behavior, and response style. You can review and append to the existing prompt.
-                  </p>
+              {/* Prompt Tab */}
+              {activeTab === "prompt" && (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="prompt">System Instructions</Label>
+                    <TextArea
+                      id="prompt"
+                      placeholder="Enter the agent's system prompt..."
+                      rows={12}
+                      value={prompt}
+                      onChange={(value: string) => setPrompt(value)}
+                      disabled={isSubmitting}
+                      className="font-mono text-sm"
+                    />
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      Define the agent's personality, behavior, and response style. You can review and append to the existing prompt.
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </Form>
+          )}
+        </div>
 
-            {/* Submit Button */}
-            <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" disabled={isSubmitting || isLoading}>
-                {isSubmitting ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </Form>
+        {/* Fixed Footer with Submit Button */}
+        {!isLoading && (
+          <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 flex-shrink-0 bg-white dark:bg-gray-900">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSubmitting}
+              onClick={() => {
+                const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                handleSubmit(fakeEvent);
+              }}
+            >
+              {isSubmitting ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
         )}
       </div>
     </Modal>

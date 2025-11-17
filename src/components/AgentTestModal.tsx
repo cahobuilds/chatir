@@ -98,12 +98,16 @@ export default function AgentTestModal({
   const [transcription, setTranscription] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInterface | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const synthesisRef = useRef<SpeechSynthesis | null>(null);
+  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  // Initialize Web Speech API
+  // Initialize Web Speech API and Speech Synthesis
   useEffect(() => {
     if (typeof window !== "undefined") {
+      // Initialize Speech Recognition
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
@@ -128,25 +132,19 @@ export default function AgentTestModal({
           if (finalTranscript) {
             // Clear interim transcription and add final
             setTranscription("");
+            const userInput = finalTranscript.trim();
+            
             // Add user message
             const userMessage: Message = {
               id: Date.now().toString(),
               type: "user",
-              text: finalTranscript.trim(),
+              text: userInput,
               timestamp: new Date(),
             };
             setMessages((prev) => [...prev, userMessage]);
             
-            // Simulate agent response (in real implementation, this would call your API)
-            setTimeout(() => {
-              const agentMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                type: "agent",
-                text: `I heard you say: "${finalTranscript.trim()}". How can I help you further?`,
-                timestamp: new Date(),
-              };
-              setMessages((prev) => [...prev, agentMessage]);
-            }, 500);
+            // Call agent API to get real response
+            handleAgentVoiceResponse(userInput);
           } else {
             // Update interim transcription (show what's being spoken in real-time)
             setTranscription(interimTranscript);
@@ -171,6 +169,18 @@ export default function AgentTestModal({
           }
         };
       }
+
+      // Initialize Speech Synthesis
+      if ("speechSynthesis" in window) {
+        synthesisRef.current = window.speechSynthesis;
+        
+        // Load voices (some browsers need this)
+        if (synthesisRef.current.getVoices().length === 0) {
+          synthesisRef.current.addEventListener("voiceschanged", () => {
+            // Voices loaded
+          });
+        }
+      }
     }
 
     return () => {
@@ -179,6 +189,9 @@ export default function AgentTestModal({
       }
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      if (synthesisRef.current && currentUtteranceRef.current) {
+        synthesisRef.current.cancel();
       }
     };
   }, [isRecording]);
@@ -242,13 +255,17 @@ export default function AgentTestModal({
       }
 
       // Add welcome message from agent
+      const welcomeText = `Hi, thank you for calling ${agent.name}! My name is ${agent.name}, your AI agent. I can help you place orders, create support tickets and more. Feel free to interrupt or ask for a live agent at any time. How can I help you?`;
       const welcomeMessage: Message = {
         id: Date.now().toString(),
         type: "agent",
-        text: `Hi, thank you for calling ${agent.name}! My name is ${agent.name}, your AI agent. I can help you place orders, create support tickets and more. Feel free to interrupt or ask for a live agent at any time. How can I help you?`,
+        text: welcomeText,
         timestamp: new Date(),
       };
       setMessages([welcomeMessage]);
+      
+      // Speak the welcome message
+      speakText(welcomeText);
     } catch (error: any) {
       console.error("Microphone access error:", error);
       setError(error.message || "Failed to access microphone. Please allow microphone access.");
@@ -261,14 +278,131 @@ export default function AgentTestModal({
     setIsRecording(false);
     setIsListening(false);
 
+    // Stop speech recognition
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
 
+    // Stop microphone
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
     }
+
+    // Stop any ongoing speech synthesis
+    if (synthesisRef.current && currentUtteranceRef.current) {
+      synthesisRef.current.cancel();
+      setIsSpeaking(false);
+    }
+  };
+
+  const handleAgentVoiceResponse = async (userInput: string) => {
+    if (!agent) return;
+
+    try {
+      // Call the agent test API
+      const response = await fetch(`/api/agents/${agent.id}/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          test_type: "voice",
+          message: userInput,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const agentResponse = data.response || data.message || "I'm sorry, I didn't understand that.";
+        
+        // Add agent message to chat
+        const agentMessage: Message = {
+          id: Date.now().toString(),
+          type: "agent",
+          text: agentResponse,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, agentMessage]);
+
+        // Convert agent response to speech and play it
+        speakText(agentResponse);
+      } else {
+        const errorData = await response.json();
+        const errorMessage = errorData.error || "Failed to get agent response";
+        setError(errorMessage);
+        
+        // Still add error message to chat
+        const errorMsg: Message = {
+          id: Date.now().toString(),
+          type: "agent",
+          text: `Error: ${errorMessage}`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+      }
+    } catch (error: any) {
+      console.error("Agent response error:", error);
+      const errorMessage = error.message || "Failed to communicate with agent";
+      setError(errorMessage);
+      
+      const errorMsg: Message = {
+        id: Date.now().toString(),
+        type: "agent",
+        text: `Error: ${errorMessage}`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    }
+  };
+
+  const speakText = (text: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      console.warn("Speech synthesis not supported");
+      return;
+    }
+
+    // Cancel any ongoing speech
+    if (synthesisRef.current) {
+      synthesisRef.current.cancel();
+    }
+
+    synthesisRef.current = window.speechSynthesis;
+    const utterance = new SpeechSynthesisUtterance(text);
+    currentUtteranceRef.current = utterance;
+
+    // Configure voice settings from agent configuration if available
+    // Default to a pleasant voice
+    utterance.lang = "en-US";
+    utterance.rate = 1.0; // Normal speed
+    utterance.pitch = 1.0; // Normal pitch
+    utterance.volume = 1.0; // Full volume
+
+    // Try to find a good voice
+    const voices = synthesisRef.current.getVoices();
+    const preferredVoice = voices.find(
+      (voice) => voice.name.includes("Google") || voice.name.includes("Microsoft") || voice.name.includes("Samantha")
+    ) || voices.find((voice) => voice.lang.startsWith("en"));
+    
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      currentUtteranceRef.current = null;
+    };
+
+    utterance.onerror = (event) => {
+      console.error("Speech synthesis error:", event);
+      setIsSpeaking(false);
+      currentUtteranceRef.current = null;
+    };
+
+    // Speak the text
+    synthesisRef.current.speak(utterance);
   };
 
   const handleChatTest = async () => {
@@ -441,17 +575,27 @@ export default function AgentTestModal({
                     )}
                   </div>
 
-                  {/* Recording Indicator */}
-                  {isListening && (
-                    <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 bg-red-50 dark:bg-red-900/10">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
-                        <span className="text-sm text-red-700 dark:text-red-400 font-medium">
-                          Recording...
-                        </span>
-                      </div>
+                  {/* Status Indicators */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 bg-gray-50 dark:bg-gray-800/50">
+                    <div className="flex items-center justify-center gap-4">
+                      {isListening && (
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
+                          <span className="text-sm text-red-700 dark:text-red-400 font-medium">
+                            Recording...
+                          </span>
+                        </div>
+                      )}
+                      {isSpeaking && (
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
+                          <span className="text-sm text-blue-700 dark:text-blue-400 font-medium">
+                            Speaking...
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* End Call Button */}

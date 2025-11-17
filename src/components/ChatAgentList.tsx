@@ -57,6 +57,8 @@ export default function ChatAgentList() {
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [folders, setFolders] = useState<Array<{ id: string; name: string; description?: string }>>([]);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -67,8 +69,28 @@ export default function ChatAgentList() {
   });
 
   useEffect(() => {
-    fetchAgents();
+    if (currentOrganization?.id) {
+      fetchFolders();
+    }
   }, [currentOrganization]);
+
+  useEffect(() => {
+    fetchAgents();
+  }, [currentOrganization, selectedFolder]);
+
+  const fetchFolders = async () => {
+    if (!currentOrganization?.id) return;
+    
+    try {
+      const response = await fetch(`/api/folders?tenant_id=${currentOrganization.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFolders(data.folders || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch folders:", error);
+    }
+  };
 
   const handleSyncFromRetell = async () => {
     if (!currentOrganization?.id) {
@@ -113,14 +135,17 @@ export default function ChatAgentList() {
   const fetchAgents = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/agents");
+      // Use type filter in API call instead of filtering client-side
+      const params = new URLSearchParams({ type: 'chat' });
+      if (selectedFolder) {
+        params.append('folder_id', selectedFolder);
+      }
+      
+      const response = await fetch(`/api/agents?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
-        // API returns { agents: [...] }
-        const agentsList = data.agents || data || [];
-        // Filter for chat agents only
-        const chatAgents = agentsList.filter((agent: Agent) => agent.type === "chat");
-        setAgents(chatAgents);
+        // API already filters by type, so use directly
+        setAgents(data.agents || []);
       }
     } catch (error) {
       console.error("Failed to fetch agents:", error);
@@ -344,14 +369,25 @@ export default function ChatAgentList() {
         {/* Filters and Sorting */}
         <div className="mb-4 flex items-center justify-between gap-4 px-6">
           <div className="flex items-center gap-2">
-            <Label htmlFor="status-filter" className="text-sm">Filter:</Label>
+            <Label htmlFor="folder-filter" className="text-sm">Folder:</Label>
             <Select
+              id="folder-filter"
+              options={[
+                { value: "", label: "All Folders" },
+                ...folders.map(f => ({ value: f.id, label: f.name }))
+              ]}
+              value={selectedFolder || ""}
+              onChange={(value) => setSelectedFolder(value || null)}
+            />
+            <Label htmlFor="status-filter" className="text-sm ml-4">Status:</Label>
+            <Select
+              id="status-filter"
               options={[
                 { value: "all", label: "All" },
                 { value: "active", label: "Active" },
                 { value: "inactive", label: "Inactive" },
               ]}
-              defaultValue={statusFilter}
+              value={statusFilter}
               onChange={(value) => setStatusFilter(value as StatusFilter)}
             />
           </div>

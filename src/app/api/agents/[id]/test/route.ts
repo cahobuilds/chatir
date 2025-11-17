@@ -57,40 +57,114 @@ export async function POST(
 
     // Handle voice agent testing
     if (agent.type === 'voice' && test_type === 'voice') {
-      if (!agent.retell_agent_id) {
-        return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+      // Browser-based voice testing (no phone number required)
+      if (!message) {
+        return NextResponse.json({ error: 'message is required for browser-based voice testing' }, { status: 400 });
       }
 
-      if (!phone_number) {
-        return NextResponse.json({ error: 'phone_number is required for voice testing' }, { status: 400 });
+      // If phone_number is provided, use Retell phone call testing
+      if (phone_number) {
+        if (!agent.retell_agent_id) {
+          return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+        }
+
+        // Get reseller's Retell API key
+        const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
+
+        if (!retellApiKey) {
+          return NextResponse.json(
+            { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+            { status: 400 }
+          );
+        }
+
+        // Create test call via Retell AI
+        const retellClient = createRetellClient(retellApiKey);
+        const call = await retellClient.call.createPhoneCall({
+          from_number: phone_number, // Test number
+          to_number: phone_number, // For testing, call yourself
+          override_agent_id: agent.retell_agent_id,
+          metadata: {
+            test: true,
+            test_user_id: user.id,
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          call_id: call.call_id,
+          message: 'Test call initiated successfully',
+        });
       }
 
-      // Get reseller's Retell API key
-      const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
+      // Browser-based testing: Get agent response using LLM
+      const config = typeof agent.configuration === 'string' 
+        ? JSON.parse(agent.configuration) 
+        : agent.configuration || {};
 
-      if (!retellApiKey) {
-        return NextResponse.json(
-          { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
-          { status: 400 }
-        );
+      // Get the prompt/system instructions
+      const systemPrompt = config.prompt || 
+                          config.system_instructions || 
+                          config.systemPrompt ||
+                          config.llm_config?.system_instructions ||
+                          `You are ${agent.name}, a helpful AI assistant.`;
+
+      // Get LLM configuration
+      const llmConfig = config.llm_config || config.llm || {};
+      const llmProvider = llmConfig.provider || 'openai';
+      const llmModel = llmConfig.model || 'gpt-4';
+      const temperature = llmConfig.temperature ?? 0.7;
+
+      // For now, we'll use OpenAI API (you can extend this to support other providers)
+      if (llmProvider === 'openai') {
+        const openaiApiKey = process.env.OPENAI_API_KEY;
+        if (!openaiApiKey) {
+          return NextResponse.json(
+            { error: 'OpenAI API key not configured' },
+            { status: 500 }
+          );
+        }
+
+        const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: llmModel,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: message },
+            ],
+            temperature: temperature,
+            max_tokens: llmConfig.max_tokens || 1000,
+          }),
+        });
+
+        if (!openaiResponse.ok) {
+          const errorData = await openaiResponse.json();
+          return NextResponse.json(
+            { error: errorData.error?.message || 'Failed to get LLM response' },
+            { status: 500 }
+          );
+        }
+
+        const openaiData = await openaiResponse.json();
+        const agentResponse = openaiData.choices[0]?.message?.content || "I'm sorry, I didn't understand that.";
+
+        return NextResponse.json({
+          success: true,
+          response: agentResponse,
+          message: 'Voice test completed successfully',
+        });
       }
 
-      // Create test call via Retell AI
-      const retellClient = createRetellClient(retellApiKey);
-      const call = await retellClient.call.createPhoneCall({
-        from_number: phone_number, // Test number
-        to_number: phone_number, // For testing, call yourself
-        override_agent_id: agent.retell_agent_id,
-        metadata: {
-          test: true,
-          test_user_id: user.id,
-        },
-      });
-
+      // Fallback: return a simple response
       return NextResponse.json({
         success: true,
-        call_id: call.call_id,
-        message: 'Test call initiated successfully',
+        response: `I heard you say: "${message}". How can I help you further?`,
+        message: 'Voice test completed (using fallback response)',
       });
     }
 
