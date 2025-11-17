@@ -621,7 +621,6 @@ export default function AgentInteractionModal({
             }, 180000); // 3 minutes timeout
 
             return;
-          }
         } catch (retellError: any) {
           console.error("Retell setup error:", retellError);
           setError(`Retell unavailable: ${retellError.message}. Using browser TTS.`);
