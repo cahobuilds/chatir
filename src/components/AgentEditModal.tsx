@@ -120,7 +120,25 @@ export default function AgentEditModal({
           if (response.ok) {
             const data = await response.json();
             const agentData = data.agent;
-            const config = agentData.configuration || {};
+            
+            // Handle configuration - it might be a string or object
+            let config: any = {};
+            if (agentData.configuration) {
+              if (typeof agentData.configuration === 'string') {
+                try {
+                  config = JSON.parse(agentData.configuration);
+                } catch (e) {
+                  console.error('Failed to parse configuration:', e);
+                  config = {};
+                }
+              } else if (typeof agentData.configuration === 'object') {
+                config = agentData.configuration;
+              }
+            }
+
+            console.log('Agent data:', agentData);
+            console.log('Parsed config:', config);
+            console.log('Prompt from config:', config.prompt);
 
             // Agent Configuration
             setAgentName(agentData.name || "");
@@ -147,8 +165,10 @@ export default function AgentEditModal({
             setEnableFunctionCalling(llmConfig.enable_function_calling !== false);
             setDynamicVariables(config.dynamic_variables || []);
 
-            // Prompt
-            setPrompt(config.prompt || "");
+            // Prompt - check multiple possible locations
+            const promptValue = config.prompt || config.system_instructions || config.systemPrompt || "";
+            console.log('Setting prompt to:', promptValue);
+            setPrompt(promptValue);
           } else {
             const errorData = await response.json();
             setError(errorData.error || "Failed to load agent data");
