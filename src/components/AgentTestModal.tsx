@@ -134,17 +134,20 @@ export default function AgentTestModal({
             setTranscription("");
             const userInput = finalTranscript.trim();
             
-            // Add user message
-            const userMessage: Message = {
-              id: Date.now().toString(),
-              type: "user",
-              text: userInput,
-              timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, userMessage]);
-            
-            // Call agent API to get real response
-            handleAgentVoiceResponse(userInput);
+            // Only process if we have actual content
+            if (userInput.length > 0) {
+              // Add user message
+              const userMessage: Message = {
+                id: Date.now().toString(),
+                type: "user",
+                text: userInput,
+                timestamp: new Date(),
+              };
+              setMessages((prev) => [...prev, userMessage]);
+              
+              // Call agent API to get real response
+              handleAgentVoiceResponse(userInput);
+            }
           } else {
             // Update interim transcription (show what's being spoken in real-time)
             setTranscription(interimTranscript);
@@ -298,6 +301,12 @@ export default function AgentTestModal({
 
   const handleAgentVoiceResponse = async (userInput: string) => {
     if (!agent) return;
+    
+    // Validate input
+    if (!userInput || userInput.trim().length === 0) {
+      console.warn("Empty user input, skipping API call");
+      return;
+    }
 
     try {
       // Call the agent test API
@@ -306,7 +315,7 @@ export default function AgentTestModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           test_type: "voice",
-          message: userInput,
+          message: userInput.trim(),
         }),
       });
 

@@ -58,8 +58,10 @@ export async function POST(
     // Handle voice agent testing
     if (agent.type === 'voice' && test_type === 'voice') {
       // Browser-based voice testing (no phone number required)
-      if (!message) {
-        return NextResponse.json({ error: 'message is required for browser-based voice testing' }, { status: 400 });
+      if (!message || typeof message !== 'string' || message.trim().length === 0) {
+        return NextResponse.json({ 
+          error: 'message is required for browser-based voice testing and must not be empty' 
+        }, { status: 400 });
       }
 
       // If phone_number is provided, use Retell phone call testing
@@ -97,74 +99,40 @@ export async function POST(
         });
       }
 
-      // Browser-based testing: Get agent response using LLM
-      const config = typeof agent.configuration === 'string' 
-        ? JSON.parse(agent.configuration) 
-        : agent.configuration || {};
-
-      // Get the prompt/system instructions
-      const systemPrompt = config.prompt || 
-                          config.system_instructions || 
-                          config.systemPrompt ||
-                          config.llm_config?.system_instructions ||
-                          `You are ${agent.name}, a helpful AI assistant.`;
-
-      // Get LLM configuration
-      const llmConfig = config.llm_config || config.llm || {};
-      const llmProvider = llmConfig.provider || 'openai';
-      const llmModel = llmConfig.model || 'gpt-4';
-      const temperature = llmConfig.temperature ?? 0.7;
-
-      // For now, we'll use OpenAI API (you can extend this to support other providers)
-      if (llmProvider === 'openai') {
-        const openaiApiKey = process.env.OPENAI_API_KEY;
-        if (!openaiApiKey) {
-          return NextResponse.json(
-            { error: 'OpenAI API key not configured' },
-            { status: 500 }
-          );
-        }
-
-        const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openaiApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: llmModel,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: message },
-            ],
-            temperature: temperature,
-            max_tokens: llmConfig.max_tokens || 1000,
-          }),
-        });
-
-        if (!openaiResponse.ok) {
-          const errorData = await openaiResponse.json();
-          return NextResponse.json(
-            { error: errorData.error?.message || 'Failed to get LLM response' },
-            { status: 500 }
-          );
-        }
-
-        const openaiData = await openaiResponse.json();
-        const agentResponse = openaiData.choices[0]?.message?.content || "I'm sorry, I didn't understand that.";
-
+      // Browser-based testing: For voice agents, responses are handled by Retell
+      // The browser test interface simulates the conversation, but actual agent responses
+      // come from Retell's real-time API during actual calls
+      
+      // Check if agent is linked to Retell
+      if (!agent.retell_agent_id) {
         return NextResponse.json({
           success: true,
-          response: agentResponse,
-          message: 'Voice test completed successfully',
+          response: `I heard you say: "${message}". This is a test response. To get real agent responses, ensure the agent is linked to Retell AI and use phone-based testing.`,
+          message: 'Voice test completed (simulated response - agent not linked to Retell)',
+          note: 'For full voice testing with real-time responses, use phone-based testing or ensure the agent is configured with Retell AI.',
         });
       }
 
-      // Fallback: return a simple response
+      // Get reseller's Retell API key to verify configuration
+      const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
+      
+      if (!retellApiKey) {
+        return NextResponse.json({
+          success: true,
+          response: `I heard you say: "${message}". This is a test response. Retell AI is not configured for this organization's reseller.`,
+          message: 'Voice test completed (simulated response - Retell not configured)',
+          note: 'Contact your reseller administrator to configure Retell AI for full voice testing capabilities.',
+        });
+      }
+
+      // For browser-based testing, we return a simulated response
+      // Real-time voice interactions require Retell's WebSocket API or phone calls
+      // The frontend handles the speech synthesis of this response
       return NextResponse.json({
         success: true,
-        response: `I heard you say: "${message}". How can I help you further?`,
-        message: 'Voice test completed (using fallback response)',
+        response: `I heard you say: "${message}". This is a simulated response for browser testing. For real-time voice interactions, the agent uses Retell AI's real-time API during actual phone calls.`,
+        message: 'Voice test completed (simulated response)',
+        note: 'Browser-based testing provides transcription and simulated responses. For full voice testing with real-time Retell AI responses, use phone-based testing.',
       });
     }
 
