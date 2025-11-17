@@ -342,57 +342,38 @@ const AppSidebar: React.FC = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`py-8 flex ${
+        className={`py-8 flex items-center gap-3 ${
           !isExpanded && !isHovered ? "xl:justify-center" : "justify-start"
         }`}
       >
-        <Link href="/">
-          {isExpanded || isHovered || isMobileOpen ? (
-            organizationLogo ? (
-              <Image
-                src={organizationLogo}
-                alt={currentOrganization?.name || "Organization Logo"}
-                width={150}
-                height={40}
-                className="h-10 w-auto object-contain max-w-[150px]"
-                unoptimized
-              />
-            ) : (
-              <>
-                <Image
-                  className="dark:hidden"
-                  src="/images/logo/logo.svg"
-                  alt="Logo"
-                  width={150}
-                  height={40}
-                />
-                <Image
-                  className="hidden dark:block"
-                  src="/images/logo/logo-dark.svg"
-                  alt="Logo"
-                  width={150}
-                  height={40}
-                />
-              </>
-            )
+        <Link href="/" className="flex items-center gap-3">
+          {/* Logo Icon - Always visible */}
+          {organizationLogo ? (
+            <Image
+              src={organizationLogo}
+              alt={currentOrganization?.name || "Organization Logo"}
+              width={isExpanded || isHovered || isMobileOpen ? 40 : 32}
+              height={isExpanded || isHovered || isMobileOpen ? 40 : 32}
+              className={`object-contain ${
+                isExpanded || isHovered || isMobileOpen ? "h-10 w-10" : "h-8 w-8"
+              }`}
+              unoptimized
+            />
           ) : (
-            organizationLogo ? (
-              <Image
-                src={organizationLogo}
-                alt={currentOrganization?.name || "Organization Logo"}
-                width={32}
-                height={32}
-                className="h-8 w-8 object-contain"
-                unoptimized
-              />
-            ) : (
-              <Image
-                src="/images/logo/logo-icon.svg"
-                alt="Logo"
-                width={32}
-                height={32}
-              />
-            )
+            <Image
+              src="/images/logo/logo-icon.svg"
+              alt="Logo"
+              width={isExpanded || isHovered || isMobileOpen ? 40 : 32}
+              height={isExpanded || isHovered || isMobileOpen ? 40 : 32}
+              className={isExpanded || isHovered || isMobileOpen ? "h-10 w-10" : "h-8 w-8"}
+            />
+          )}
+          
+          {/* Wordmark Text - Only visible when expanded */}
+          {(isExpanded || isHovered || isMobileOpen) && (
+            <span className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">
+              {currentOrganization?.name || "TailAdmin"}
+            </span>
           )}
         </Link>
       </div>
