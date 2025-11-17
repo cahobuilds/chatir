@@ -72,6 +72,63 @@ export async function POST(
 
     // Create web call via Retell AI
     const retellClient = createRetellClient(retellApiKey);
+    
+    // First, verify the agent exists and is properly configured in Retell
+    try {
+      const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
+      
+      // Validate agent has a response engine configured
+      if (!retellAgent.response_engine) {
+        return NextResponse.json(
+          { 
+            error: 'Agent is not properly configured in Retell AI. Please ensure the agent has a response engine (LLM) configured in the Retell dashboard.',
+            details: 'The agent exists but has no response engine configured.'
+          },
+          { status: 400 }
+        );
+      }
+      
+      // Validate response engine type
+      if (retellAgent.response_engine.type === 'retell-llm') {
+        const llmId = (retellAgent.response_engine as any).llm_id;
+        if (!llmId) {
+          return NextResponse.json(
+            { 
+              error: 'Agent LLM is not properly configured in Retell AI.',
+              details: 'The agent uses Retell LLM but the LLM ID is missing.'
+            },
+            { status: 400 }
+          );
+        }
+      } else if (retellAgent.response_engine.type === 'custom-llm') {
+        const websocketUrl = (retellAgent.response_engine as any).llm_websocket_url;
+        if (!websocketUrl) {
+          return NextResponse.json(
+            { 
+              error: 'Agent custom LLM is not properly configured in Retell AI.',
+              details: 'The agent uses a custom LLM but the websocket URL is missing.'
+            },
+            { status: 400 }
+          );
+        }
+      }
+      
+      console.log(`Agent ${agent.retell_agent_id} validated successfully in Retell`);
+    } catch (retellError: any) {
+      console.error('Error validating agent in Retell:', retellError);
+      if (retellError.status === 404 || retellError.message?.includes('not found')) {
+        return NextResponse.json(
+          { 
+            error: 'Agent not found in Retell AI. Please ensure the agent is properly synced.',
+            details: `Agent ID ${agent.retell_agent_id} does not exist in Retell.`
+          },
+          { status: 404 }
+        );
+      }
+      // Continue anyway - validation might fail but call creation might still work
+      console.warn('Agent validation failed, but proceeding with call creation:', retellError.message);
+    }
+    
     const webCall = await retellClient.call.createWebCall({
       agent_id: agent.retell_agent_id,
       metadata: {

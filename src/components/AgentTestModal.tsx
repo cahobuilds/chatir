@@ -282,7 +282,9 @@ export default function AgentTestModal({
 
           if (!webCallResponse.ok) {
             const errorData = await webCallResponse.json();
-            throw new Error(errorData.error || "Failed to create web call");
+            const errorMessage = errorData.error || "Failed to create web call";
+            const errorDetails = errorData.details ? `\n\nDetails: ${errorData.details}` : "";
+            throw new Error(`${errorMessage}${errorDetails}`);
           }
 
           const { access_token, call_id } = await webCallResponse.json();
@@ -328,8 +330,21 @@ export default function AgentTestModal({
 
           retellClient.on("call_ended", () => {
             console.log("Retell call ended");
+            console.warn("⚠️ Call ended before call_ready - this may indicate:");
+            console.warn("  1. Agent not properly configured in Retell");
+            console.warn("  2. Agent LLM not configured or invalid");
+            console.warn("  3. Access token issue");
+            console.warn("  4. Network/connection problem");
+            
             setIsRecording(false);
             setIsListening(false);
+            
+            // Show error to user if call ended before ready
+            if (!retellCallIdRef.current) {
+              // Call ended immediately - likely a configuration issue
+              setError("Call ended immediately. Please check agent configuration in Retell AI dashboard.");
+            }
+            
             // Clear refs after a short delay to allow for potential reconnection attempts
             setTimeout(() => {
               retellClientRef.current = null;
@@ -339,22 +354,33 @@ export default function AgentTestModal({
 
           retellClient.on("error", (error: any) => {
             console.error("Retell error:", error);
+            console.error("Error details:", JSON.stringify(error, null, 2));
             
             // Don't fail on PublishTrackError if it's just a timing issue
             // The SDK will retry automatically
             if (error?.message?.includes("PublishTrackError") || 
                 error?.message?.includes("publishing rejected")) {
-              console.warn("PublishTrackError detected - this may be a timing issue, SDK will retry");
-              // Don't end the call, let it retry
+              console.warn("PublishTrackError detected - this may be a timing issue");
+              console.warn("The call may still work if the engine connects soon");
+              // Don't end the call immediately, give it a chance to recover
+              // Only show error if call actually ends
               return;
             }
             
-            setError(`Retell error: ${error.message || "Unknown error"}`);
+            // For other errors, show to user
+            const errorMessage = error?.message || error?.error || "Unknown error";
+            setError(`Retell error: ${errorMessage}. Check agent configuration in Retell AI.`);
             setIsRecording(false);
             setIsListening(false);
-            retellClient.stopCall();
-            retellClientRef.current = null;
-            retellCallIdRef.current = null;
+            
+            // Only stop call if it's a critical error
+            if (error?.message?.includes("authentication") || 
+                error?.message?.includes("unauthorized") ||
+                error?.message?.includes("invalid")) {
+              retellClient.stopCall();
+              retellClientRef.current = null;
+              retellCallIdRef.current = null;
+            }
           });
 
           retellClient.on("update", (data: any) => {
