@@ -41,9 +41,14 @@ export async function GET(request: NextRequest) {
       .order('name', { ascending: true });
 
     if (foldersError) {
-      // If table doesn't exist, return empty array instead of error
-      if (foldersError.message?.includes('does not exist') || foldersError.code === '42P01') {
-        console.warn('agent_folders table does not exist yet, returning empty array');
+      // If table doesn't exist or schema cache is stale (PGRST205), return empty array
+      if (
+        foldersError.message?.includes('does not exist') || 
+        foldersError.code === '42P01' ||
+        foldersError.code === 'PGRST205' ||
+        foldersError.message?.includes('schema cache')
+      ) {
+        console.warn('agent_folders table not available (may be schema cache issue), returning empty array:', foldersError.code);
         return NextResponse.json({ folders: [] });
       }
       console.error('Folders API error:', foldersError);

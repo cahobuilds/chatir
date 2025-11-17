@@ -54,17 +54,24 @@ export async function GET(request: NextRequest) {
       if (agents && agents.length > 0) {
         const folderIds = [...new Set(agents.map(a => a.folder_id).filter(Boolean))];
         if (folderIds.length > 0) {
-          const { data: folders } = await adminSupabase
+          const { data: folders, error: foldersError } = await adminSupabase
             .from('agent_folders')
             .select('id, name')
             .in('id', folderIds);
           
-          const folderMap = new Map(folders?.map(f => [f.id, f]) || []);
-          agents.forEach(agent => {
-            if (agent.folder_id && folderMap.has(agent.folder_id)) {
-              (agent as any).agent_folders = folderMap.get(agent.folder_id);
-            }
-          });
+          // If schema cache is stale (PGRST205), skip folder attachment but don't fail
+          if (foldersError && foldersError.code !== 'PGRST205') {
+            console.warn('Error fetching folders for agents:', foldersError);
+          }
+          
+          if (folders && !foldersError) {
+            const folderMap = new Map(folders.map(f => [f.id, f]));
+            agents.forEach(agent => {
+              if (agent.folder_id && folderMap.has(agent.folder_id)) {
+                (agent as any).agent_folders = folderMap.get(agent.folder_id);
+              }
+            });
+          }
         }
       }
 
@@ -137,17 +144,24 @@ export async function GET(request: NextRequest) {
     if (agents && agents.length > 0) {
       const folderIds = [...new Set(agents.map(a => a.folder_id).filter(Boolean))];
       if (folderIds.length > 0) {
-        const { data: folders } = await supabase
+        const { data: folders, error: foldersError } = await supabase
           .from('agent_folders')
           .select('id, name')
           .in('id', folderIds);
         
-        const folderMap = new Map(folders?.map(f => [f.id, f]) || []);
-        agents.forEach(agent => {
-          if (agent.folder_id && folderMap.has(agent.folder_id)) {
-            (agent as any).agent_folders = folderMap.get(agent.folder_id);
-          }
-        });
+        // If schema cache is stale (PGRST205), skip folder attachment but don't fail
+        if (foldersError && foldersError.code !== 'PGRST205') {
+          console.warn('Error fetching folders for agents:', foldersError);
+        }
+        
+        if (folders && !foldersError) {
+          const folderMap = new Map(folders.map(f => [f.id, f]));
+          agents.forEach(agent => {
+            if (agent.folder_id && folderMap.has(agent.folder_id)) {
+              (agent as any).agent_folders = folderMap.get(agent.folder_id);
+            }
+          });
+        }
       }
     }
 
