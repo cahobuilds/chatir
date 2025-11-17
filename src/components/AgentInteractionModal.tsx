@@ -371,16 +371,18 @@ export default function AgentInteractionModal({
 
           retellClient.on("call_ended", (data: any) => {
             console.log(`❌ call_ended event fired: ${JSON.stringify(data)}`);
+            const wasInitializing = isInitializingRef.current;
+            const duration = initializationStartTime 
+              ? Math.floor((Date.now() - initializationStartTime) / 1000)
+              : 0;
+            
             setIsInitializing(false);
             isInitializingRef.current = false;
             setInitializationStartTime(null);
             setIsRecording(false);
             setIsListening(false);
             
-            if (isInitializingRef.current) {
-              const duration = initializationStartTime 
-                ? Math.floor((Date.now() - initializationStartTime) / 1000)
-                : 0;
+            if (wasInitializing) {
               setError(`Call ended during initialization after ${duration}s. Check Retell dashboard for call ${retellCallIdRef.current}`);
             }
             
