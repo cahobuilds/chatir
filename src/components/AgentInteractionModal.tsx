@@ -600,6 +600,10 @@ export default function AgentInteractionModal({
       }
 
       // Browser-based fallback
+      // For browser fallback, we need microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SpeechRecognition) {
         setError("Speech recognition not supported in your browser.");
