@@ -431,8 +431,16 @@ export default function AgentInteractionModal({
               setMessages([]);
             });
 
-            retellClient.on("call_ended", () => {
-              console.log("Retell call ended");
+            retellClient.on("call_ended", (data: any) => {
+              console.log("Retell call ended", {
+                call_id: retellCallIdRef.current,
+                data: data,
+                was_initializing: isInitializingRef.current,
+                initialization_duration: initializationStartTime 
+                  ? `${Math.floor((Date.now() - initializationStartTime) / 1000)}s`
+                  : 'unknown',
+              });
+              
               setIsInitializing(false);
               isInitializingRef.current = false;
               setInitializationStartTime(null);
@@ -441,9 +449,16 @@ export default function AgentInteractionModal({
               
               // Check if call ended before call_ready (indicates configuration issue)
               if (isInitializingRef.current) {
-                setError("Call ended during initialization. The agent may need more time to initialize. Please try again.");
+                const duration = initializationStartTime 
+                  ? Math.floor((Date.now() - initializationStartTime) / 1000)
+                  : 0;
+                console.error(`[AgentInteractionModal] Call ended during initialization after ${duration}s`);
+                setError(`Call ended during initialization after ${duration}s. The agent may need more time to initialize or there may be a configuration issue. Check Retell dashboard for call ${retellCallIdRef.current}`);
               } else if (!retellCallIdRef.current) {
+                console.error("[AgentInteractionModal] Call ended immediately - no call_id");
                 setError("Call ended immediately. Please check agent configuration in Retell AI dashboard:\n1. Agent LLM must be configured\n2. Agent must have valid API keys\n3. Check Retell dashboard for agent status");
+              } else {
+                console.log(`[AgentInteractionModal] Call ${retellCallIdRef.current} ended normally`);
               }
               
               setTimeout(() => {
