@@ -18,6 +18,7 @@ import Select from "./form/Select";
 import { useOrganization } from "@/context/OrganizationContext";
 import Alert from "./ui/alert/Alert";
 import TextArea from "./form/input/TextArea";
+import { ArrowPathIcon } from "@heroicons/react/24/outline";
 
 interface Agent {
   id: string;
@@ -42,6 +43,7 @@ export default function VoiceAgentList() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     type: "voice" as "voice" | "chat",
@@ -52,7 +54,47 @@ export default function VoiceAgentList() {
 
   useEffect(() => {
     fetchAgents();
-  }, []);
+  }, [currentOrganization]);
+
+  const handleSyncFromRetell = async () => {
+    if (!currentOrganization?.id) {
+      setError("No organization selected");
+      return;
+    }
+
+    try {
+      setSyncing(true);
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch('/api/retell/agents/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tenant_id: currentOrganization.id }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Sync failed');
+      }
+
+      const data = await response.json();
+      setSuccess(`Successfully synced ${data.synced} agent(s) from Retell AI!${data.errors > 0 ? ` (${data.errors} error(s))` : ''}`);
+      
+      // Refresh agents after sync
+      await fetchAgents();
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      console.error("Sync error:", err);
+      setError(err.message || 'Failed to sync agents from Retell AI');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const fetchAgents = async () => {
     try {
@@ -216,14 +258,35 @@ export default function VoiceAgentList() {
 
   return (
     <>
+      {error && (
+        <div className="mb-4">
+          <Alert variant="error" title="Error" message={error} />
+        </div>
+      )}
+      {success && (
+        <div className="mb-4">
+          <Alert variant="success" title="Success" message={success} />
+        </div>
+      )}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
         <div className="mb-6 flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-white/[0.05]">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
             Voice Agents
           </h2>
-          <Button onClick={handleCreate} size="sm">
-            Create Agent
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={handleSyncFromRetell} 
+              size="sm"
+              variant="outline"
+              disabled={syncing || !currentOrganization?.id}
+            >
+              <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? "Syncing..." : "Sync from Retell"}
+            </Button>
+            <Button onClick={handleCreate} size="sm">
+              Create Agent
+            </Button>
+          </div>
         </div>
 
         <div className="max-w-full overflow-x-auto">
@@ -268,9 +331,28 @@ export default function VoiceAgentList() {
                 <TableRow>
                   <TableCell
                     colSpan={5}
-                    className="px-5 py-8 text-center text-gray-500 dark:text-gray-400"
+                    className="px-5 py-8 text-center"
                   >
-                    No voice agents found. Create your first agent to get started.
+                    <div className="space-y-3">
+                      <p className="text-gray-500 dark:text-gray-400">
+                        No voice agents found.
+                      </p>
+                      <div className="flex items-center justify-center gap-2">
+                        <Button 
+                          onClick={handleSyncFromRetell} 
+                          size="sm"
+                          variant="outline"
+                          disabled={syncing || !currentOrganization?.id}
+                        >
+                          <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                          {syncing ? "Syncing..." : "Sync Agents from Retell"}
+                        </Button>
+                        <span className="text-gray-400 dark:text-gray-500">or</span>
+                        <Button onClick={handleCreate} size="sm">
+                          Create New Agent
+                        </Button>
+                      </div>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
