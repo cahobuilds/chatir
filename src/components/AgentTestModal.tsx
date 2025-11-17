@@ -360,49 +360,89 @@ export default function AgentTestModal({
       return;
     }
 
-    // Cancel any ongoing speech
-    if (synthesisRef.current) {
-      synthesisRef.current.cancel();
-    }
+    try {
+      // Cancel any ongoing speech
+      if (synthesisRef.current) {
+        synthesisRef.current.cancel();
+      }
 
-    synthesisRef.current = window.speechSynthesis;
-    const utterance = new SpeechSynthesisUtterance(text);
-    currentUtteranceRef.current = utterance;
+      // Wait a bit for cancellation to complete
+      setTimeout(() => {
+        try {
+          synthesisRef.current = window.speechSynthesis;
+          
+          // Check if speech synthesis is available
+          if (!synthesisRef.current) {
+            console.warn("Speech synthesis not available");
+            return;
+          }
 
-    // Configure voice settings from agent configuration if available
-    // Default to a pleasant voice
-    utterance.lang = "en-US";
-    utterance.rate = 1.0; // Normal speed
-    utterance.pitch = 1.0; // Normal pitch
-    utterance.volume = 1.0; // Full volume
+          const utterance = new SpeechSynthesisUtterance(text);
+          currentUtteranceRef.current = utterance;
 
-    // Try to find a good voice
-    const voices = synthesisRef.current.getVoices();
-    const preferredVoice = voices.find(
-      (voice) => voice.name.includes("Google") || voice.name.includes("Microsoft") || voice.name.includes("Samantha")
-    ) || voices.find((voice) => voice.lang.startsWith("en"));
-    
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
-    }
+          // Configure voice settings from agent configuration if available
+          // Default to a pleasant voice
+          utterance.lang = "en-US";
+          utterance.rate = 1.0; // Normal speed
+          utterance.pitch = 1.0; // Normal pitch
+          utterance.volume = 1.0; // Full volume
 
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-    };
+          // Try to find a good voice (wait for voices to load if needed)
+          const getVoices = () => {
+            const voices = synthesisRef.current?.getVoices() || [];
+            if (voices.length === 0) {
+              // Voices not loaded yet, wait for voiceschanged event
+              synthesisRef.current?.addEventListener("voiceschanged", () => {
+                const loadedVoices = synthesisRef.current?.getVoices() || [];
+                const preferredVoice = loadedVoices.find(
+                  (voice) => voice.name.includes("Google") || voice.name.includes("Microsoft") || voice.name.includes("Samantha")
+                ) || loadedVoices.find((voice) => voice.lang.startsWith("en"));
+                if (preferredVoice) {
+                  utterance.voice = preferredVoice;
+                }
+                synthesisRef.current?.speak(utterance);
+              }, { once: true });
+              return;
+            }
+            
+            const preferredVoice = voices.find(
+              (voice) => voice.name.includes("Google") || voice.name.includes("Microsoft") || voice.name.includes("Samantha")
+            ) || voices.find((voice) => voice.lang.startsWith("en"));
+            
+            if (preferredVoice) {
+              utterance.voice = preferredVoice;
+            }
+            
+            synthesisRef.current?.speak(utterance);
+          };
 
-    utterance.onend = () => {
+          utterance.onstart = () => {
+            setIsSpeaking(true);
+          };
+
+          utterance.onend = () => {
+            setIsSpeaking(false);
+            currentUtteranceRef.current = null;
+          };
+
+          utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
+            console.error("Speech synthesis error:", event.error, event);
+            setIsSpeaking(false);
+            currentUtteranceRef.current = null;
+            // Don't show error to user, just log it
+          };
+
+          // Get voices and speak
+          getVoices();
+        } catch (error) {
+          console.error("Error setting up speech synthesis:", error);
+          setIsSpeaking(false);
+        }
+      }, 100);
+    } catch (error) {
+      console.error("Error in speakText:", error);
       setIsSpeaking(false);
-      currentUtteranceRef.current = null;
-    };
-
-    utterance.onerror = (event) => {
-      console.error("Speech synthesis error:", event);
-      setIsSpeaking(false);
-      currentUtteranceRef.current = null;
-    };
-
-    // Speak the text
-    synthesisRef.current.speak(utterance);
+    }
   };
 
   const handleChatTest = async () => {

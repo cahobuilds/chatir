@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get folders for the tenant
+    // Check if agent_folders table exists first
     const { data: folders, error: foldersError } = await supabase
       .from('agent_folders')
       .select('*')
@@ -40,6 +41,12 @@ export async function GET(request: NextRequest) {
       .order('name', { ascending: true });
 
     if (foldersError) {
+      // If table doesn't exist, return empty array instead of error
+      if (foldersError.message?.includes('does not exist') || foldersError.code === '42P01') {
+        console.warn('agent_folders table does not exist yet, returning empty array');
+        return NextResponse.json({ folders: [] });
+      }
+      console.error('Folders API error:', foldersError);
       return NextResponse.json({ error: foldersError.message }, { status: 500 });
     }
 
