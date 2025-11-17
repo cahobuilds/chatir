@@ -374,6 +374,15 @@ export default function AgentInteractionModal({
               setIsRecording(true);
               setIsListening(false); // Don't set listening until call_ready
               
+              // Mute AFTER call_started to ensure connection is established
+              // The SDK needs unmuted tracks during startCall to establish WebRTC connection
+              try {
+                retellClient.mute();
+                console.log("Microphone muted after call_started - will unmute on call_ready");
+              } catch (muteError) {
+                console.warn("Could not mute after call_started:", muteError);
+              }
+              
               // Show initialization message
               setMessages([{
                 id: 'init',
@@ -613,24 +622,15 @@ export default function AgentInteractionModal({
             });
 
             // Start the call - this will connect to Retell
-            // NOTE: Tracks are enabled but we'll mute them until call_ready fires
-            // The SDK needs enabled tracks to publish them to the WebRTC connection
+            // NOTE: Tracks are enabled and NOT muted during startCall
+            // The SDK needs unmuted tracks to establish the WebRTC connection
+            // We'll mute AFTER call_started event fires to ensure connection is established
             await retellClient.startCall({
               accessToken: access_token,
             });
 
-            // Immediately mute to prevent audio transmission until engine is ready
-            // Tracks are enabled so SDK can publish them, but muted so no audio is sent
-            try {
-              retellClient.mute();
-              console.log("Call started - microphone muted until call_ready fires");
-            } catch (muteError) {
-              console.warn("Could not mute immediately (may not be supported yet):", muteError);
-              // This is okay - we'll mute in call_ready if needed
-            }
-
             console.log("Call started, waiting for engine to initialize (this may take up to 2 minutes)...");
-            console.log("Microphone tracks are enabled but muted - will unmute after call_ready fires");
+            console.log("Microphone tracks are enabled - will mute after call_started, unmute on call_ready");
             
             // Set a timeout to show warning if initialization takes too long
             setTimeout(() => {
