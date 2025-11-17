@@ -308,17 +308,15 @@ export default function RetellIntegrationManagement() {
           <Select
             id="tenant_select"
             value={selectedTenantId}
-            onChange={(e) => setSelectedTenantId(e.target.value)}
+            onChange={(value) => setSelectedTenantId(value)}
             disabled={loadingTenants}
             className="mt-1"
-          >
-            <option value="">Select an organization...</option>
-            {tenants.map((tenant) => (
-              <option key={tenant.id} value={tenant.id}>
-                {tenant.name}
-              </option>
-            ))}
-          </Select>
+            placeholder="Select an organization..."
+            options={tenants.map((tenant) => ({
+              value: tenant.id,
+              label: tenant.name,
+            }))}
+          />
         </div>
 
         {selectedTenantId && (
