@@ -191,6 +191,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_agent_folders_updated_at ON agent_folders;
 CREATE TRIGGER update_agent_folders_updated_at
   BEFORE UPDATE ON agent_folders
   FOR EACH ROW
@@ -205,6 +206,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_user_agents_updated_at ON user_agents;
 CREATE TRIGGER update_user_agents_updated_at
   BEFORE UPDATE ON user_agents
   FOR EACH ROW
