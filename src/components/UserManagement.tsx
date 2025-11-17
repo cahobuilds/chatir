@@ -638,8 +638,8 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
                           placeholder="john@example.com"
                         />
                       </div>
-                </div>
-              </div>
+                    </div>
+                  </div>
 
                   {/* Password */}
                   <div>
@@ -647,7 +647,7 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
                       Password
                     </h3>
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div>
+                      <div>
                         <Label htmlFor="user-password">
                           Password <span className="text-error-500">*</span>
                         </Label>
@@ -660,8 +660,8 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
                           placeholder="Minimum 8 characters"
                           hint="Password must be at least 8 characters"
                         />
-                </div>
-                <div>
+                      </div>
+                      <div>
                         <Label htmlFor="user-confirm-password">
                           Confirm Password <span className="text-error-500">*</span>
                         </Label>
@@ -673,9 +673,9 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
                           onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                           placeholder="Re-enter password"
                           error={formData.confirmPassword !== '' && formData.password !== formData.confirmPassword}
-                  />
-                </div>
-              </div>
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Organization Selection */}
@@ -686,24 +686,24 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                       Select one or more organizations to associate this user with:
                     </p>
-                    <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-900/50">
                       {organizations.length === 0 ? (
                         <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                          Loading organizations...
+                          {showNewUser ? 'Loading organizations...' : 'No organizations available'}
                         </p>
                       ) : (
                         organizations.map((org) => (
                           <label
                             key={org.id}
-                            className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+                            className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-colors"
                           >
                             <input
                               type="checkbox"
                               checked={formData.organizationIds.includes(org.id)}
                               onChange={() => toggleOrganization(org.id)}
-                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                             />
-                            <BuildingOfficeIcon className="w-5 h-5 text-gray-400" />
+                            <BuildingOfficeIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
                             <span className="flex-1 text-sm font-medium text-gray-900 dark:text-white">
                               {org.name}
                             </span>
