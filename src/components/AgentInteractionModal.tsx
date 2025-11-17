@@ -250,24 +250,14 @@ export default function AgentInteractionModal({
       }
     }
 
+    // Only cleanup on unmount, NOT when isRecording changes
+    // This was causing calls to end prematurely when call_started fired
     return () => {
-      if (retellClientRef.current) {
-        try {
-          retellClientRef.current.stopCall();
-        } catch (error) {
-          console.error("Error stopping Retell call:", error);
-        }
-        retellClientRef.current = null;
-        retellCallIdRef.current = null;
-      }
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      }
     };
-  }, [isRecording]);
+  }, []); // Empty dependency array - only run once on mount
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -280,6 +270,7 @@ export default function AgentInteractionModal({
       setIsRecording(false);
       setIsListening(false);
     } else if (!isOpen) {
+      // Cleanup when modal closes
       if (retellClientRef.current) {
         try {
           retellClientRef.current.stopCall();
@@ -294,11 +285,31 @@ export default function AgentInteractionModal({
       }
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
       }
       setIsRecording(false);
       setIsListening(false);
     }
   }, [isOpen, agent]);
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      if (retellClientRef.current) {
+        try {
+          retellClientRef.current.stopCall();
+        } catch (error) {
+          console.error("Error stopping Retell call on unmount:", error);
+        }
+        retellClientRef.current = null;
+        retellCallIdRef.current = null;
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+      }
+    };
+  }, []); // Only run on unmount
 
   const handleStartTest = async () => {
     if (!agent) {
