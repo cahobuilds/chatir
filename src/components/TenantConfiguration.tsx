@@ -8,7 +8,11 @@ import {
   GlobeAltIcon,
   PhotoIcon,
   XMarkIcon,
-  CheckIcon
+  CheckIcon,
+  ArrowPathIcon,
+  KeyIcon,
+  EyeIcon,
+  EyeSlashIcon
 } from "@heroicons/react/24/outline";
 import { createClient } from "@/lib/supabase/client";
 
@@ -35,6 +39,9 @@ export default function TenantConfiguration() {
   const [tenantName, setTenantName] = useState("");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
+  const [retellApiKey, setRetellApiKey] = useState("");
+  const [showRetellApiKey, setShowRetellApiKey] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const supabase = createClient();
 
@@ -85,6 +92,7 @@ export default function TenantConfiguration() {
       setTenant(tenantData);
       setTenantName(tenantData.name);
       setLogoPreview((tenantData.branding as any)?.logo_url || null);
+      setRetellApiKey((tenantData as any).retell_api_key || "");
       
       // Initialize config state
       setConfig({
@@ -239,6 +247,85 @@ export default function TenantConfiguration() {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveRetellApiKey = async () => {
+    if (!tenant) {
+      setError("No organization found");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch(`/api/tenants/${tenant.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ retell_api_key: retellApiKey.trim() }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Update failed');
+      }
+
+      const data = await response.json();
+      setTenant(data.tenant);
+      setSuccess("Retell API key saved successfully!");
+    } catch (err: any) {
+      console.error("Update error:", err);
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSyncRetellAgents = async () => {
+    if (!tenant) {
+      setError("No organization found");
+      return;
+    }
+
+    if (!retellApiKey.trim()) {
+      setError("Please configure your Retell API key first");
+      return;
+    }
+
+    try {
+      setSyncing(true);
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch('/api/retell/agents/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tenant_id: tenant.id }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Sync failed');
+      }
+
+      const data = await response.json();
+      setSuccess(`Successfully synced ${data.synced} agent(s) from Retell AI!${data.errors > 0 ? ` (${data.errors} error(s))` : ''}`);
+      
+      // Refresh the page or refetch agents after a short delay
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err: any) {
+      console.error("Sync error:", err);
+      setError(err.message);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -540,6 +627,77 @@ export default function TenantConfiguration() {
                 placeholder="/* Custom CSS styles */"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Retell AI Integration */}
+        <div>
+          <div className="flex items-center space-x-2 mb-4">
+            <KeyIcon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+              Retell AI Integration
+            </h4>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Retell API Key
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type={showRetellApiKey ? "text" : "password"}
+                  value={retellApiKey}
+                  onChange={(e) => setRetellApiKey(e.target.value)}
+                  placeholder="Enter your Retell AI API key"
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowRetellApiKey(!showRetellApiKey)}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+                  title={showRetellApiKey ? "Hide API key" : "Show API key"}
+                >
+                  {showRetellApiKey ? (
+                    <EyeSlashIcon className="w-5 h-5" />
+                  ) : (
+                    <EyeIcon className="w-5 h-5" />
+                  )}
+                </button>
+                <button
+                  onClick={handleSaveRetellApiKey}
+                  disabled={saving || retellApiKey === ((tenant as any)?.retell_api_key || "")}
+                  className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saving ? "Saving..." : "Save Key"}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Get your API key from{" "}
+                <a
+                  href="https://retellai.com/dashboard/api-keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Retell AI Dashboard
+                </a>
+              </p>
+            </div>
+
+            <div>
+              <button
+                onClick={handleSyncRetellAgents}
+                disabled={syncing || !retellApiKey.trim()}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? "Syncing..." : "Sync Agents from Retell AI"}
+              </button>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Import all agents from your Retell AI account. Existing agents will be updated, new ones will be created.
+              </p>
             </div>
           </div>
         </div>

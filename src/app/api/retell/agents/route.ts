@@ -2,6 +2,65 @@ import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { NextRequest, NextResponse } from 'next/server';
 
+// GET /api/retell/agents - List agents from Retell AI
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get tenant_id from query params
+    const { searchParams } = new URL(request.url);
+    const tenant_id = searchParams.get('tenant_id');
+
+    if (!tenant_id) {
+      return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
+    }
+
+    // Verify user has access to this tenant
+    const { data: userTenant } = await supabase
+      .from('user_tenants')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('tenant_id', tenant_id)
+      .in('role', ['tenant_admin', 'super_admin', 'system_admin'])
+      .single();
+
+    if (!userTenant) {
+      return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
+    }
+
+    // Get tenant's Retell API key
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('retell_api_key')
+      .eq('id', tenant_id)
+      .single();
+
+    if (!tenant?.retell_api_key) {
+      return NextResponse.json(
+        { error: 'Tenant Retell API key not configured. Please configure it in tenant settings.' },
+        { status: 400 }
+      );
+    }
+
+    // List agents from Retell AI
+    const retellClient = createRetellClient(tenant.retell_api_key);
+    const retellAgents = await retellClient.agent.list();
+
+    return NextResponse.json({ agents: retellAgents });
+  } catch (error: any) {
+    console.error('Retell AI agent list error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to list Retell AI agents' },
+      { status: 500 }
+    );
+  }
+}
+
 // POST /api/retell/agents - Create Retell AI agent
 export async function POST(request: NextRequest) {
   try {
