@@ -87,7 +87,10 @@ export default function VoiceAgentList() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ tenant_id: currentOrganization.id }),
+        body: JSON.stringify({ 
+          tenant_id: currentOrganization.id,
+          type: 'voice' // Only sync voice agents
+        }),
       });
 
       if (!response.ok) {

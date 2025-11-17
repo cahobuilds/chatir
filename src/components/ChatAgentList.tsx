@@ -90,7 +90,10 @@ export default function ChatAgentList() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ tenant_id: currentOrganization.id }),
+        body: JSON.stringify({ 
+          tenant_id: currentOrganization.id,
+          type: 'chat' // Only sync chat agents
+        }),
       });
 
       if (!response.ok) {
