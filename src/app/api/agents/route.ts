@@ -1,17 +1,42 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/agents - Get agents for current user's tenant(s)
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
+    const adminSupabase = createAdminClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user's tenant IDs
+    // Check if user is system_admin (can access all agents)
+    const { data: systemAdminCheck } = await supabase
+      .from('user_tenants')
+      .select('role')
+      .eq('user_id', user.id)
+      .in('role', ['system_admin'])
+      .single();
+
+    const isSystemAdmin = !!systemAdminCheck;
+
+    // If system admin, get all agents using admin client to bypass RLS
+    if (isSystemAdmin) {
+      const { data: agents, error: agentsError } = await adminSupabase
+        .from('agents')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (agentsError) {
+        return NextResponse.json({ error: agentsError.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ agents: agents || [] });
+    }
+
+    // For regular users, get their tenant IDs
     const { data: userTenants } = await supabase
       .from('user_tenants')
       .select('tenant_id')
@@ -35,7 +60,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: agentsError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ agents });
+    return NextResponse.json({ agents: agents || [] });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -65,21 +90,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'type must be "chat" or "voice"' }, { status: 400 });
     }
 
-    // Verify user has access to this tenant
-    const { data: userTenant } = await supabase
+    // Check if user is system_admin (can create agents for any tenant)
+    const { data: systemAdminCheck } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'agent'])
+      .in('role', ['system_admin'])
       .single();
 
-    if (!userTenant) {
-      return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
+    const isSystemAdmin = !!systemAdminCheck;
+
+    // If not system_admin, verify user has access to this tenant
+    if (!isSystemAdmin) {
+      const { data: userTenant } = await supabase
+        .from('user_tenants')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('tenant_id', tenant_id)
+        .in('role', ['tenant_admin', 'super_admin', 'agent'])
+        .single();
+
+      if (!userTenant) {
+        return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
+      }
     }
 
+    // Use admin client for system admin to bypass RLS, regular client for others
+    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+
     // Create agent
-    const { data: agent, error: agentError } = await supabase
+    const { data: agent, error: agentError } = await clientToUse
       .from('agents')
       .insert({
         tenant_id,
