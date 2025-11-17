@@ -52,18 +52,26 @@ export async function POST(request: NextRequest) {
     const retellClient = createRetellClient(retellApiKey);
     const retellAgents = await retellClient.agent.list();
 
-    // Get existing agents for this tenant
+    console.log(`[Sync] Found ${retellAgents.length} total agents from Retell for tenant ${tenant_id}`);
+    if (type) {
+      console.log(`[Sync] Filtering for type: ${type}`);
+    }
+
+    // Get existing agents for this tenant (including type to check for type changes)
     const { data: existingAgents } = await supabase
       .from('agents')
-      .select('retell_agent_id, id')
+      .select('retell_agent_id, id, type')
       .eq('tenant_id', tenant_id);
 
     const existingRetellIds = new Set(
       existingAgents?.map(a => a.retell_agent_id).filter(Boolean) || []
     );
 
+    console.log(`[Sync] Found ${existingAgents?.length || 0} existing agents in database for tenant ${tenant_id}`);
+
     const syncedAgents = [];
     const errors = [];
+    let skippedByType = 0;
 
     // Sync each Retell agent
     for (const retellAgent of retellAgents) {
@@ -122,21 +130,28 @@ export async function POST(request: NextRequest) {
         
         // If type filter is provided, skip agents that don't match
         if (type && agentType !== type) {
+          skippedByType++;
           console.log(`[Sync] Skipping agent ${retellAgent.agent_id} (${retellAgent.agent_name}): detected type=${agentType}, filter=${type}`);
           continue;
         }
         
-        console.log(`[Sync] Agent ${retellAgent.agent_id} (${retellAgent.agent_name}): type=${agentType}, voice_id=${retellAgent.voice_id || 'none'}, response_engine=${JSON.stringify(retellAgent.response_engine)}`);
+        console.log(`[Sync] Processing agent ${retellAgent.agent_id} (${retellAgent.agent_name}): type=${agentType}, voice_id=${retellAgent.voice_id || 'none'}, response_engine=${JSON.stringify(retellAgent.response_engine)}`);
 
         if (existingRetellIds.has(retellAgent.agent_id)) {
-          // Update existing agent
+          // Update existing agent (including type in case it changed)
           const existingAgent = existingAgents?.find(a => a.retell_agent_id === retellAgent.agent_id);
           if (existingAgent) {
+            // Check if type changed
+            const typeChanged = existingAgent.type !== agentType;
+            if (typeChanged) {
+              console.log(`[Sync] Type changed for agent ${retellAgent.agent_id}: ${existingAgent.type} -> ${agentType}`);
+            }
+            
             const { data: updatedAgent, error: updateError } = await supabase
               .from('agents')
               .update({
                 name: retellAgent.agent_name || `Retell Agent ${retellAgent.agent_id}`,
-                type: agentType,
+                type: agentType, // Always update type in case it changed
                 configuration: {
                   ...retellAgent,
                   retell_agent_id: retellAgent.agent_id,
@@ -147,7 +162,11 @@ export async function POST(request: NextRequest) {
               .select()
               .single();
 
-            if (updateError) throw updateError;
+            if (updateError) {
+              console.error(`[Sync] Error updating agent ${retellAgent.agent_id}:`, updateError);
+              throw updateError;
+            }
+            console.log(`[Sync] Updated agent ${retellAgent.agent_id} (${updatedAgent?.name})`);
             syncedAgents.push({ action: 'updated', agent: updatedAgent });
           }
         } else {
@@ -169,7 +188,11 @@ export async function POST(request: NextRequest) {
             .select()
             .single();
 
-          if (createError) throw createError;
+          if (createError) {
+            console.error(`[Sync] Error creating agent ${retellAgent.agent_id}:`, createError);
+            throw createError;
+          }
+          console.log(`[Sync] Created new agent ${retellAgent.agent_id} (${newAgent?.name}) as type ${agentType}`);
           syncedAgents.push({ action: 'created', agent: newAgent });
         }
       } catch (error: any) {
@@ -180,9 +203,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const createdCount = syncedAgents.filter(a => a.action === 'created').length;
+    const updatedCount = syncedAgents.filter(a => a.action === 'updated').length;
+    
+    console.log(`[Sync] Summary for tenant ${tenant_id}:`);
+    console.log(`  - Total Retell agents: ${retellAgents.length}`);
+    console.log(`  - Skipped by type filter: ${skippedByType}`);
+    console.log(`  - Created: ${createdCount}`);
+    console.log(`  - Updated: ${updatedCount}`);
+    console.log(`  - Errors: ${errors.length}`);
+    
     return NextResponse.json({
       success: true,
       synced: syncedAgents.length,
+      created: createdCount,
+      updated: updatedCount,
+      skipped: skippedByType,
       errors: errors.length,
       agents: syncedAgents,
       errors_list: errors,
