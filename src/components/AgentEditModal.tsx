@@ -362,6 +362,24 @@ export default function AgentEditModal({
                     disabled={isSubmitting}
                     required
                   />
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Agent ID:</span>
+                    <code className="px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700">
+                      {agent.id}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(agent.id);
+                        setSuccess("Agent ID copied to clipboard!");
+                        setTimeout(() => setSuccess(null), 2000);
+                      }}
+                      className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                      title="Copy Agent ID"
+                    >
+                      Copy
+                    </button>
+                  </div>
                 </div>
 
                 <div>
