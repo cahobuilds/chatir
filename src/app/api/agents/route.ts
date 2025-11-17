@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
     // Get query parameters for filtering
     const { searchParams } = new URL(request.url);
     const typeFilter = searchParams.get('type'); // 'voice' or 'chat'
-    const folderId = searchParams.get('folder_id'); // Filter by folder
 
     // If system admin, get all agents using admin client to bypass RLS
     if (isSystemAdmin) {
@@ -38,11 +37,6 @@ export async function GET(request: NextRequest) {
         agentsQuery = agentsQuery.eq('type', typeFilter);
       }
 
-      // Apply folder filter if provided
-      if (folderId) {
-        agentsQuery = agentsQuery.eq('folder_id', folderId);
-      }
-
       const { data: agents, error: agentsError } = await agentsQuery
         .order('created_at', { ascending: false });
 
@@ -51,32 +45,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: agentsError.message }, { status: 500 });
       }
 
-      console.log(`[Agents API] System admin found ${agents?.length || 0} agents (type: ${typeFilter || 'all'}, folder: ${folderId || 'all'})`);
-
-      // Fetch folder information separately if agents have folder_id
-      if (agents && agents.length > 0) {
-        const folderIds = [...new Set(agents.map(a => a.folder_id).filter(Boolean))];
-        if (folderIds.length > 0) {
-          const { data: folders, error: foldersError } = await adminSupabase
-            .from('agent_folders')
-            .select('id, name')
-            .in('id', folderIds);
-          
-          // If schema cache is stale (PGRST205), skip folder attachment but don't fail
-          if (foldersError && foldersError.code !== 'PGRST205') {
-            console.warn('Error fetching folders for agents:', foldersError);
-          }
-          
-          if (folders && !foldersError) {
-            const folderMap = new Map(folders.map(f => [f.id, f]));
-            agents.forEach(agent => {
-              if (agent.folder_id && folderMap.has(agent.folder_id)) {
-                (agent as any).agent_folders = folderMap.get(agent.folder_id);
-              }
-            });
-          }
-        }
-      }
+      console.log(`[Agents API] System admin found ${agents?.length || 0} agents (type: ${typeFilter || 'all'})`);
 
       return NextResponse.json({ agents: agents || [] });
     }
@@ -115,11 +84,6 @@ export async function GET(request: NextRequest) {
       agentsQuery = agentsQuery.eq('type', typeFilter);
     }
 
-    // Apply folder filter if provided
-    if (folderId) {
-      agentsQuery = agentsQuery.eq('folder_id', folderId);
-    }
-
     // For non-admin users, filter by user_agents assignments
     if (!isAdmin) {
       // Get agent IDs the user has access to
@@ -147,32 +111,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: agentsError.message }, { status: 500 });
     }
 
-    console.log(`[Agents API] Found ${agents?.length || 0} agents for user ${user.id} (type: ${typeFilter || 'all'}, folder: ${folderId || 'all'})`);
-
-    // Fetch folder information separately if agents have folder_id
-    if (agents && agents.length > 0) {
-      const folderIds = [...new Set(agents.map(a => a.folder_id).filter(Boolean))];
-      if (folderIds.length > 0) {
-        const { data: folders, error: foldersError } = await supabase
-          .from('agent_folders')
-          .select('id, name')
-          .in('id', folderIds);
-        
-        // If schema cache is stale (PGRST205), skip folder attachment but don't fail
-        if (foldersError && foldersError.code !== 'PGRST205') {
-          console.warn('Error fetching folders for agents:', foldersError);
-        }
-        
-        if (folders && !foldersError) {
-          const folderMap = new Map(folders.map(f => [f.id, f]));
-          agents.forEach(agent => {
-            if (agent.folder_id && folderMap.has(agent.folder_id)) {
-              (agent as any).agent_folders = folderMap.get(agent.folder_id);
-            }
-          });
-        }
-      }
-    }
+    console.log(`[Agents API] Found ${agents?.length || 0} agents for user ${user.id} (type: ${typeFilter || 'all'})`);
 
     return NextResponse.json({ agents: agents || [] });
   } catch (error: any) {

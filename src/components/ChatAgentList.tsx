@@ -57,8 +57,6 @@ export default function ChatAgentList() {
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-  const [folders, setFolders] = useState<Array<{ id: string; name: string; description?: string }>>([]);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -69,28 +67,8 @@ export default function ChatAgentList() {
   });
 
   useEffect(() => {
-    if (currentOrganization?.id) {
-      fetchFolders();
-    }
-  }, [currentOrganization]);
-
-  useEffect(() => {
     fetchAgents();
-  }, [currentOrganization, selectedFolder]);
-
-  const fetchFolders = async () => {
-    if (!currentOrganization?.id) return;
-    
-    try {
-      const response = await fetch(`/api/folders?tenant_id=${currentOrganization.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setFolders(data.folders || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch folders:", error);
-    }
-  };
+  }, [currentOrganization]);
 
   const handleSyncAgents = async () => {
     if (!currentOrganization?.id) {
@@ -137,9 +115,6 @@ export default function ChatAgentList() {
       setLoading(true);
       // Use type filter in API call instead of filtering client-side
       const params = new URLSearchParams({ type: 'chat' });
-      if (selectedFolder) {
-        params.append('folder_id', selectedFolder);
-      }
       
       const response = await fetch(`/api/agents?${params.toString()}`);
       if (response.ok) {
@@ -369,17 +344,7 @@ export default function ChatAgentList() {
         {/* Filters and Sorting */}
         <div className="mb-4 flex items-center justify-between gap-4 px-6">
           <div className="flex items-center gap-2">
-            <Label htmlFor="folder-filter" className="text-sm">Folder:</Label>
-            <Select
-              id="folder-filter"
-              options={[
-                { value: "", label: "All Folders" },
-                ...folders.map(f => ({ value: f.id, label: f.name }))
-              ]}
-              value={selectedFolder || ""}
-              onChange={(value) => setSelectedFolder(value || null)}
-            />
-            <Label htmlFor="status-filter" className="text-sm ml-4">Status:</Label>
+            <Label htmlFor="status-filter" className="text-sm">Status:</Label>
             <Select
               id="status-filter"
               options={[

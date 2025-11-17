@@ -56,8 +56,6 @@ export default function VoiceAgentList() {
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-  const [folders, setFolders] = useState<Array<{ id: string; name: string; description?: string }>>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [formData, setFormData] = useState({
     name: "",
@@ -69,29 +67,9 @@ export default function VoiceAgentList() {
 
   useEffect(() => {
     if (currentOrganization?.id) {
-      fetchFolders();
-    }
-  }, [currentOrganization]);
-
-  useEffect(() => {
-    if (currentOrganization?.id) {
       fetchAgents();
     }
-  }, [currentOrganization?.id, selectedFolder]);
-
-  const fetchFolders = async () => {
-    if (!currentOrganization?.id) return;
-    
-    try {
-      const response = await fetch(`/api/folders?tenant_id=${currentOrganization.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setFolders(data.folders || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch folders:", error);
-    }
-  };
+  }, [currentOrganization?.id]);
 
   const handleSyncAgents = async () => {
     if (!currentOrganization?.id) {
@@ -144,9 +122,6 @@ export default function VoiceAgentList() {
       setLoading(true);
       // Use type filter in API call instead of filtering client-side
       const params = new URLSearchParams({ type: 'voice' });
-      if (selectedFolder) {
-        params.append('folder_id', selectedFolder);
-      }
       
       const response = await fetch(`/api/agents?${params.toString()}`);
       if (response.ok) {
@@ -281,7 +256,7 @@ export default function VoiceAgentList() {
   const filteredAndSortedAgents = useMemo(() => {
     let filtered = [...agents];
     
-    console.log(`[VoiceAgentList] Filtering ${agents.length} agents. Status filter: ${statusFilter}, Search: "${searchQuery}", Folder: ${selectedFolder || 'none'}`);
+    console.log(`[VoiceAgentList] Filtering ${agents.length} agents. Status filter: ${statusFilter}, Search: "${searchQuery}"`);
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -334,7 +309,7 @@ export default function VoiceAgentList() {
 
     console.log(`[VoiceAgentList] Final filtered agents: ${filtered.length}`);
     return filtered;
-  }, [agents, statusFilter, sortField, sortDirection, searchQuery, selectedFolder]);
+  }, [agents, statusFilter, sortField, sortDirection, searchQuery]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -445,17 +420,7 @@ export default function VoiceAgentList() {
         {/* Filters and Sorting */}
         <div className="mb-4 flex items-center justify-between gap-4 px-6">
           <div className="flex items-center gap-2">
-            <Label htmlFor="folder-filter" className="text-sm">Folder:</Label>
-            <Select
-              id="folder-filter"
-              options={[
-                { value: "", label: "All Folders" },
-                ...folders.map(f => ({ value: f.id, label: f.name }))
-              ]}
-              value={selectedFolder || ""}
-              onChange={(value) => setSelectedFolder(value || null)}
-            />
-            <Label htmlFor="status-filter" className="text-sm ml-4">Status:</Label>
+            <Label htmlFor="status-filter" className="text-sm">Status:</Label>
             <Select
               id="status-filter"
               options={[
