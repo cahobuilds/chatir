@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Modal } from "./ui/modal";
 import Button from "./ui/button/Button";
 import Input from "./form/input/InputField";
 import Label from "./form/Label";
 import Alert from "./ui/alert/Alert";
-import { MicrophoneIcon, ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
+import { MicrophoneIcon, ChatBubbleLeftRightIcon, StopIcon, PhoneIcon } from "@heroicons/react/24/outline";
 
 interface Agent {
   id: string;
@@ -21,6 +21,65 @@ interface AgentTestModalProps {
   onClose: () => void;
 }
 
+interface Message {
+  id: string;
+  type: "user" | "agent";
+  text: string;
+  timestamp: Date;
+}
+
+// TypeScript declarations for Web Speech API
+interface SpeechRecognitionInterface {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+  isFinal: boolean;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message?: string;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: {
+      new (): SpeechRecognitionInterface;
+    };
+    webkitSpeechRecognition: {
+      new (): SpeechRecognitionInterface;
+    };
+  }
+}
+
 export default function AgentTestModal({
   agent,
   isOpen,
@@ -33,9 +92,99 @@ export default function AgentTestModal({
   const [isTesting, setIsTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Audio test states
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcription, setTranscription] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionInterface | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+
+  // Initialize Web Speech API
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = "en-US";
+        recognitionRef.current = recognition;
+
+        recognition.onresult = (event: any) => {
+          let interimTranscript = "";
+          let finalTranscript = "";
+
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalTranscript += transcript + " ";
+            } else {
+              interimTranscript += transcript;
+            }
+          }
+
+          if (finalTranscript) {
+            // Clear interim transcription and add final
+            setTranscription("");
+            // Add user message
+            const userMessage: Message = {
+              id: Date.now().toString(),
+              type: "user",
+              text: finalTranscript.trim(),
+              timestamp: new Date(),
+            };
+            setMessages((prev) => [...prev, userMessage]);
+            
+            // Simulate agent response (in real implementation, this would call your API)
+            setTimeout(() => {
+              const agentMessage: Message = {
+                id: (Date.now() + 1).toString(),
+                type: "agent",
+                text: `I heard you say: "${finalTranscript.trim()}". How can I help you further?`,
+                timestamp: new Date(),
+              };
+              setMessages((prev) => [...prev, agentMessage]);
+            }, 500);
+          } else {
+            // Update interim transcription (show what's being spoken in real-time)
+            setTranscription(interimTranscript);
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.error("Speech recognition error:", event.error);
+          setError(`Speech recognition error: ${event.error}`);
+          setIsRecording(false);
+          setIsListening(false);
+        };
+
+        recognition.onend = () => {
+          if (isRecording && recognitionRef.current) {
+            // Restart if still recording
+            try {
+              recognitionRef.current.start();
+            } catch (e) {
+              console.error("Failed to restart recognition:", e);
+            }
+          }
+        };
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [isRecording]);
 
   // Reset state when modal opens/closes or agent changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen && agent) {
       setActiveTab(agent.type);
       setPhoneNumber("");
@@ -43,42 +192,82 @@ export default function AgentTestModal({
       setChatResponse(null);
       setError(null);
       setSuccess(null);
+      setTranscription("");
+      setMessages([]);
+      setIsRecording(false);
+      setIsListening(false);
+    } else if (!isOpen) {
+      // Clean up when modal closes
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      setIsRecording(false);
+      setIsListening(false);
     }
   }, [isOpen, agent]);
 
-  const handleVoiceTest = async () => {
-    if (!agent || !phoneNumber) {
-      setError("Phone number is required");
+  const handleStartAudioTest = async () => {
+    if (!agent) {
+      setError("No agent selected");
       return;
     }
 
-    setIsTesting(true);
     setError(null);
     setSuccess(null);
+    setTranscription("");
+    setMessages([]);
 
     try {
-      const response = await fetch(`/api/agents/${agent.id}/test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          test_type: "voice",
-          phone_number: phoneNumber,
-        }),
-      });
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
 
-      if (response.ok) {
-        const data = await response.json();
-        setSuccess(`Test call initiated! Call ID: ${data.call_id}`);
-        setTimeout(() => setSuccess(null), 5000);
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || "Failed to initiate test call");
+      // Check if Speech Recognition is available
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        setError("Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.");
+        stream.getTracks().forEach((track) => track.stop());
+        return;
       }
+
+      setIsRecording(true);
+      setIsListening(true);
+
+      // Start speech recognition
+      if (recognitionRef.current) {
+        recognitionRef.current.start();
+      }
+
+      // Add welcome message from agent
+      const welcomeMessage: Message = {
+        id: Date.now().toString(),
+        type: "agent",
+        text: `Hi, thank you for calling ${agent.name}! My name is ${agent.name}, your AI agent. I can help you place orders, create support tickets and more. Feel free to interrupt or ask for a live agent at any time. How can I help you?`,
+        timestamp: new Date(),
+      };
+      setMessages([welcomeMessage]);
     } catch (error: any) {
-      console.error("Test call error:", error);
-      setError(error.message || "Failed to initiate test call");
-    } finally {
-      setIsTesting(false);
+      console.error("Microphone access error:", error);
+      setError(error.message || "Failed to access microphone. Please allow microphone access.");
+      setIsRecording(false);
+      setIsListening(false);
+    }
+  };
+
+  const handleStopAudioTest = () => {
+    setIsRecording(false);
+    setIsListening(false);
+
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
     }
   };
 
@@ -174,43 +363,111 @@ export default function AgentTestModal({
         {/* Voice Test Tab */}
         {activeTab === "voice" && agent.type === "voice" && (
           <div className="space-y-6">
-            <div className="flex flex-col items-center justify-center py-8">
-              <div className="mb-4 rounded-full bg-indigo-100 p-6 dark:bg-indigo-900/20">
-                <MicrophoneIcon className="h-12 w-12 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
-                Test your agent
-              </h3>
-              <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-                Enter your phone number to receive a test call
-              </p>
-            </div>
+            {!isRecording ? (
+              <>
+                <div className="flex flex-col items-center justify-center py-8">
+                  <div className="mb-4 rounded-full bg-indigo-100 p-6 dark:bg-indigo-900/20">
+                    <MicrophoneIcon className="h-12 w-12 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+                    Test your agent
+                  </h3>
+                  <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
+                    Click the button below to start testing with your microphone. Your speech will be transcribed in real-time.
+                  </p>
+                </div>
 
-            <div>
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                type="tel"
-                id="phone"
-                placeholder="+1234567890"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                disabled={isTesting}
-                required
-              />
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Enter your phone number in E.164 format (e.g., +1234567890)
-              </p>
-            </div>
+                <div className="flex justify-center">
+                  <Button
+                    onClick={handleStartAudioTest}
+                    size="sm"
+                    variant="primary"
+                  >
+                    <MicrophoneIcon className="w-4 h-4 mr-2" />
+                    Start Audio Test
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Chat Interface */}
+                <div className="flex flex-col h-[400px] border border-gray-200 rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                  {/* Messages Area */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {messages.length === 0 ? (
+                      <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                        <div className="text-center">
+                          <MicrophoneIcon className="h-8 w-8 mx-auto mb-2 text-indigo-600 dark:text-indigo-400" />
+                          <p>Listening... Speak into your microphone</p>
+                        </div>
+                      </div>
+                    ) : (
+                      messages.map((message) => (
+                        <div
+                          key={message.id}
+                          className={`flex ${
+                            message.type === "user" ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          <div
+                            className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                              message.type === "user"
+                                ? "bg-indigo-600 text-white"
+                                : "bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600"
+                            }`}
+                          >
+                            <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                            <p className="text-xs mt-1 opacity-70">
+                              {message.timestamp.toLocaleTimeString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    
+                    {/* Live transcription indicator */}
+                    {isListening && transcription && (
+                      <div className="flex justify-end">
+                        <div className="max-w-[80%] rounded-lg px-4 py-2 bg-indigo-100 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
+                          <p className="text-sm text-gray-600 dark:text-gray-300 italic">
+                            {transcription}
+                          </p>
+                          <div className="flex items-center gap-1 mt-1">
+                            <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Listening...</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
-            <div className="flex justify-end">
-              <Button
-                onClick={handleVoiceTest}
-                disabled={isTesting || !phoneNumber.trim()}
-                size="sm"
-              >
-                {isTesting ? "Initiating..." : "Test"}
-              </Button>
-            </div>
+                  {/* Recording Indicator */}
+                  {isListening && (
+                    <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 bg-red-50 dark:bg-red-900/10">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
+                        <span className="text-sm text-red-700 dark:text-red-400 font-medium">
+                          Recording...
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* End Call Button */}
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleStopAudioTest}
+                    size="sm"
+                    variant="outline"
+                    className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                  >
+                    <StopIcon className="w-4 h-4 mr-2" />
+                    End the Call
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

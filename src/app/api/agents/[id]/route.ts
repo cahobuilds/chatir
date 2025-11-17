@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/agents/[id] - Get agent by ID
@@ -15,8 +15,21 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get agent (RLS will ensure user can only access agents from their tenant)
-    const { data: agent, error: agentError } = await supabase
+    // Check if user is system_admin (can access any agent)
+    const { data: systemAdminCheck } = await supabase
+      .from('user_tenants')
+      .select('role')
+      .eq('user_id', user.id)
+      .in('role', ['system_admin'])
+      .single();
+
+    const isSystemAdmin = !!systemAdminCheck;
+
+    // Use admin client for system admin to bypass RLS, regular client for others
+    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+
+    // Get agent (RLS will ensure user can only access agents from their tenant, unless system_admin)
+    const { data: agent, error: agentError } = await clientToUse
       .from('agents')
       .select('*')
       .eq('id', id)
