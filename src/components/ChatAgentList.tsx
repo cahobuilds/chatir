@@ -98,18 +98,44 @@ export default function ChatAgentList() {
       }
 
       const data = await response.json();
-      setSuccess(`Successfully synced ${data.synced} agent(s)!${data.errors > 0 ? ` (${data.errors} error(s))` : ''}`);
+      const createdCount = data.agents?.filter((a: any) => a.action === 'created').length || 0;
+      const updatedCount = data.agents?.filter((a: any) => a.action === 'updated').length || 0;
+      
+      let message = `Successfully synced ${data.synced} agent(s)!`;
+      if (createdCount > 0) message += ` ${createdCount} created`;
+      if (updatedCount > 0) message += ` ${updatedCount} updated`;
+      if (data.errors > 0) message += ` (${data.errors} error(s))`;
+      
+      setSuccess(message);
       
       // Refresh agents after sync
       await fetchAgents();
       
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(null), 3000);
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccess(null), 5000);
     } catch (err: any) {
       console.error("Sync error:", err);
       setError(err.message || 'Failed to sync agents');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSearchAgent = async (retellAgentId: string) => {
+    try {
+      const response = await fetch(`/api/agents/search?retell_agent_id=${retellAgentId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.found) {
+          setSuccess(`Found agent: ${data.agents[0].name} (Type: ${data.agents[0].type})`);
+          await fetchAgents();
+        } else {
+          setError(`Agent ${retellAgentId} not found in database. Try syncing agents from Retell.`);
+        }
+      }
+    } catch (err: any) {
+      console.error("Search error:", err);
+      setError('Failed to search for agent');
     }
   };
 
@@ -355,6 +381,14 @@ export default function ChatAgentList() {
             Chat Agents
           </h2>
           <div className="flex items-center gap-2">
+            <Button 
+              onClick={() => handleSearchAgent('agent_845973dd68ec8e7a53e0b1d46a')} 
+              size="sm"
+              variant="outline"
+              title="Search for agent_845973dd68ec8e7a53e0b1d46a"
+            >
+              Search Agent
+            </Button>
             <Button 
               onClick={handleSyncAgents} 
               size="sm"

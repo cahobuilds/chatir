@@ -64,8 +64,29 @@ export async function POST(request: NextRequest) {
     for (const retellAgent of retellAgents) {
       try {
         // Determine agent type based on Retell agent configuration
-        // Voice agents typically have voice_id, chat agents might have different config
-        const agentType = retellAgent.voice_id ? 'voice' : 'chat';
+        // Chat agents typically don't have voice_id, voice agents do
+        // Also check response_engine type - custom-llm with websocket is usually chat
+        let agentType = 'chat'; // Default to chat
+        
+        // If voice_id exists, it's definitely a voice agent
+        if (retellAgent.voice_id) {
+          agentType = 'voice';
+        } else if (retellAgent.response_engine) {
+          // Check response_engine type
+          const responseEngine = retellAgent.response_engine;
+          if (responseEngine.type === 'custom-llm' && responseEngine.llm_websocket_url) {
+            // Custom LLM with websocket is typically chat
+            agentType = 'chat';
+          } else if (responseEngine.type === 'retell-llm') {
+            // Retell LLM without voice_id is chat
+            agentType = 'chat';
+          } else {
+            // Default to chat if no voice_id
+            agentType = 'chat';
+          }
+        }
+        
+        console.log(`[Sync] Agent ${retellAgent.agent_id} (${retellAgent.agent_name}): type=${agentType}, voice_id=${retellAgent.voice_id}, response_engine=${JSON.stringify(retellAgent.response_engine)}`);
 
         if (existingRetellIds.has(retellAgent.agent_id)) {
           // Update existing agent
