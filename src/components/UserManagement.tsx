@@ -701,7 +701,7 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
                               type="checkbox"
                               checked={formData.organizationIds.includes(org.id)}
                               onChange={() => toggleOrganization(org.id)}
-                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer flex-shrink-0"
                             />
                             <BuildingOfficeIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />
                             <span className="flex-1 text-sm font-medium text-gray-900 dark:text-white">
@@ -814,4 +814,4 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
       </div>
     </div>
   );
-}
+}// Cache bust: 1763372151
