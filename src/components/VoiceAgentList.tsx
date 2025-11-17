@@ -153,6 +153,8 @@ export default function VoiceAgentList() {
         const data = await response.json();
         // API already filters by type, so use directly
         console.log(`Fetched ${data.agents?.length || 0} voice agents for tenant ${currentOrganization.id}`);
+        console.log('Sample agent structure:', data.agents?.[0]);
+        console.log('All agents:', data.agents);
         setAgents(data.agents || []);
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -278,23 +280,29 @@ export default function VoiceAgentList() {
   // Filter and sort agents
   const filteredAndSortedAgents = useMemo(() => {
     let filtered = [...agents];
+    
+    console.log(`[VoiceAgentList] Filtering ${agents.length} agents. Status filter: ${statusFilter}, Search: "${searchQuery}", Folder: ${selectedFolder || 'none'}`);
 
     // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
+      const beforeSearch = filtered.length;
       filtered = filtered.filter((agent) =>
         agent.name.toLowerCase().includes(query) ||
         agent.id.toLowerCase().includes(query) ||
         (agent.retell_agent_id && agent.retell_agent_id.toLowerCase().includes(query)) ||
         (agent.configuration?.voice_id && agent.configuration.voice_id.toLowerCase().includes(query))
       );
+      console.log(`[VoiceAgentList] After search filter: ${filtered.length} of ${beforeSearch} agents`);
     }
 
     // Apply status filter
     if (statusFilter !== "all") {
+      const beforeStatus = filtered.length;
       filtered = filtered.filter((agent) =>
         statusFilter === "active" ? agent.is_active : !agent.is_active
       );
+      console.log(`[VoiceAgentList] After status filter (${statusFilter}): ${filtered.length} of ${beforeStatus} agents`);
     }
 
     // Apply sorting
@@ -324,8 +332,9 @@ export default function VoiceAgentList() {
       return 0;
     });
 
+    console.log(`[VoiceAgentList] Final filtered agents: ${filtered.length}`);
     return filtered;
-  }, [agents, statusFilter, sortField, sortDirection, searchQuery]);
+  }, [agents, statusFilter, sortField, sortDirection, searchQuery, selectedFolder]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
