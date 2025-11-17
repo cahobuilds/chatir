@@ -181,7 +181,12 @@ export async function PATCH(
     }
 
     // Fetch updated user data
-    const { data: updatedUser } = await adminSupabase.auth.admin.getUserById(id);
+    const { data: updatedUser, error: fetchUserError } = await adminSupabase.auth.admin.getUserById(id);
+    
+    if (fetchUserError || !updatedUser?.user) {
+      return NextResponse.json({ error: 'Failed to fetch updated user data' }, { status: 500 });
+    }
+    
     const { data: updatedTenants } = await adminSupabase
       .from('user_tenants')
       .select('id, tenant_id, role, status, last_login, created_at, tenants(id, name)')
@@ -189,9 +194,9 @@ export async function PATCH(
 
     return NextResponse.json({
       user: {
-        id: updatedUser?.user.id,
-        email: updatedUser?.user.email,
-        name: updatedUser?.user.user_metadata?.name || updatedUser?.user.email,
+        id: updatedUser.user.id,
+        email: updatedUser.user.email,
+        name: updatedUser.user.user_metadata?.name || updatedUser.user.email,
         tenants: updatedTenants?.map(ut => ({
           id: ut.id,
           tenant_id: ut.tenant_id,
