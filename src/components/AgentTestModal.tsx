@@ -286,10 +286,21 @@ export default function AgentTestModal({
 
           // Set up event handlers
           retellClient.on("call_started", () => {
-            console.log("Retell call started");
+            console.log("Retell call started - waiting for engine to be ready...");
             setIsRecording(true);
             setIsListening(true);
+            // Don't show success yet - wait for call_ready
+          });
+
+          retellClient.on("call_ready", () => {
+            console.log("Retell call ready - engine connected and audio active");
             setSuccess("Connected to Retell AI - audio is now active!");
+            // Ensure audio playback is started (required for some browsers)
+            try {
+              retellClient.startAudioPlayback?.();
+            } catch (e) {
+              console.warn("Could not start audio playback:", e);
+            }
           });
 
           retellClient.on("call_ended", () => {
@@ -310,11 +321,19 @@ export default function AgentTestModal({
             retellCallIdRef.current = null;
           });
 
-          retellClient.on("transcript", (data: any) => {
-            // Handle real-time transcripts from Retell
+          retellClient.on("update", (data: any) => {
+            // Handle real-time updates from Retell
             if (data.transcript) {
               setTranscription(data.transcript);
             }
+          });
+
+          retellClient.on("agent_start_talking", () => {
+            setIsSpeaking(true);
+          });
+
+          retellClient.on("agent_stop_talking", () => {
+            setIsSpeaking(false);
           });
 
           // Start the call
