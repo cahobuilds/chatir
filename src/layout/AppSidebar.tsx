@@ -239,6 +239,16 @@ const AppSidebar: React.FC = () => {
                 {(isExpanded || isHovered || isMobileOpen) && (
                   <>
                     <span className="menu-item-text">{nav.name}</span>
+                    {nav.badge === "new" && (
+                      <Badge size="sm" color={isActive(nav.path) ? "primary" : "light"} variant="light" className="ml-auto">
+                        NEW
+                      </Badge>
+                    )}
+                    {nav.badge === "pro" && (
+                      <Badge size="sm" color={isActive(nav.path) ? "info" : "light"} variant="light" className="ml-auto">
+                        PRO
+                      </Badge>
+                    )}
                     {nav.type === "template" && (
                       <Badge size="sm" color="warning" variant="light" className="ml-auto">
                         Demo

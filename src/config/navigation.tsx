@@ -4,6 +4,8 @@ import {
   UserCircleIcon,
   BoxIcon,
   PlugInIcon,
+  CallIcon,
+  ChatIcon,
 } from "../icons";
 
 export type PageType = "functional" | "template";
@@ -31,7 +33,7 @@ export interface NavItem {
 
 // Navigation configuration
 export const navigationConfig: NavItem[] = [
-  // Dashboard - Single item, always functional
+  // Dashboard - Multiple items
   {
     name: "Dashboard",
     icon: <AiIcon />,
@@ -39,6 +41,24 @@ export const navigationConfig: NavItem[] = [
     path: "/dashboard",
     type: "functional",
     description: "Overview of organizations and agents",
+  },
+  {
+    name: "Voice Agents",
+    icon: <CallIcon />,
+    category: "dashboard",
+    path: "/agents/voice",
+    type: "functional",
+    badge: "new",
+    description: "Manage voice AI agents",
+  },
+  {
+    name: "Chat Agents",
+    icon: <ChatIcon />,
+    category: "dashboard",
+    path: "/agents/chat",
+    type: "functional",
+    badge: "new",
+    description: "Manage chat AI agents",
   },
 
   // Admin - Functional features
@@ -49,20 +69,6 @@ export const navigationConfig: NavItem[] = [
     type: "functional",
     defaultOpen: true,
     subItems: [
-      {
-        name: "Voice Agents",
-        path: "/agents/voice",
-        type: "functional",
-        badge: "new",
-        description: "Manage voice AI agents",
-      },
-      {
-        name: "Chat Agents",
-        path: "/agents/chat",
-        type: "functional",
-        badge: "new",
-        description: "Manage chat AI agents",
-      },
       {
         name: "Users",
         path: "/users",
