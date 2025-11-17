@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
+import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { getResellerRetellConfig, getResellerTenantId } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -67,8 +68,14 @@ export async function POST(request: NextRequest) {
     // Get reseller tenant ID for billing tracking
     const resellerTenantId = await getResellerTenantId(agent.tenant_id);
 
+    // Create Retell client with enhanced configuration for call creation
+    // Standard timeout (30s) and default retries (2) for call operations
+    const retellClient = createRetellClient(retellApiKey, {
+      timeout: 30 * 1000, // 30 seconds for call creation
+      maxRetries: 2, // Default retries for transient failures
+    });
+
     // Create phone call via Retell AI using reseller's API key
-    const retellClient = createRetellClient(retellApiKey);
     const call = await retellClient.call.createPhoneCall({
       from_number,
       to_number,
@@ -102,9 +109,13 @@ export async function POST(request: NextRequest) {
       interaction,
     }, { status: 201 });
   } catch (error: any) {
-    console.error('Retell AI call creation error:', error);
+    // Log error with context
+    logRetellError(error, 'Call Creation');
+    
+    // Format user-friendly error message
+    const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: error.message || 'Failed to create phone call' },
+      { error: `Failed to create phone call: ${errorMessage}` },
       { status: 500 }
     );
   }

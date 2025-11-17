@@ -1,9 +1,44 @@
 import Retell from 'retell-sdk';
 
-export function createRetellClient(apiKey: string) {
-  return new Retell({
+interface RetellClientOptions {
+  maxRetries?: number;
+  timeout?: number;
+  enableLogging?: boolean;
+}
+
+/**
+ * Creates a Retell client with enhanced configuration
+ * @param apiKey - Retell API key
+ * @param options - Optional client configuration
+ * @returns Configured Retell client instance
+ */
+export function createRetellClient(
+  apiKey: string,
+  options?: RetellClientOptions
+) {
+  const clientOptions: any = {
     apiKey,
-  });
+  };
+
+  // Configure retries (default: 2, can be overridden)
+  if (options?.maxRetries !== undefined) {
+    clientOptions.maxRetries = options.maxRetries;
+  }
+
+  // Configure timeout (default: 60 seconds, can be overridden)
+  if (options?.timeout !== undefined) {
+    clientOptions.timeout = options.timeout;
+  }
+
+  // Enable debug logging in development
+  if (options?.enableLogging || process.env.NODE_ENV === 'development') {
+    // SDK automatically logs when DEBUG=true is set
+    if (process.env.DEBUG === 'true') {
+      // Logging is handled automatically by the SDK
+    }
+  }
+
+  return new Retell(clientOptions);
 }
 
 export interface RetellAgentConfig {

@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
+import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/tenants/[id]/retell/billing - Sync billing data from Retell
@@ -62,7 +63,12 @@ export async function GET(
       .eq('id', id);
 
     try {
-      const retellClient = createRetellClient(tenant.retell_api_key);
+      // Create Retell client with enhanced configuration for billing sync
+      // Longer timeout (45s) and more retries (3) for billing operations
+      const retellClient = createRetellClient(tenant.retell_api_key, {
+        timeout: 45 * 1000, // 45 seconds for billing operations
+        maxRetries: 3, // More retries for critical billing sync
+      });
       
       // Get billing/usage data from Retell
       // Note: Retell SDK may have different methods for billing
@@ -108,6 +114,9 @@ export async function GET(
         billing: billingData
       });
     } catch (syncError: any) {
+      // Log error with context
+      logRetellError(syncError, 'Billing Sync');
+      
       // Update status back to connected on error
       await adminSupabase
         .from('tenants')
@@ -116,9 +125,10 @@ export async function GET(
         })
         .eq('id', id);
 
-      console.error('Billing sync error:', syncError);
+      // Format user-friendly error message
+      const errorMessage = formatRetellError(syncError);
       return NextResponse.json({ 
-        error: `Failed to sync billing: ${syncError.message || 'Unknown error'}` 
+        error: `Failed to sync billing: ${errorMessage}` 
       }, { status: 500 });
     }
   } catch (error: any) {

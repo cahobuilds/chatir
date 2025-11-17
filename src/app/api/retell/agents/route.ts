@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
+import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { getResellerRetellConfig } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -44,15 +45,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Create Retell client with enhanced configuration for listing agents
+    // Standard timeout (20s) and default retries (2) for read operations
+    const retellClient = createRetellClient(retellApiKey, {
+      timeout: 20 * 1000, // 20 seconds for listing operations
+      maxRetries: 2, // Default retries for transient failures
+    });
+
     // List agents from Retell AI using reseller's API key
-    const retellClient = createRetellClient(retellApiKey);
     const retellAgents = await retellClient.agent.list();
 
     return NextResponse.json({ agents: retellAgents });
   } catch (error: any) {
-    console.error('Retell AI agent list error:', error);
+    // Log error with context
+    logRetellError(error, 'Agent List');
+    
+    // Format user-friendly error message
+    const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: error.message || 'Failed to list Retell AI agents' },
+      { error: `Failed to list Retell AI agents: ${errorMessage}` },
       { status: 500 }
     );
   }
@@ -101,9 +112,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create Retell AI agent using reseller's API key
-    const retellClient = createRetellClient(retellApiKey);
+    // Create Retell client with enhanced configuration for agent creation
+    // Longer timeout (30s) and more retries (3) for write operations
+    const retellClient = createRetellClient(retellApiKey, {
+      timeout: 30 * 1000, // 30 seconds for agent creation
+      maxRetries: 3, // More retries for critical write operations
+    });
     
+    // Create Retell AI agent using reseller's API key
     const retellAgent = await retellClient.agent.create({
       agent_name,
       voice_id,
@@ -134,9 +150,13 @@ export async function POST(request: NextRequest) {
       retell_agent: retellAgent,
     }, { status: 201 });
   } catch (error: any) {
-    console.error('Retell AI agent creation error:', error);
+    // Log error with context
+    logRetellError(error, 'Agent Creation');
+    
+    // Format user-friendly error message
+    const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: error.message || 'Failed to create Retell AI agent' },
+      { error: `Failed to create Retell AI agent: ${errorMessage}` },
       { status: 500 }
     );
   }

@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
+import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/tenants/[id]/retell/connect - Connect to Retell tenant
@@ -42,7 +43,12 @@ export async function POST(
 
     // Test the Retell API key by making a simple API call
     try {
-      const retellClient = createRetellClient(retell_api_key);
+      // Create Retell client with enhanced configuration for connection test
+      // Shorter timeout (15s) and fewer retries (1) for quick validation
+      const retellClient = createRetellClient(retell_api_key, {
+        timeout: 15 * 1000, // 15 seconds for connection test
+        maxRetries: 1, // Single retry for quick validation
+      });
       
       // Try to list agents to validate the API key
       // This is a lightweight operation that validates the connection
@@ -79,7 +85,8 @@ export async function POST(
         tenant: updatedTenant
       });
     } catch (retellError: any) {
-      console.error('Retell API validation error:', retellError);
+      // Log error with context
+      logRetellError(retellError, 'Connection Test');
       
       // Update status to error
       await adminSupabase
@@ -89,8 +96,10 @@ export async function POST(
         })
         .eq('id', id);
 
+      // Format user-friendly error message
+      const errorMessage = formatRetellError(retellError);
       return NextResponse.json({ 
-        error: `Invalid Retell API key or connection failed: ${retellError.message || 'Unknown error'}` 
+        error: `Invalid Retell API key or connection failed: ${errorMessage}` 
       }, { status: 400 });
     }
   } catch (error: any) {
