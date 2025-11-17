@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -18,7 +18,9 @@ import Select from "./form/Select";
 import { useOrganization } from "@/context/OrganizationContext";
 import Alert from "./ui/alert/Alert";
 import TextArea from "./form/input/TextArea";
-import { ArrowPathIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, PencilIcon, TrashIcon, PlayIcon } from "@heroicons/react/24/outline";
+import AgentEditModal from "./AgentEditModal";
+import AgentTestModal from "./AgentTestModal";
 
 interface Agent {
   id: string;
@@ -34,16 +36,26 @@ interface Agent {
   updated_at: string;
 }
 
+type SortField = "name" | "status" | "created_at";
+type SortDirection = "asc" | "desc";
+type StatusFilter = "all" | "active" | "inactive";
+
 export default function VoiceAgentList() {
   const { currentOrganization } = useOrganization();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [testingAgent, setTestingAgent] = useState<Agent | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [sortField, setSortField] = useState<SortField>("created_at");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [formData, setFormData] = useState({
     name: "",
     type: "voice" as "voice" | "chat",
@@ -124,19 +136,17 @@ export default function VoiceAgentList() {
       voice_id: "",
       language: "en-US",
     });
-    setIsModalOpen(true);
+    setIsCreateModalOpen(true);
   };
 
   const handleEdit = (agent: Agent) => {
     setEditingAgent(agent);
-    setFormData({
-      name: agent.name,
-      type: agent.type,
-      is_active: agent.is_active,
-      voice_id: agent.configuration?.voice_id || "",
-      language: agent.configuration?.language || "en-US",
-    });
-    setIsModalOpen(true);
+    setIsEditModalOpen(true);
+  };
+
+  const handleTest = (agent: Agent) => {
+    setTestingAgent(agent);
+    setIsTestModalOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -177,13 +187,8 @@ export default function VoiceAgentList() {
     setIsSubmitting(true);
 
     try {
-      const url = editingAgent
-        ? `/api/agents/${editingAgent.id}`
-        : "/api/agents";
-      const method = editingAgent ? "PATCH" : "POST";
-
-      const response = await fetch(url, {
-        method,
+      const response = await fetch("/api/agents", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tenant_id: currentOrganization.id,
@@ -199,8 +204,8 @@ export default function VoiceAgentList() {
 
       if (response.ok) {
         const data = await response.json();
-        setSuccess(editingAgent ? "Agent updated successfully!" : "Agent created successfully!");
-        setIsModalOpen(false);
+        setSuccess("Agent created successfully!");
+        setIsCreateModalOpen(false);
         await fetchAgents();
         
         // Reset form
@@ -228,6 +233,56 @@ export default function VoiceAgentList() {
 
   const getStatusBadgeColor = (isActive: boolean) => {
     return isActive ? "success" : "error";
+  };
+
+  // Filter and sort agents
+  const filteredAndSortedAgents = useMemo(() => {
+    let filtered = [...agents];
+
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((agent) =>
+        statusFilter === "active" ? agent.is_active : !agent.is_active
+      );
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortField) {
+        case "name":
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case "status":
+          aValue = a.is_active ? 1 : 0;
+          bValue = b.is_active ? 1 : 0;
+          break;
+        case "created_at":
+          aValue = new Date(a.created_at).getTime();
+          bValue = new Date(b.created_at).getTime();
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [agents, statusFilter, sortField, sortDirection]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
   };
 
   const voiceOptions = [
@@ -289,15 +344,38 @@ export default function VoiceAgentList() {
           </div>
         </div>
 
+        {/* Filters and Sorting */}
+        <div className="mb-4 flex items-center justify-between gap-4 px-6">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="status-filter" className="text-sm">Filter:</Label>
+            <Select
+              options={[
+                { value: "all", label: "All" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+              ]}
+              defaultValue={statusFilter}
+              onChange={(value) => setStatusFilter(value as StatusFilter)}
+            />
+          </div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            Showing {filteredAndSortedAgents.length} of {agents.length} agents
+          </div>
+        </div>
+
         <div className="max-w-full overflow-x-auto">
           <Table>
             <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
               <TableRow>
                 <TableCell
                   isHeader
-                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => handleSort("name")}
                 >
                   Agent Name
+                  {sortField === "name" && (
+                    <span className="ml-1">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                  )}
                 </TableCell>
                 <TableCell
                   isHeader
@@ -307,15 +385,23 @@ export default function VoiceAgentList() {
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => handleSort("status")}
                 >
                   Status
+                  {sortField === "status" && (
+                    <span className="ml-1">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                  )}
                 </TableCell>
                 <TableCell
                   isHeader
-                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"
+                  className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => handleSort("created_at")}
                 >
                   Created
+                  {sortField === "created_at" && (
+                    <span className="ml-1">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                  )}
                 </TableCell>
                 <TableCell
                   isHeader
@@ -327,7 +413,7 @@ export default function VoiceAgentList() {
             </TableHeader>
 
             <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-              {agents.length === 0 ? (
+              {filteredAndSortedAgents.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={5}
@@ -356,14 +442,14 @@ export default function VoiceAgentList() {
                   </TableCell>
                 </TableRow>
               ) : (
-                agents.map((agent) => (
+                filteredAndSortedAgents.map((agent) => (
                   <TableRow key={agent.id}>
                     <TableCell className="px-5 py-4 text-start">
                       <span className="block font-medium text-gray-800 text-theme-sm dark:text-white/90">
                         {agent.name}
                       </span>
                       <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
-                        ID: {agent.id.slice(0, 8)}...
+                        ID: {agent.retell_agent_id || agent.id.slice(0, 8)}...
                       </span>
                     </TableCell>
                     <TableCell className="px-5 py-4 text-start">
@@ -390,16 +476,26 @@ export default function VoiceAgentList() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleEdit(agent)}
+                          onClick={() => handleTest(agent)}
+                          title="Test Agent"
                         >
-                          Edit
+                          <PlayIcon className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEdit(agent)}
+                          title="Edit Prompt"
+                        >
+                          <PencilIcon className="w-4 h-4" />
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => handleDelete(agent.id)}
+                          title="Delete Agent"
                         >
-                          Delete
+                          <TrashIcon className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -411,14 +507,38 @@ export default function VoiceAgentList() {
         </div>
       </div>
 
-      <Modal 
-        isOpen={isModalOpen} 
+      {/* Agent Edit Modal (Prompt Only) */}
+      <AgentEditModal
+        agent={editingAgent}
+        isOpen={isEditModalOpen}
         onClose={() => {
-          setIsModalOpen(false);
+          setIsEditModalOpen(false);
+          setEditingAgent(null);
+        }}
+        onSuccess={() => {
+          fetchAgents();
+        }}
+      />
+
+      {/* Agent Test Modal */}
+      <AgentTestModal
+        agent={testingAgent}
+        isOpen={isTestModalOpen}
+        onClose={() => {
+          setIsTestModalOpen(false);
+          setTestingAgent(null);
+        }}
+      />
+
+      {/* Create Agent Modal */}
+      <Modal 
+        isOpen={isCreateModalOpen} 
+        onClose={() => {
+          setIsCreateModalOpen(false);
           setError(null);
           setSuccess(null);
         }}
-        title={editingAgent ? "Edit Voice Agent" : "Create Voice Agent"}
+        title="Create Voice Agent"
       >
         <div className="px-6 py-4">
           {error && (
@@ -509,18 +629,16 @@ export default function VoiceAgentList() {
                   type="button"
                   variant="outline"
                   onClick={() => {
-                    setIsModalOpen(false);
+                    setIsCreateModalOpen(false);
                     setError(null);
                     setSuccess(null);
-                    if (!editingAgent) {
-                      setFormData({
-                        name: "",
-                        type: "voice",
-                        is_active: true,
-                        voice_id: "",
-                        language: "en-US",
-                      });
-                    }
+                    setFormData({
+                      name: "",
+                      type: "voice",
+                      is_active: true,
+                      voice_id: "",
+                      language: "en-US",
+                    });
                   }}
                   disabled={isSubmitting}
                 >
@@ -532,8 +650,8 @@ export default function VoiceAgentList() {
                   disabled={isSubmitting || !formData.name.trim() || !formData.voice_id.trim()}
                 >
                   {isSubmitting 
-                    ? (editingAgent ? "Updating..." : "Creating...") 
-                    : (editingAgent ? "Update" : "Create")
+                    ? "Creating..." 
+                    : "Create"
                   }
                 </Button>
               </div>
