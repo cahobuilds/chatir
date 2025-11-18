@@ -300,15 +300,7 @@ export async function GET(request: NextRequest) {
       justify-content: flex-start;
       margin-bottom: 8px;
     \`;
-    typingIndicator.innerHTML = \`
-      <div style="background-color: #f3f4f6; padding: 10px 14px; border-radius: 18px;">
-        <div style="display: flex; gap: 4px;">
-          <div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite;"></div>
-          <div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite 0.2s;"></div>
-          <div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite 0.4s;"></div>
-        </div>
-      </div>
-    \`;
+    typingIndicator.innerHTML = '<div style="background-color: #f3f4f6; padding: 10px 14px; border-radius: 18px;"><div style="display: flex; gap: 4px;"><div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite;"></div><div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite 0.2s;"></div><div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite 0.4s;"></div></div></div>';
     document.getElementById('chat-widget-messages').appendChild(typingIndicator);
     
     try {
