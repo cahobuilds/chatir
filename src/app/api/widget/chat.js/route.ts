@@ -41,10 +41,10 @@ export async function GET(request: NextRequest) {
   'use strict';
   
   console.log('[Chat Widget] Script loaded');
-  console.log('[Chat Widget] Base URL:', \`${baseUrl}\`);
+  console.log('[Chat Widget] Base URL:', '${baseUrl}');
   
-  const agentId = \`${agentId}\`;
-  const apiUrl = \`${baseUrl}/api/widget/chat/message\`;
+  const agentId = '${agentId}';
+  const apiUrl = '${baseUrl}/api/widget/chat/message';
   
   console.log('[Chat Widget] Agent ID:', agentId);
   console.log('[Chat Widget] API URL:', apiUrl);
