@@ -74,21 +74,25 @@ export async function GET(request: NextRequest) {
     button.setAttribute('aria-label', 'Open chat');
     button.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="currentColor"/></svg>';
     button.style.cssText = \`
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 60px;
-      height: 60px;
-      background-color: \${config.primaryColor};
-      color: \${config.textColor};
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: \${config.zIndex};
-      transition: transform 0.2s;
+      position: fixed !important;
+      bottom: 20px !important;
+      right: 20px !important;
+      width: 60px !important;
+      height: 60px !important;
+      background-color: \${config.primaryColor} !important;
+      color: \${config.textColor} !important;
+      border-radius: 50% !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      cursor: pointer !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+      z-index: 9999 !important;
+      transition: transform 0.2s !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      box-sizing: border-box !important;
     \`;
     button.addEventListener('click', toggleChat);
     button.addEventListener('mouseenter', () => {
@@ -102,19 +106,23 @@ export async function GET(request: NextRequest) {
     chatWindow = document.createElement('div');
     chatWindow.id = 'chat-widget-window';
     chatWindow.style.cssText = \`
-      position: fixed;
-      bottom: 90px;
-      right: 20px;
-      width: 380px;
-      height: 600px;
-      max-height: calc(100vh - 120px);
-      background-color: \${config.backgroundColor};
-      border-radius: \${config.borderRadius};
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-      display: none;
-      flex-direction: column;
-      z-index: \${config.zIndex};
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      position: fixed !important;
+      bottom: 90px !important;
+      right: 20px !important;
+      width: 380px !important;
+      height: 600px !important;
+      max-height: calc(100vh - 120px) !important;
+      background-color: \${config.backgroundColor} !important;
+      border-radius: \${config.borderRadius} !important;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important;
+      display: none !important;
+      flex-direction: column !important;
+      z-index: 9999 !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      box-sizing: border-box !important;
     \`;
     
     // Header
