@@ -99,13 +99,24 @@ export async function POST(request: NextRequest) {
 
     // If agent has Retell integration, use Retell for response
     if (agent.retell_agent_id) {
+      console.log('[Chat Widget] Agent has Retell integration, agent_id:', agent.retell_agent_id);
       try {
         const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
         
         if (!retellApiKey) {
-          console.warn('[Chat Widget] Retell API key not configured for tenant:', agent.tenant_id);
-          // Fall through to simple response
+          console.error('[Chat Widget] Retell API key not configured for tenant:', agent.tenant_id);
+          return NextResponse.json({
+            error: 'Retell AI is not configured for this agent. Please contact support.',
+          }, { 
+            status: 500,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            },
+          });
         } else {
+          console.log('[Chat Widget] Retell API key found, proceeding with Retell chat');
           const retellClient = createRetellClient(retellApiKey, {
             timeout: 30 * 1000, // 30 seconds for chat operations
             maxRetries: 2,
@@ -208,15 +219,20 @@ export async function POST(request: NextRequest) {
         }
       } catch (retellError: any) {
         console.error('[Chat Widget] Retell chat error:', retellError);
-        // Log detailed error for debugging
-        if (retellError.response) {
-          console.error('[Chat Widget] Retell API error response:', {
+        console.error('[Chat Widget] Retell error details:', {
+          message: retellError?.message,
+          stack: retellError?.stack,
+          response: retellError?.response ? {
             status: retellError.response.status,
             statusText: retellError.response.statusText,
             data: retellError.response.data,
-            agent_id: agent.retell_agent_id,
-          });
-          
+          } : null,
+          agent_id: agent.retell_agent_id,
+          tenant_id: agent.tenant_id,
+        });
+        
+        // Log detailed error for debugging
+        if (retellError.response) {
           // Provide user-friendly error messages
           const statusCode = retellError.response.status;
           const errorData = retellError.response.data || {};
@@ -250,11 +266,25 @@ export async function POST(request: NextRequest) {
             },
           });
         }
-        // Fall through to simple response if no response object
+        
+        // If no response object, log and return error (don't fall through silently)
+        console.error('[Chat Widget] Retell error without response object, returning error to user');
+        return NextResponse.json({
+          error: 'Failed to connect to Retell AI. Please try again.',
+          details: retellError?.message || 'Unknown error',
+        }, { 
+          status: 500,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          },
+        });
       }
     }
 
     // Fallback: Simple response without Retell
+    console.warn('[Chat Widget] Agent does not have Retell integration, using fallback response. Agent ID:', agent.id, 'Retell Agent ID:', agent.retell_agent_id);
     const agentResponse = `Thank you for your message: "${message}". I'm here to help!`;
     
     transcript.push({
@@ -276,6 +306,7 @@ export async function POST(request: NextRequest) {
       conversation_id: interactionId,
       response: agentResponse,
       agent_name: agent.name,
+      warning: 'Agent is not connected to Retell AI. This is a fallback response.',
     }, {
       headers: {
         'Access-Control-Allow-Origin': '*',
