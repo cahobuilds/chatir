@@ -110,20 +110,32 @@ export async function POST(request: NextRequest) {
         while (currentTenantId && !visited.has(currentTenantId) && !retellApiKey) {
           visited.add(currentTenantId);
           
-          const { data: tenant } = await adminSupabase
+          const { data: tenant, error: tenantError } = await adminSupabase
             .from('tenants')
             .select('id, parent_id, is_reseller, retell_api_key')
             .eq('id', currentTenantId)
             .single();
           
-          if (!tenant) break;
+          if (tenantError || !tenant) {
+            console.error('[Chat Widget] Error fetching tenant:', tenantError?.message || 'Tenant not found');
+            break;
+          }
           
+          console.log('[Chat Widget] Checking tenant:', {
+            id: tenant.id,
+            is_reseller: tenant.is_reseller,
+            has_api_key: !!tenant.retell_api_key,
+            parent_id: tenant.parent_id,
+          });
+          
+          // If this tenant is a reseller and has an API key, use it
           if (tenant.is_reseller === true && tenant.retell_api_key) {
             retellApiKey = tenant.retell_api_key;
             console.log('[Chat Widget] Found Retell API key for reseller tenant:', currentTenantId);
             break;
           }
           
+          // Move to parent tenant
           currentTenantId = tenant.parent_id;
         }
         
