@@ -683,21 +683,36 @@ export default function ChatAgentList() {
                         {agent.name}
                       </span>
                       <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
-                        ID: {agent.retell_agent_id || agent.id.slice(0, 8)}...
-                        {agent.retell_agent_id && (
-                          <>
-                            {agent.retell_channel && (
-                              <span className={`ml-2 ${agent.retell_channel === 'chat' ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                                • {agent.retell_channel === 'chat' ? 'Chat' : 'Voice'} Channel
-                              </span>
+                        <span className="flex items-center gap-2">
+                          <span>
+                            ID: {agent.retell_agent_id || agent.id.slice(0, 8)}...
+                            {agent.retell_agent_id && (
+                              <>
+                                {agent.retell_channel && (
+                                  <span className={`ml-2 ${agent.retell_channel === 'chat' ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                                    • {agent.retell_channel === 'chat' ? 'Chat' : 'Voice'} Channel
+                                  </span>
+                                )}
+                                {publishStatus[agent.id] !== undefined && (
+                                  <span className={`ml-2 ${publishStatus[agent.id] ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+                                    • {publishStatus[agent.id] ? 'Published' : 'Not Published'}
+                                  </span>
+                                )}
+                              </>
                             )}
-                            {publishStatus[agent.id] !== undefined && (
-                              <span className={`ml-2 ${publishStatus[agent.id] ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
-                                • {publishStatus[agent.id] ? 'Published' : 'Not Published'}
-                              </span>
-                            )}
-                          </>
-                        )}
+                          </span>
+                          <button
+                            onClick={async () => {
+                              await navigator.clipboard.writeText(agent.id);
+                              setSuccess(`Database UUID copied: ${agent.id}`);
+                              setTimeout(() => setSuccess(null), 3000);
+                            }}
+                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            title="Copy full database UUID"
+                          >
+                            <ClipboardDocumentIcon className="w-3 h-3" />
+                          </button>
+                        </span>
                       </span>
                     </TableCell>
                     <TableCell className="px-5 py-4 text-start text-gray-500 text-theme-sm dark:text-gray-400">
