@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// GET /api/widget/chat.js - Serves the embeddable chat widget script
-// Handle CORS preflight
+// GET /api/widget/loader.js - Serves a simple loader script that reads data attributes
+// This is a cleaner approach that works better with Webflow and other platforms
+
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
@@ -16,43 +17,70 @@ export async function OPTIONS() {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const agentId = searchParams.get('agent_id');
   
-  // Dynamically determine base URL from request
-  const url = new URL(request.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
-
-  if (!agentId) {
-    return new NextResponse('// Error: agent_id parameter is required', {
-      status: 400,
-      headers: { 
-        'Content-Type': 'text/javascript; charset=utf-8',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'X-Content-Type-Options': 'nosniff',
-      },
-    });
-  }
-
-  // Generate the widget script
-  const widgetScript = `
+  // This loader script reads configuration from data attributes
+  const loaderScript = `
 (function() {
   'use strict';
   
-  console.log('[Chat Widget] Script loaded');
-  console.log('[Chat Widget] Base URL:', '${baseUrl}');
+  console.log('[Chat Widget Loader] Initializing...');
   
-  const agentId = '${agentId}';
-  const apiUrl = '${baseUrl}/api/widget/chat/message';
+  // Find the script tag with id="chat-widget-loader"
+  const scriptTag = document.currentScript || document.getElementById('chat-widget-loader');
   
-  console.log('[Chat Widget] Agent ID:', agentId);
-  console.log('[Chat Widget] API URL:', apiUrl);
+  if (!scriptTag) {
+    console.error('[Chat Widget Loader] Could not find script tag');
+    return;
+  }
+  
+  // Read configuration from data attributes
+  const agentId = scriptTag.getAttribute('data-agent-id');
+  const primaryColor = scriptTag.getAttribute('data-color') || '#3b82f6';
+  const title = scriptTag.getAttribute('data-title') || 'Chat Support';
+  const subtitle = scriptTag.getAttribute('data-subtitle') || 'We are here to help';
+  const autoOpen = scriptTag.getAttribute('data-auto-open') === 'true';
+  const position = scriptTag.getAttribute('data-position') || 'bottom-right';
+  
+  if (!agentId) {
+    console.error('[Chat Widget Loader] data-agent-id attribute is required');
+    return;
+  }
+  
+  console.log('[Chat Widget Loader] Configuration:', {
+    agentId,
+    primaryColor,
+    title,
+    subtitle,
+    autoOpen,
+    position,
+  });
+  
+  // Determine API base URL
+  // Use data-api-url if provided, otherwise extract from script src
+  let apiUrl = scriptTag.getAttribute('data-api-url');
+  if (!apiUrl) {
+    // Extract base URL from script src
+    const scriptSrc = scriptTag.src || scriptTag.getAttribute('src');
+    if (scriptSrc) {
+      try {
+        const url = new URL(scriptSrc);
+        apiUrl = url.origin;
+      } catch (e) {
+        console.warn('[Chat Widget Loader] Could not parse script src, using current origin');
+        apiUrl = window.location.origin;
+      }
+    } else {
+      apiUrl = window.location.origin;
+    }
+  }
+  const messageUrl = apiUrl + '/api/widget/chat/message';
+  
+  console.log('[Chat Widget Loader] API URL:', messageUrl);
   
   // Widget configuration
   const config = {
-    position: 'bottom-right',
-    primaryColor: '#3b82f6',
+    position: position,
+    primaryColor: primaryColor,
     textColor: '#ffffff',
     backgroundColor: '#ffffff',
     borderRadius: '8px',
@@ -68,11 +96,11 @@ export async function GET(request: NextRequest) {
   function createWidget() {
     // Check if already created
     if (document.getElementById('chat-widget-button')) {
-      console.log('[Chat Widget] Widget already exists, skipping');
+      console.log('[Chat Widget Loader] Widget already exists, skipping');
       return;
     }
     
-    console.log('[Chat Widget] Creating widget for agent:', agentId);
+    console.log('[Chat Widget Loader] Creating widget for agent:', agentId);
     
     // Create button
     const button = document.createElement('div');
@@ -81,10 +109,10 @@ export async function GET(request: NextRequest) {
     button.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="currentColor"/></svg>';
     button.style.cssText = 'position: fixed !important; bottom: 20px !important; right: 20px !important; width: 60px !important; height: 60px !important; background-color: ' + config.primaryColor + ' !important; color: ' + config.textColor + ' !important; border-radius: 50% !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; z-index: 9999 !important; transition: transform 0.2s !important; margin: 0 !important; padding: 0 !important; border: none !important; box-sizing: border-box !important;';
     button.addEventListener('click', toggleChat);
-    button.addEventListener('mouseenter', () => {
+    button.addEventListener('mouseenter', function() {
       button.style.transform = 'scale(1.1)';
     });
-    button.addEventListener('mouseleave', () => {
+    button.addEventListener('mouseleave', function() {
       button.style.transform = 'scale(1)';
     });
     
@@ -96,7 +124,7 @@ export async function GET(request: NextRequest) {
     // Header
     const header = document.createElement('div');
     header.style.cssText = 'background-color: ' + config.primaryColor + '; color: ' + config.textColor + '; padding: 16px; border-radius: ' + config.borderRadius + ' ' + config.borderRadius + ' 0 0; display: flex; justify-content: space-between; align-items: center;';
-    header.innerHTML = '<div><div style="font-weight: 600; font-size: 16px;">Chat Support</div><div style="font-size: 12px; opacity: 0.9;">We are here to help</div></div><button id="chat-widget-close" style="background: none; border: none; color: ' + config.textColor + '; cursor: pointer; font-size: 24px; line-height: 1;">&times;</button>';
+    header.innerHTML = '<div><div style="font-weight: 600; font-size: 16px;">' + title + '</div><div style="font-size: 12px; opacity: 0.9;">' + subtitle + '</div></div><button id="chat-widget-close" style="background: none; border: none; color: ' + config.textColor + '; cursor: pointer; font-size: 24px; line-height: 1;">&times;</button>';
     header.querySelector('#chat-widget-close').addEventListener('click', toggleChat);
     
     // Messages container
@@ -119,7 +147,7 @@ export async function GET(request: NextRequest) {
     sendButton.style.cssText = 'padding: 12px 24px; background-color: ' + config.primaryColor + '; color: ' + config.textColor + '; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;';
     
     sendButton.addEventListener('click', sendMessage);
-    input.addEventListener('keypress', (e) => {
+    input.addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
         sendMessage();
       }
@@ -140,29 +168,31 @@ export async function GET(request: NextRequest) {
     // Append to body
     if (document.body) {
       document.body.appendChild(widgetContainer);
-      console.log('[Chat Widget] Widget container appended to body');
+      console.log('[Chat Widget Loader] Widget container appended to body');
       
       // Verify it was added
       const addedButton = document.getElementById('chat-widget-button');
       if (addedButton) {
-        console.log('[Chat Widget] Button verified in DOM');
-        const computedStyle = window.getComputedStyle(addedButton);
-        console.log('[Chat Widget] Button display:', computedStyle.display);
-        console.log('[Chat Widget] Button visibility:', computedStyle.visibility);
-        console.log('[Chat Widget] Button position:', computedStyle.position);
-        console.log('[Chat Widget] Button z-index:', computedStyle.zIndex);
+        console.log('[Chat Widget Loader] Button verified in DOM');
       } else {
-        console.error('[Chat Widget] Button not found in DOM after append!');
+        console.error('[Chat Widget Loader] Button not found in DOM after append!');
       }
     } else {
-      console.error('[Chat Widget] Cannot append widget: document.body is null');
+      console.error('[Chat Widget Loader] Cannot append widget: document.body is null');
       return;
     }
     
     // Add welcome message
     addMessage('assistant', 'Hello! How can I help you today?');
     
-    console.log('[Chat Widget] Widget created successfully');
+    // Auto-open if configured
+    if (autoOpen) {
+      setTimeout(function() {
+        toggleChat();
+      }, 1000);
+    }
+    
+    console.log('[Chat Widget Loader] Widget created successfully');
   }
   
   function toggleChat() {
@@ -207,7 +237,7 @@ export async function GET(request: NextRequest) {
     document.getElementById('chat-widget-messages').appendChild(typingIndicator);
     
     try {
-      const response = await fetch(apiUrl, {
+      const response = await fetch(messageUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -223,8 +253,8 @@ export async function GET(request: NextRequest) {
       typingIndicator.remove();
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('[Chat Widget] API error:', response.status, errorData);
+        const errorData = await response.json().catch(function() { return { error: 'Unknown error' }; });
+        console.error('[Chat Widget Loader] API error:', response.status, errorData);
         
         let errorMsg = errorData.error || errorData.message || 'Please try again.';
         
@@ -253,7 +283,7 @@ export async function GET(request: NextRequest) {
       }
     } catch (error) {
       typingIndicator.remove();
-      console.error('[Chat Widget] Fetch error:', error);
+      console.error('[Chat Widget Loader] Fetch error:', error);
       addMessage('assistant', 'Sorry, I encountered a connection error. Please check your internet connection and try again.');
     }
   }
@@ -261,31 +291,31 @@ export async function GET(request: NextRequest) {
   // Initialize widget when DOM is ready
   function initWidget() {
     try {
-      console.log('[Chat Widget] Initialization attempt, readyState:', document.readyState);
+      console.log('[Chat Widget Loader] Initialization attempt, readyState:', document.readyState);
       
       // Check if widget already exists
       if (document.getElementById('chat-widget-button')) {
-        console.log('[Chat Widget] Widget already exists, skipping');
+        console.log('[Chat Widget Loader] Widget already exists, skipping');
         return;
       }
       
       // Ensure body exists
       if (!document.body) {
-        console.log('[Chat Widget] Document body not found, retrying in 100ms...');
+        console.log('[Chat Widget Loader] Document body not found, retrying in 100ms...');
         setTimeout(initWidget, 100);
         return;
       }
       
-      console.log('[Chat Widget] Creating widget...');
+      console.log('[Chat Widget Loader] Creating widget...');
       createWidget();
-      console.log('[Chat Widget] Widget created successfully');
+      console.log('[Chat Widget Loader] Widget created successfully');
     } catch (error) {
-      console.error('[Chat Widget] Error initializing:', error);
-      console.error('[Chat Widget] Error stack:', error.stack);
+      console.error('[Chat Widget Loader] Error initializing:', error);
+      console.error('[Chat Widget Loader] Error stack:', error.stack);
       // Retry after a delay if initialization fails
-      setTimeout(() => {
+      setTimeout(function() {
         if (!document.getElementById('chat-widget-button')) {
-          console.log('[Chat Widget] Retrying initialization...');
+          console.log('[Chat Widget Loader] Retrying initialization...');
           initWidget();
         }
       }, 1000);
@@ -304,9 +334,9 @@ export async function GET(request: NextRequest) {
   }
   
   // Also try on window load as a fallback
-  window.addEventListener('load', () => {
+  window.addEventListener('load', function() {
     if (!document.getElementById('chat-widget-button')) {
-      console.log('Window loaded, initializing widget...');
+      console.log('[Chat Widget Loader] Window loaded, initializing widget...');
       initWidget();
     }
   });
@@ -348,7 +378,7 @@ export async function GET(request: NextRequest) {
   if (document.head) {
     document.head.appendChild(style);
   } else {
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', function() {
       if (document.head) {
         document.head.appendChild(style);
       }
@@ -357,7 +387,7 @@ export async function GET(request: NextRequest) {
 })();
 `;
 
-  return new NextResponse(widgetScript, {
+  return new NextResponse(loaderScript, {
     headers: {
       'Content-Type': 'text/javascript; charset=utf-8',
       'Cache-Control': 'public, max-age=3600',

@@ -762,10 +762,24 @@ export default function AgentTestModal({
       return;
     }
 
+    const userMessageText = chatMessage.trim();
     setIsTesting(true);
     setError(null);
     setSuccess(null);
     setChatResponse(null);
+
+    // Add user message to conversation
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: "user",
+      text: userMessageText,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    // Clear input
+    const messageToSend = userMessageText;
+    setChatMessage("");
 
     try {
       const response = await fetch(`/api/agents/${agent.id}/test`, {
@@ -773,22 +787,77 @@ export default function AgentTestModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           test_type: "chat",
-          message: chatMessage,
+          message: messageToSend,
         }),
       });
 
+      const data = await response.json();
+
       if (response.ok) {
-        const data = await response.json();
-        setChatResponse(data.response || "Test response received");
-        setSuccess("Chat test completed successfully!");
-        setTimeout(() => setSuccess(null), 3000);
+        if (data.success === false) {
+          // Handle cases where response is OK but success is false
+          const errorMsg = data.response || data.message || data.error || "Test failed";
+          setError(errorMsg);
+          
+          // Add error message to conversation
+          const errorMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            type: "agent",
+            text: `Error: ${errorMsg}`,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, errorMessage]);
+        } else {
+          // Success case - add agent response to conversation
+          const agentResponseText = data.response || "Test response received";
+          setChatResponse(agentResponseText);
+          setSuccess("Chat test completed successfully!");
+          setTimeout(() => setSuccess(null), 3000);
+          
+          const agentMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            type: "agent",
+            text: agentResponseText,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, agentMessage]);
+        }
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || "Failed to test chat agent");
+        // Error response
+        const errorMsg = data.response || data.error || data.message || `Failed to test chat agent (${response.status})`;
+        setError(errorMsg);
+        
+        // Add error message to conversation
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: "agent",
+          text: `Error: ${errorMsg}`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        
+        // Show specific guidance for common errors
+        if (response.status === 422) {
+          if (data.requires_publish) {
+            setError(`${errorMsg}\n\nPlease publish the agent using the publish button in the agent list.`);
+          } else if (data.requires_chat_channel) {
+            setError(`${errorMsg}\n\nPlease ensure the agent is configured as a chat agent in Retell dashboard.`);
+          }
+        }
       }
     } catch (error: any) {
       console.error("Chat test error:", error);
-      setError(error.message || "Failed to test chat agent");
+      const errorMsg = error.message || "Failed to test chat agent. Please check your connection and try again.";
+      setError(errorMsg);
+      
+      // Add error message to conversation
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "agent",
+        text: `Error: ${errorMsg}`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsTesting(false);
     }
@@ -1015,55 +1084,151 @@ export default function AgentTestModal({
         {/* Chat Test Tab */}
         {activeTab === "chat" && agent.type === "chat" && (
           <div className="space-y-6">
-            <div className="flex flex-col items-center justify-center py-8">
-              <div className="mb-4 rounded-full bg-indigo-100 p-6 dark:bg-indigo-900/20">
-                <ChatBubbleLeftRightIcon className="h-12 w-12 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
-                Test your agent
-              </h3>
-              <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-                Send a message to test the agent's response
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="message">Message</Label>
-              <Input
-                type="text"
-                id="message"
-                placeholder="Enter your test message..."
-                value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
-                disabled={isTesting}
-                required
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleChatTest();
-                  }
-                }}
-              />
-            </div>
-
-            {chatResponse && (
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-                <Label>Agent Response</Label>
-                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-                  {chatResponse}
+            {!chatResponse && !error && (
+              <div className="flex flex-col items-center justify-center py-8">
+                <div className="mb-4 rounded-full bg-indigo-100 p-6 dark:bg-indigo-900/20">
+                  <ChatBubbleLeftRightIcon className="h-12 w-12 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+                  Test your agent
+                </h3>
+                <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
+                  Send a message to test the agent's response
                 </p>
               </div>
             )}
 
-            <div className="flex justify-end">
-              <Button
-                onClick={handleChatTest}
-                disabled={isTesting || !chatMessage.trim()}
-                size="sm"
-              >
-                {isTesting ? "Testing..." : "Test"}
-              </Button>
-            </div>
+            {/* Chat Interface - Show conversation-style UI */}
+            {(messages.length > 0 || chatMessage) && (
+              <div className="flex flex-col h-[400px] border border-gray-200 rounded-lg dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+                {/* Messages Area */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
+                  {messages.length === 0 && chatMessage && (
+                    <div className="flex justify-end items-start gap-3">
+                      <div className="max-w-[75%] rounded-2xl rounded-br-sm px-4 py-2.5 bg-indigo-600 text-white shadow-sm">
+                        <p className="text-sm whitespace-pre-wrap">{chatMessage}</p>
+                      </div>
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex items-start gap-3 ${
+                        message.type === "user" ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      {message.type === "agent" && (
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                          <ChatBubbleLeftRightIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                      )}
+                      
+                      <div
+                        className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${
+                          message.type === "user"
+                            ? "bg-indigo-600 text-white rounded-br-sm"
+                            : message.text.startsWith("Error:")
+                            ? "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-bl-sm"
+                            : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-bl-sm"
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                      </div>
+
+                      {message.type === "user" && (
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {isTesting && (
+                    <div className="flex items-start gap-3 justify-start">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                        <ChatBubbleLeftRightIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <div className="max-w-[75%] rounded-2xl rounded-bl-sm px-4 py-2.5 bg-gray-100 dark:bg-gray-700 shadow-sm">
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Input Area */}
+                <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900">
+                  <div className="flex gap-2">
+                    <Input
+                      type="text"
+                      placeholder="Type your message..."
+                      value={chatMessage}
+                      onChange={(e) => setChatMessage(e.target.value)}
+                      disabled={isTesting}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleChatTest();
+                        }
+                      }}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={handleChatTest}
+                      disabled={isTesting || !chatMessage.trim()}
+                      size="sm"
+                    >
+                      {isTesting ? "Sending..." : "Send"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Simple Input View - Show when no conversation yet */}
+            {!chatResponse && !error && messages.length === 0 && (
+              <>
+                <div>
+                  <Label htmlFor="message">Message</Label>
+                  <Input
+                    type="text"
+                    id="message"
+                    placeholder="Enter your test message..."
+                    value={chatMessage}
+                    onChange={(e) => setChatMessage(e.target.value)}
+                    disabled={isTesting}
+                    required
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleChatTest();
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleChatTest}
+                    disabled={isTesting || !chatMessage.trim()}
+                    size="sm"
+                  >
+                    {isTesting ? "Testing..." : "Test"}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
