@@ -138,14 +138,105 @@ export async function POST(
 
     // Handle chat agent testing
     if (agent.type === 'chat' && test_type === 'chat') {
-      // For chat testing, we'll return a mock response
-      // In a real implementation, you'd integrate with your chat API
-      return NextResponse.json({
-        success: true,
-        message: 'Chat test initiated',
-        response: `Test response from ${agent.name}. This is a placeholder response.`,
-        agent_id: agent.id,
-      });
+      if (!message || typeof message !== 'string' || message.trim().length === 0) {
+        return NextResponse.json({ 
+          error: 'message is required for chat testing and must not be empty' 
+        }, { status: 400 });
+      }
+
+      // Check if agent is linked to Retell
+      if (!agent.retell_agent_id) {
+        return NextResponse.json({
+          success: true,
+          message: 'Chat test completed (agent not linked to Retell)',
+          response: `I received your message: "${message}". This agent is not yet linked to Retell AI. Please sync agents or create the agent in Retell first.`,
+          agent_id: agent.id,
+        });
+      }
+
+      // Get reseller's Retell API key
+      const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
+
+      if (!retellApiKey) {
+        return NextResponse.json({
+          success: true,
+          message: 'Chat test completed (Retell not configured)',
+          response: `I received your message: "${message}". Retell AI is not configured for this organization's reseller. Please contact your reseller administrator.`,
+          agent_id: agent.id,
+        });
+      }
+
+      try {
+        const retellClient = createRetellClient(retellApiKey, {
+          timeout: 30 * 1000, // 30 seconds for chat operations
+          maxRetries: 2,
+        });
+
+        // Create a new chat session for this test
+        const chatSession = await retellClient.chat.create({
+          agent_id: agent.retell_agent_id,
+          metadata: {
+            test: true,
+            test_user_id: user.id,
+            agent_id: agent.id,
+            tenant_id: agent.tenant_id,
+          },
+        });
+
+        // Create chat completion with user message
+        const completion = await retellClient.chat.createChatCompletion({
+          chat_id: chatSession.chat_id,
+          content: message.trim(),
+        });
+
+        // Extract agent response from completion messages
+        const agentMessages = completion.messages.filter(
+          (msg: any) => msg.role === 'agent' && 'content' in msg && typeof msg.content === 'string'
+        );
+
+        if (agentMessages.length === 0) {
+          return NextResponse.json({
+            success: false,
+            message: 'No agent response received from Retell',
+            response: 'I apologize, but I couldn\'t generate a response. Please check the agent configuration in Retell AI.',
+            agent_id: agent.id,
+          });
+        }
+
+        // Get the latest agent message
+        const latestAgentMessage = agentMessages[agentMessages.length - 1] as { content: string; role: 'agent' };
+        const agentResponse = latestAgentMessage.content || 'I apologize, but I couldn\'t generate a response.';
+
+        // End the chat session (cleanup)
+        try {
+          await retellClient.chat.end(chatSession.chat_id);
+        } catch (endError) {
+          // Log but don't fail - the response is already generated
+          console.warn('Failed to end chat session:', endError);
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: 'Chat test completed successfully',
+          response: agentResponse,
+          agent_id: agent.id,
+        });
+      } catch (retellError: any) {
+        console.error('Retell chat test error:', retellError);
+        
+        // Return error details for debugging
+        const errorMessage = retellError?.response?.data?.message || 
+                           retellError?.message || 
+                           'Failed to get response from Retell AI';
+        
+        return NextResponse.json({
+          success: false,
+          message: 'Chat test failed',
+          response: `Error: ${errorMessage}. Please check the agent configuration in Retell AI.`,
+          agent_id: agent.id,
+          error: errorMessage,
+        }, { status: 500 });
+      }
     }
 
     return NextResponse.json(
