@@ -389,10 +389,26 @@ export async function GET(request: NextRequest) {
     #chat-widget-button {
       position: fixed !important;
       z-index: 9999 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      box-sizing: border-box !important;
     }
     #chat-widget-window {
       position: fixed !important;
       z-index: 9999 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      box-sizing: border-box !important;
+    }
+    #chat-widget-container {
+      position: fixed !important;
+      z-index: 9999 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      box-sizing: border-box !important;
     }
   \`;
   
