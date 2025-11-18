@@ -71,56 +71,121 @@ export async function POST(request: NextRequest) {
       maxRetries: 2,
     });
 
-    // First, verify the agent exists by checking if it's in the list
-    let agentExists = false;
-    try {
-      const agentList = await retellClient.agent.list();
-      agentExists = agentList.some((a: any) => {
-        const id = typeof a === 'string' ? a : (a as any).agent_id;
-        return id === retell_agent_id;
-      });
-    } catch (listError: any) {
-      console.warn('Could not verify agent existence via list:', listError.message);
-    }
+    // For chat agents, try to validate by attempting to create a chat session
+    // Chat agents created in the dashboard may not be accessible via agent.retrieve()
+    // This is a known limitation - chat agents can't be retrieved via standard API
+    let retellAgent: any = null;
+    let channel: string | null = null;
+    let isPublished = false;
+    let validationMethod = '';
 
-    let retellAgent;
+    // First, try standard agent.retrieve() method
     try {
       retellAgent = await retellClient.agent.retrieve(retell_agent_id);
-    } catch (retellError: any) {
-      logRetellError(retellError, 'Agent Link - Retell Retrieve');
+      const agentData = retellAgent as any;
+      channel = agentData.channel || null;
+      isPublished = agentData.is_published || false;
+      validationMethod = 'agent.retrieve()';
+    } catch (retrieveError: any) {
+      const retellStatus = retrieveError?.response?.status || retrieveError?.status || 500;
+      const retellErrorMessage = formatRetellError(retrieveError);
       
-      // Get the actual status code from Retell error
-      const retellStatus = retellError?.response?.status || retellError?.status || 500;
-      const retellErrorMessage = formatRetellError(retellError);
-      
-      // Provide more specific error messages
-      let errorMessage = `Retell agent not found or inaccessible: ${retellErrorMessage}`;
-      
+      // If we get "Invalid agent channel" error, it might be a chat agent
+      // Chat agents created in dashboard may not be accessible via agent.retrieve()
       if (retellStatus === 400 && retellErrorMessage.includes('Invalid agent channel')) {
-        if (!agentExists) {
-          errorMessage = `Agent ID "${retell_agent_id}" does not exist in your Retell account. Please verify the agent ID is correct and exists in your Retell dashboard.`;
-        } else {
-          errorMessage = `Agent "${retell_agent_id}" exists but has an invalid channel configuration. Please check the agent settings in Retell dashboard.`;
+        console.log(`[Link Retell] Agent ${retell_agent_id} returned "Invalid agent channel" - attempting chat session validation`);
+        
+        // Try to validate by creating a test chat session (this will fail if agent doesn't exist)
+        try {
+          const testChat = await retellClient.chat.create({
+            agent_id: retell_agent_id,
+            metadata: {
+              validation: true,
+              test: true,
+            },
+          });
+          
+          // If chat session created successfully, agent exists and is a chat agent
+          channel = 'chat';
+          validationMethod = 'chat.create()';
+          
+          // Try to get agent details from chat response
+          if (testChat.agent_id === retell_agent_id) {
+            // End the test chat session
+            try {
+              await retellClient.chat.end(testChat.chat_id);
+            } catch (endError) {
+              // Ignore errors ending test chat
+            }
+            
+            // For chat agents, we can't determine published status via API
+            // Assume it's published if we can create a chat session
+            isPublished = true;
+            
+            console.log(`[Link Retell] Successfully validated chat agent ${retell_agent_id} via chat session`);
+          }
+        } catch (chatError: any) {
+          const chatStatus = chatError?.response?.status || chatError?.status || 500;
+          const chatErrorMessage = formatRetellError(chatError);
+          
+          // If chat creation also fails, agent doesn't exist or isn't accessible
+          logRetellError(chatError, 'Agent Link - Chat Validation');
+          
+          let errorMessage = `Agent ID "${retell_agent_id}" could not be validated. `;
+          
+          if (chatStatus === 404) {
+            errorMessage += `The agent does not exist in your Retell account. Please verify the agent ID is correct.`;
+          } else if (chatStatus === 422) {
+            errorMessage += `The agent exists but is not published or not configured for chat. Please publish the agent in Retell dashboard.`;
+          } else {
+            errorMessage += `Retell API error: ${chatErrorMessage}. Please verify the agent ID is correct and exists in your Retell dashboard.`;
+          }
+          
+          return NextResponse.json(
+            { 
+              error: errorMessage,
+              retell_status: chatStatus,
+              retell_error: chatError?.response?.data || chatError?.message,
+              validation_method: 'chat.create()',
+            },
+            { status: chatStatus >= 400 && chatStatus < 500 ? chatStatus : 500 }
+          );
         }
-      } else if (retellStatus === 404 || !agentExists) {
-        errorMessage = `Agent ID "${retell_agent_id}" does not exist in your Retell account. Please verify the agent ID is correct. The agent may belong to a different Retell account.`;
+      } else {
+        // Other errors - agent doesn't exist or different issue
+        logRetellError(retrieveError, 'Agent Link - Retell Retrieve');
+        
+        let errorMessage = `Agent ID "${retell_agent_id}" could not be retrieved: ${retellErrorMessage}`;
+        
+        if (retellStatus === 404) {
+          errorMessage = `Agent ID "${retell_agent_id}" does not exist in your Retell account. Please verify the agent ID is correct.`;
+        }
+        
+        return NextResponse.json(
+          { 
+            error: errorMessage,
+            retell_status: retellStatus,
+            retell_error: retrieveError?.response?.data || retrieveError?.message,
+            validation_method: 'agent.retrieve()',
+          },
+          { status: retellStatus >= 400 && retellStatus < 500 ? retellStatus : 500 }
+        );
       }
-      
-      // Return appropriate status code based on Retell's response
-      return NextResponse.json(
-        { 
-          error: errorMessage,
-          retell_status: retellStatus,
-          retell_error: retellError?.response?.data || retellError?.message,
-          agent_exists: agentExists,
-        },
-        { status: retellStatus >= 400 && retellStatus < 500 ? retellStatus : 500 }
-      );
     }
 
+    // If we got agent data from retrieve, use it; otherwise use values from chat validation
     const retellAgentData = retellAgent as any;
-    const channel = retellAgentData.channel || null;
-    const isPublished = retellAgentData.is_published || false;
+    if (retellAgentData && !channel) {
+      channel = retellAgentData.channel || null;
+    }
+    if (retellAgentData && isPublished === false) {
+      isPublished = retellAgentData.is_published || false;
+    }
+    
+    // If we still don't have channel info, default to 'chat' if validation was via chat.create()
+    if (!channel && validationMethod === 'chat.create()') {
+      channel = 'chat';
+    }
 
     // Check if channel matches agent type
     if (agent.type === 'chat' && channel !== 'chat') {
@@ -169,10 +234,11 @@ export async function POST(request: NextRequest) {
       agent: updatedAgent,
       retell_agent: {
         agent_id: retell_agent_id,
-        agent_name: retellAgentData.agent_name,
+        agent_name: retellAgentData?.agent_name || 'Unknown',
         channel: channel,
         is_published: isPublished,
       },
+      validation_method: validationMethod || 'agent.retrieve()',
       message: `Agent "${agent.name}" successfully linked to Retell agent "${retellAgentData.agent_name}" (${channel} channel)`,
     });
   } catch (error: any) {
