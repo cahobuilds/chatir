@@ -50,15 +50,14 @@ export async function POST(request: NextRequest) {
     // Get tenant_id if not provided
     if (!tenantId) {
       // Try to find tenant from any agent with this retell_agent_id
-      // Use limit(1) instead of single() since multiple agents can share the same retell_agent_id
-      const { data: agents } = await supabase
+      const { data: agent } = await supabase
         .from('agents')
         .select('tenant_id')
         .eq('retell_agent_id', retellAgentId)
-        .limit(1);
+        .single();
 
-      if (agents && agents.length > 0) {
-        tenantId = agents[0].tenant_id;
+      if (agent) {
+        tenantId = agent.tenant_id;
       }
     }
 
