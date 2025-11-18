@@ -262,20 +262,28 @@ export async function GET(request: NextRequest) {
         }),
       });
       
-      const data = await response.json();
-      
       // Remove typing indicator
       typingIndicator.remove();
       
-      if (response.ok) {
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Widget API error:', response.status, errorData);
+        addMessage('assistant', 'Sorry, I encountered an error: ' + (errorData.error || errorData.message || 'Please try again.'));
+        return;
+      }
+      
+      const data = await response.json();
+      
+      if (data.response) {
         conversationId = data.conversation_id;
         addMessage('assistant', data.response);
       } else {
-        addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
+        addMessage('assistant', 'Sorry, I didn\'t receive a response. Please try again.');
       }
     } catch (error) {
       typingIndicator.remove();
-      addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
+      console.error('Widget fetch error:', error);
+      addMessage('assistant', 'Sorry, I encountered a connection error. Please check your internet connection and try again.');
     }
   }
   
