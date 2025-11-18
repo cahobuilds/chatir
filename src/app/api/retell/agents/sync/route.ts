@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Sync] Found ${existingAgents?.length || 0} existing agents in database for tenant ${tenant_id}`);
 
-    const syncedAgents = [];
-    const errors = [];
+    const syncedAgents: Array<{ action: 'created' | 'updated'; agent: any }> = [];
+    const errors: Array<{ retell_agent_id: string; error: string }> = [];
     let skippedByType = 0;
 
     // Sync each Retell agent
