@@ -225,7 +225,20 @@ export async function GET(request: NextRequest) {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         console.error('[Chat Widget] API error:', response.status, errorData);
-        const errorMsg = errorData.error || errorData.message || 'Please try again.';
+        
+        let errorMsg = errorData.error || errorData.message || 'Please try again.';
+        
+        // Provide more helpful error messages
+        if (response.status === 422) {
+          errorMsg = 'The chat agent is not available. Please contact support or try again later.';
+        } else if (response.status === 404) {
+          errorMsg = 'Agent not found. Please check the agent configuration.';
+        } else if (response.status === 400) {
+          errorMsg = errorData.error || 'Invalid request. Please try again.';
+        } else if (response.status >= 500) {
+          errorMsg = 'Server error. Please try again in a moment.';
+        }
+        
         addMessage('assistant', 'Sorry, I encountered an error: ' + errorMsg);
         return;
       }

@@ -102,7 +102,10 @@ export async function POST(request: NextRequest) {
       try {
         const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
         
-        if (retellApiKey) {
+        if (!retellApiKey) {
+          console.warn('[Chat Widget] Retell API key not configured for tenant:', agent.tenant_id);
+          // Fall through to simple response
+        } else {
           const retellClient = createRetellClient(retellApiKey, {
             timeout: 30 * 1000, // 30 seconds for chat operations
             maxRetries: 2,
@@ -122,6 +125,7 @@ export async function POST(request: NextRequest) {
           retellChatId = (interactionMetadata as any)?.retell_chat_id;
           
           if (!retellChatId) {
+            console.log('[Chat Widget] Creating new Retell chat session for agent:', agent.retell_agent_id);
             // Create new chat session in Retell
             const chatSession = await retellClient.chat.create({
               agent_id: agent.retell_agent_id,
@@ -133,6 +137,7 @@ export async function POST(request: NextRequest) {
             });
             
             retellChatId = chatSession.chat_id;
+            console.log('[Chat Widget] Retell chat session created:', retellChatId);
             
             // Store chat_id in interaction metadata
             await adminSupabase
@@ -144,9 +149,12 @@ export async function POST(request: NextRequest) {
                 },
               })
               .eq('id', interactionId);
+          } else {
+            console.log('[Chat Widget] Reusing existing Retell chat session:', retellChatId);
           }
           
           // Create chat completion with user message
+          console.log('[Chat Widget] Sending message to Retell chat:', retellChatId);
           const completion = await retellClient.chat.createChatCompletion({
             chat_id: retellChatId,
             content: message,
@@ -160,12 +168,15 @@ export async function POST(request: NextRequest) {
           );
           
           if (agentMessages.length === 0) {
+            console.error('[Chat Widget] No agent messages in completion:', completion);
             throw new Error('No agent response received from Retell');
           }
           
           // Get the latest agent message (should be the response to our user message)
           const latestAgentMessage = agentMessages[agentMessages.length - 1] as { content: string; role: 'agent' };
           const agentResponse = latestAgentMessage.content || 'I apologize, but I couldn\'t generate a response.';
+          
+          console.log('[Chat Widget] Received agent response:', agentResponse.substring(0, 100) + '...');
           
           // Add agent response to transcript
           transcript.push({
@@ -187,18 +198,59 @@ export async function POST(request: NextRequest) {
             conversation_id: interactionId,
             response: agentResponse,
             agent_name: agent.name,
+          }, {
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            },
           });
         }
       } catch (retellError: any) {
-        console.error('Retell chat error:', retellError);
+        console.error('[Chat Widget] Retell chat error:', retellError);
         // Log detailed error for debugging
         if (retellError.response) {
-          console.error('Retell API error response:', {
+          console.error('[Chat Widget] Retell API error response:', {
             status: retellError.response.status,
+            statusText: retellError.response.statusText,
             data: retellError.response.data,
+            agent_id: agent.retell_agent_id,
+          });
+          
+          // Provide user-friendly error messages
+          const statusCode = retellError.response.status;
+          const errorData = retellError.response.data || {};
+          const errorMessage = errorData.message || retellError.message || 'Failed to get response from Retell AI';
+          
+          // If agent not published or invalid, return helpful error
+          if (statusCode === 422 || errorMessage.includes('Cannot start a chat session')) {
+            return NextResponse.json({
+              error: 'Agent is not published or not available. Please ensure the agent is published in Retell AI.',
+              details: errorMessage,
+            }, { 
+              status: 422,
+              headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+              },
+            });
+          }
+          
+          // For other errors, return generic error but log details
+          return NextResponse.json({
+            error: 'Failed to get response from Retell AI. Please try again.',
+            details: errorMessage,
+          }, { 
+            status: statusCode >= 400 && statusCode < 500 ? statusCode : 500,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            },
           });
         }
-        // Fall through to simple response
+        // Fall through to simple response if no response object
       }
     }
 
