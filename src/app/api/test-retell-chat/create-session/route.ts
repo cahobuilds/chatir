@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     let retellAgentId = retell_agent_id;
     let tenantId: string | null = null;
 
-    // If agent_id provided, fetch retell_agent_id from database
+    // If agent_id provided (Method 2), fetch retell_agent_id from database
     if (agent_id && !retell_agent_id) {
       const { data: agent } = await supabase
         .from('agents')
@@ -57,24 +57,28 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Get tenant_id if not provided
+    // Get tenant_id if not provided (for Method 1: Direct Retell API)
+    // Use the authenticated user's tenant instead of looking up by retell_agent_id
     if (!tenantId) {
-      // Try to find tenant from any agent with this retell_agent_id
-      const { data: agent } = await supabase
-        .from('agents')
+      // Get user's tenant from user_tenants
+      const { data: userTenant } = await supabase
+        .from('user_tenants')
         .select('tenant_id')
-        .eq('retell_agent_id', retellAgentId)
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
         .single();
 
-      if (agent) {
-        tenantId = agent.tenant_id;
+      if (userTenant) {
+        tenantId = userTenant.tenant_id;
+        console.log('[Test Retell Chat] Using user\'s tenant:', tenantId);
       }
     }
 
     // Get Retell API key
     if (!tenantId) {
       return NextResponse.json({ 
-        error: 'Could not determine tenant_id. Please provide agent_id or ensure retell_agent_id exists in database.' 
+        error: 'Could not determine tenant_id. Please ensure you are associated with a tenant, or provide agent_id.' 
       }, { status: 400 });
     }
 
