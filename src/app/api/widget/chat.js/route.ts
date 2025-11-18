@@ -40,8 +40,14 @@ export async function GET(request: NextRequest) {
 (function() {
   'use strict';
   
+  console.log('[Chat Widget] Script loaded');
+  console.log('[Chat Widget] Base URL:', '${baseUrl}');
+  
   const agentId = '${agentId}';
   const apiUrl = '${baseUrl}/api/widget/chat/message';
+  
+  console.log('[Chat Widget] Agent ID:', agentId);
+  console.log('[Chat Widget] API URL:', apiUrl);
   
   // Widget configuration
   const config = {
@@ -333,27 +339,31 @@ export async function GET(request: NextRequest) {
   // Initialize widget when DOM is ready
   function initWidget() {
     try {
+      console.log('[Chat Widget] Initialization attempt, readyState:', document.readyState);
+      
       // Check if widget already exists
       if (document.getElementById('chat-widget-button')) {
-        console.log('Chat widget already initialized');
+        console.log('[Chat Widget] Widget already exists, skipping');
         return;
       }
       
       // Ensure body exists
       if (!document.body) {
-        console.log('Document body not found, retrying in 100ms...');
+        console.log('[Chat Widget] Document body not found, retrying in 100ms...');
         setTimeout(initWidget, 100);
         return;
       }
       
+      console.log('[Chat Widget] Creating widget...');
       createWidget();
-      console.log('Chat widget initialized successfully');
+      console.log('[Chat Widget] Widget created successfully');
     } catch (error) {
-      console.error('Error initializing chat widget:', error);
+      console.error('[Chat Widget] Error initializing:', error);
+      console.error('[Chat Widget] Error stack:', error.stack);
       // Retry after a delay if initialization fails
       setTimeout(() => {
         if (!document.getElementById('chat-widget-button')) {
-          console.log('Retrying widget initialization...');
+          console.log('[Chat Widget] Retrying initialization...');
           initWidget();
         }
       }, 1000);
