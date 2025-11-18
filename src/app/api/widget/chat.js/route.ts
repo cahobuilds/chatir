@@ -74,8 +74,6 @@ export async function GET(request: NextRequest) {
     
     console.log('[Chat Widget] Creating widget for agent:', agentId);
     
-    try {
-    
     // Create button
     const button = document.createElement('div');
     button.id = 'chat-widget-button';
@@ -231,7 +229,7 @@ export async function GET(request: NextRequest) {
     // Add welcome message
     addMessage('assistant', 'Hello! How can I help you today?');
     
-    console.log('Chat widget created successfully');
+    console.log('[Chat Widget] Widget created successfully');
   }
   
   function toggleChat() {
