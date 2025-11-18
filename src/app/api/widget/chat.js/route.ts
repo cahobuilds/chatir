@@ -403,7 +403,7 @@ export async function GET(request: NextRequest) {
 
   return new NextResponse(widgetScript, {
     headers: {
-      'Content-Type': 'application/javascript; charset=utf-8',
+      'Content-Type': 'text/javascript; charset=utf-8',
       'Cache-Control': 'public, max-age=3600',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
