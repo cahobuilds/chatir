@@ -173,8 +173,12 @@ export async function POST(
         });
 
         // Check agent channel and publish status before attempting chat session
+        // For chat agents created in dashboard, agent.retrieve() may fail with "Invalid agent channel"
+        // In that case, we'll skip the check and try to create a chat session directly
         let isPublished = false;
         let channel: string | null = null;
+        let canCheckStatus = true;
+        
         try {
           const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
           const retellAgentData = retellAgent as any;
@@ -182,11 +186,23 @@ export async function POST(
           channel = retellAgentData.channel || null;
           console.log(`[Agent Test] Agent ${agent.retell_agent_id} - Channel: ${channel}, Published: ${isPublished}`);
         } catch (retrieveError: any) {
-          console.error('[Agent Test] Error checking agent status:', retrieveError.message);
+          const retellStatus = retrieveError?.response?.status || retrieveError?.status || 500;
+          const retellErrorMessage = retrieveError?.message || 'Unknown error';
+          
+          // If we get "Invalid agent channel", it's likely a chat agent created in dashboard
+          // Skip the status check and try to create chat session directly
+          if (retellStatus === 400 && retellErrorMessage.includes('Invalid agent channel')) {
+            console.log(`[Agent Test] Agent ${agent.retell_agent_id} returned "Invalid agent channel" - assuming chat agent, skipping status check`);
+            channel = 'chat'; // Assume chat agent
+            canCheckStatus = false; // Can't check publish status via retrieve
+          } else {
+            console.error('[Agent Test] Error checking agent status:', retrieveError.message);
+            // For other errors, still try to proceed but log the error
+          }
         }
 
-        // Check if agent is a chat agent
-        if (channel && channel !== 'chat') {
+        // Only check channel mismatch if we successfully retrieved agent info
+        if (canCheckStatus && channel && channel !== 'chat') {
           return NextResponse.json({
             success: false,
             message: 'Agent is not a chat agent',
@@ -199,7 +215,10 @@ export async function POST(
           }, { status: 422 });
         }
 
-        if (!isPublished) {
+        // Only check publish status if we were able to retrieve agent info
+        // For chat agents created in dashboard, we can't check publish status via API
+        // but we can try to create a chat session - if it fails, we'll get a 422 error
+        if (canCheckStatus && !isPublished) {
           return NextResponse.json({
             success: false,
             message: 'Agent is not published',
