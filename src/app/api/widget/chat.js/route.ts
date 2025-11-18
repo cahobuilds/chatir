@@ -329,8 +329,9 @@ export async function GET(request: NextRequest) {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('Widget API error:', response.status, errorData);
-        addMessage('assistant', 'Sorry, I encountered an error: ' + (errorData.error || errorData.message || 'Please try again.'));
+        console.error('[Chat Widget] API error:', response.status, errorData);
+        const errorMsg = errorData.error || errorData.message || 'Please try again.';
+        addMessage('assistant', 'Sorry, I encountered an error: ' + errorMsg);
         return;
       }
       
@@ -344,7 +345,7 @@ export async function GET(request: NextRequest) {
       }
     } catch (error) {
       typingIndicator.remove();
-      console.error('Widget fetch error:', error);
+      console.error('[Chat Widget] Fetch error:', error);
       addMessage('assistant', 'Sorry, I encountered a connection error. Please check your internet connection and try again.');
     }
   }
