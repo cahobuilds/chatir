@@ -101,7 +101,31 @@ export async function POST(request: NextRequest) {
     if (agent.retell_agent_id) {
       console.log('[Chat Widget] Agent has Retell integration, agent_id:', agent.retell_agent_id);
       try {
-        const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
+        // Get Retell API key using admin client (public endpoint, no user session)
+        // Traverse up the tenant hierarchy to find reseller with API key
+        let currentTenantId: string | null = agent.tenant_id;
+        const visited = new Set<string>();
+        let retellApiKey: string | null = null;
+        
+        while (currentTenantId && !visited.has(currentTenantId) && !retellApiKey) {
+          visited.add(currentTenantId);
+          
+          const { data: tenant } = await adminSupabase
+            .from('tenants')
+            .select('id, parent_id, is_reseller, retell_api_key')
+            .eq('id', currentTenantId)
+            .single();
+          
+          if (!tenant) break;
+          
+          if (tenant.is_reseller === true && tenant.retell_api_key) {
+            retellApiKey = tenant.retell_api_key;
+            console.log('[Chat Widget] Found Retell API key for reseller tenant:', currentTenantId);
+            break;
+          }
+          
+          currentTenantId = tenant.parent_id;
+        }
         
         if (!retellApiKey) {
           console.error('[Chat Widget] Retell API key not configured for tenant:', agent.tenant_id);
