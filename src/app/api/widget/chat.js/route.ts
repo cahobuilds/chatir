@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
     // Header
     const header = document.createElement('div');
     header.style.cssText = 'background-color: ' + config.primaryColor + '; color: ' + config.textColor + '; padding: 16px; border-radius: ' + config.borderRadius + ' ' + config.borderRadius + ' 0 0; display: flex; justify-content: space-between; align-items: center;';
-    header.innerHTML = '<div><div style="font-weight: 600; font-size: 16px;">Chat Support</div><div style="font-size: 12px; opacity: 0.9;">We\'re here to help</div></div><button id="chat-widget-close" style="background: none; border: none; color: ' + config.textColor + '; cursor: pointer; font-size: 24px; line-height: 1;">&times;</button>';
+    header.innerHTML = '<div><div style="font-weight: 600; font-size: 16px;">Chat Support</div><div style="font-size: 12px; opacity: 0.9;">We are here to help</div></div><button id="chat-widget-close" style="background: none; border: none; color: ' + config.textColor + '; cursor: pointer; font-size: 24px; line-height: 1;">&times;</button>';
     header.querySelector('#chat-widget-close').addEventListener('click', toggleChat);
     
     // Messages container
@@ -249,7 +249,7 @@ export async function GET(request: NextRequest) {
         conversationId = data.conversation_id;
         addMessage('assistant', data.response);
       } else {
-        addMessage('assistant', 'Sorry, I didn\'t receive a response. Please try again.');
+        addMessage('assistant', 'Sorry, I did not receive a response. Please try again.');
       }
     } catch (error) {
       typingIndicator.remove();
