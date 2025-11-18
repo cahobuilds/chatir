@@ -18,7 +18,7 @@ import Select from "./form/Select";
 import TextArea from "./form/input/TextArea";
 import { useOrganization } from "@/context/OrganizationContext";
 import Alert from "./ui/alert/Alert";
-import { ArrowPathIcon, PencilIcon, TrashIcon, PlayIcon, CodeBracketIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, PencilIcon, TrashIcon, PlayIcon, CodeBracketIcon, ClipboardDocumentIcon, CloudArrowUpIcon } from "@heroicons/react/24/outline";
 import AgentEditModal from "./AgentEditModal";
 import AgentTestModal from "./AgentTestModal";
 
@@ -57,6 +57,8 @@ export default function ChatAgentList() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [publishing, setPublishing] = useState<Record<string, boolean>>({});
+  const [publishStatus, setPublishStatus] = useState<Record<string, boolean | null>>({});
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -122,6 +124,53 @@ export default function ChatAgentList() {
       setError(err.message || 'Failed to sync agents');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handlePublishAgent = async (agent: Agent) => {
+    if (!agent.retell_agent_id) {
+      setError("Agent is not linked to Retell AI. Please sync agents first.");
+      return;
+    }
+
+    try {
+      setPublishing(prev => ({ ...prev, [agent.id]: true }));
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch(`/api/retell/agents/${agent.id}/publish`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Publish failed');
+      }
+
+      const data = await response.json();
+      
+      // Update publish status
+      setPublishStatus(prev => ({ ...prev, [agent.id]: data.is_published }));
+      
+      if (data.is_published) {
+        setSuccess(`Agent "${agent.name}" published successfully!`);
+      } else {
+        setSuccess(`Publish request sent for "${agent.name}". It may take a few moments to be published.`);
+      }
+      
+      // Refresh agents after publish
+      await fetchAgents();
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err: any) {
+      console.error("Publish error:", err);
+      setError(err.message || 'Failed to publish agent');
+    } finally {
+      setPublishing(prev => ({ ...prev, [agent.id]: false }));
     }
   };
 
@@ -570,6 +619,11 @@ export default function ChatAgentList() {
                       </span>
                       <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
                         ID: {agent.retell_agent_id || agent.id.slice(0, 8)}...
+                        {agent.retell_agent_id && publishStatus[agent.id] !== undefined && (
+                          <span className={`ml-2 ${publishStatus[agent.id] ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+                            • {publishStatus[agent.id] ? 'Published' : 'Not Published'}
+                          </span>
+                        )}
                       </span>
                     </TableCell>
                     <TableCell className="px-5 py-4 text-start text-gray-500 text-theme-sm dark:text-gray-400">
@@ -596,6 +650,18 @@ export default function ChatAgentList() {
                     </TableCell>
                     <TableCell className="px-5 py-4 text-start">
                       <div className="flex items-center gap-2">
+                        {agent.retell_agent_id && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handlePublishAgent(agent)}
+                            title={publishStatus[agent.id] ? "Published - Click to republish" : "Publish Agent"}
+                            disabled={publishing[agent.id]}
+                            className={publishStatus[agent.id] ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : ""}
+                          >
+                            <CloudArrowUpIcon className={`w-4 h-4 ${publishing[agent.id] ? 'animate-bounce' : ''}`} />
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"

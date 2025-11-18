@@ -137,8 +137,15 @@ export async function POST(request: NextRequest) {
       ...retellConfig,
     };
     
-    // Only include voice_id if provided (for voice agents)
-    if (voice_id) {
+    // Determine agent type and set channel accordingly
+    // Chat agents: have llm_websocket_url or llm_id/response_engine (and may or may not have voice_id)
+    // Voice agents: have voice_id but no LLM configuration
+    const isChatAgent = hasLLMConfig;
+    
+    if (isChatAgent) {
+      agentPayload.channel = 'chat'; // IMPORTANT: Set channel to 'chat' for chat agents
+    } else if (voice_id) {
+      agentPayload.channel = 'voice'; // Set channel to 'voice' for voice agents
       agentPayload.voice_id = voice_id;
     }
 
@@ -190,6 +197,39 @@ export async function POST(request: NextRequest) {
     // Create Retell AI agent using reseller's API key
     const retellAgent = await retellClient.agent.create(agentPayload);
 
+    // Publish the agent (required for chat sessions to work)
+    // Retell's publish API publishes the latest version and creates a new draft
+    let isPublished = false;
+    try {
+      await retellClient.agent.publish(retellAgent.agent_id);
+      
+      // Wait a moment for Retell to process
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Verify publication
+      const publishedAgent = await retellClient.agent.retrieve(retellAgent.agent_id);
+      isPublished = (publishedAgent as any).is_published || false;
+    } catch (publishError: any) {
+      // Handle JSON parse errors (expected for 204 No Content responses)
+      if (publishError.message?.includes('JSON') || 
+          publishError.message?.includes('Unexpected end') ||
+          publishError.message?.includes('empty')) {
+        // Publish request was sent, wait and check
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        try {
+          const checkAgent = await retellClient.agent.retrieve(retellAgent.agent_id);
+          isPublished = (checkAgent as any).is_published || false;
+        } catch (checkError) {
+          // Could not verify, but publish was attempted
+          console.warn('Could not verify agent publish status:', checkError);
+        }
+      } else {
+        // Real error - log but don't fail the agent creation
+        console.warn('Agent created but publish failed:', publishError.message);
+        logRetellError(publishError, 'Agent Publish');
+      }
+    }
+
     // Update agent record with Retell agent ID
     const { data: updatedAgent, error: updateError } = await supabase
       .from('agents')
@@ -211,6 +251,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       agent: updatedAgent,
       retell_agent: retellAgent,
+      is_published: isPublished,
+      message: isPublished 
+        ? 'Agent created, published, and linked successfully' 
+        : 'Agent created and linked. Publish may require a few moments to process.',
     }, { status: 201 });
   } catch (error: any) {
     // Log error with context

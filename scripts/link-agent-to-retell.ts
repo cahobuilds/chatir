@@ -138,11 +138,14 @@ async function linkAgentToRetell(agentId: string) {
       console.log(`Using Retell LLM: ${llmId}`);
 
       // Set up response_engine - Retell requires this format for chat agents
+      // IMPORTANT: Set channel to 'chat' for chat agents (required by Retell API)
+      agentPayload.channel = 'chat';
       agentPayload.response_engine = {
         type: 'retell-llm',
         llm_id: llmId,
       };
       
+      console.log('Channel:', agentPayload.channel);
       console.log('Response engine config:', JSON.stringify(agentPayload.response_engine, null, 2));
 
       // Retell requires voice_id even for chat agents - use a default or fetch available voices
@@ -176,12 +179,13 @@ async function linkAgentToRetell(agentId: string) {
         agentPayload.language = 'en-US';
       }
     } else {
-      // Voice agent - need voice_id
+      // Voice agent - need voice_id and channel
       if (!config.voice_id) {
         throw new Error('Voice agent requires voice_id in configuration');
       }
       agentPayload.voice_id = config.voice_id;
       agentPayload.language = config.language || 'en-US';
+      agentPayload.channel = 'voice'; // Explicitly set channel for voice agents
     }
 
     // Create agent in Retell
@@ -190,6 +194,58 @@ async function linkAgentToRetell(agentId: string) {
     console.log('✅ Agent created in Retell AI!');
     console.log(`   Retell Agent ID: ${retellAgent.agent_id}`);
     console.log('');
+
+    // Publish the agent (required for chat sessions)
+    // Retell's publish API publishes the latest version and creates a new draft
+    console.log('Publishing agent...');
+    try {
+      // The publish endpoint returns 204 No Content, which the SDK handles correctly
+      await retellClient.agent.publish(retellAgent.agent_id);
+      console.log('✅ Publish request sent successfully');
+      
+      // Wait for Retell to process the publish
+      console.log('Waiting for Retell to process publish...');
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Verify publication
+      const publishedAgent = await retellClient.agent.retrieve(retellAgent.agent_id);
+      const isPublished = (publishedAgent as any).is_published;
+      
+      if (isPublished) {
+        console.log('✅ Agent is published and ready for chat sessions!');
+      } else {
+        console.warn('⚠️  Agent publish request sent, but agent is not yet showing as published');
+        console.warn('   This may require a few moments to process, or manual publishing in Retell dashboard');
+        console.warn('   You can check the agent status in the Retell dashboard');
+      }
+      console.log('');
+    } catch (publishError: any) {
+      // Handle JSON parse errors (expected for 204 responses)
+      if (publishError.message?.includes('JSON') || 
+          publishError.message?.includes('Unexpected end') ||
+          publishError.message?.includes('empty')) {
+        console.log('✅ Publish request sent (empty response is expected)');
+        console.log('   Waiting for Retell to process...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        // Check if published
+        try {
+          const checkAgent = await retellClient.agent.retrieve(retellAgent.agent_id);
+          const isPublished = (checkAgent as any).is_published;
+          if (isPublished) {
+            console.log('✅ Agent is published!');
+          } else {
+            console.warn('⚠️  Agent may need more time to publish, or manual intervention');
+          }
+        } catch (checkError) {
+          console.warn('⚠️  Could not verify publish status');
+        }
+      } else {
+        console.warn('⚠️  Warning: Could not publish agent:', publishError.message);
+        console.warn('   The agent was created but may need to be published manually in Retell dashboard');
+      }
+      console.log('');
+    }
 
     // Update local agent record
     console.log('Linking agent in database...');
