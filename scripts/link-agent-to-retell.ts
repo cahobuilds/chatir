@@ -32,13 +32,21 @@ async function getResellerRetellConfig(organizationTenantId: string): Promise<st
       break;
     }
     
+    // Type assertion for tenant data
+    const tenantData = tenant as {
+      id: string;
+      parent_id: string | null;
+      is_reseller: boolean | null;
+      retell_api_key: string | null;
+    };
+    
     // If this tenant is a reseller and has API key, return it
-    if (tenant.is_reseller === true && tenant.retell_api_key) {
-      return tenant.retell_api_key;
+    if (tenantData.is_reseller === true && tenantData.retell_api_key) {
+      return tenantData.retell_api_key;
     }
     
     // Otherwise, check parent
-    currentTenantId = tenant.parent_id;
+    currentTenantId = tenantData.parent_id;
   }
   
   return null;
