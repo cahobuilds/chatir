@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import Badge from "../ui/badge/Badge";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -8,6 +8,7 @@ import { getRoleDisplayName } from "@/lib/roles-client";
 import ComponentCard from "../common/ComponentCard";
 import Link from "next/link";
 import { type LegacyRole } from "@/lib/permissions";
+import { ClipboardDocumentIcon, CheckIcon } from "@heroicons/react/24/outline";
 
 interface Tenant {
   id: string;
@@ -47,6 +48,7 @@ interface AccountSettingsProps {
 
 export default function AccountSettings({ profile, selectedTenant, onTenantChange }: AccountSettingsProps) {
   const { roleInfo } = usePermissions(selectedTenant?.tenants.id || null);
+  const [copiedTenantId, setCopiedTenantId] = useState<string | null>(null);
 
   if (!profile) {
     return (
@@ -129,28 +131,51 @@ export default function AccountSettings({ profile, selectedTenant, onTenantChang
               </p>
             )}
             {selectedTenant && (
-              <div className="flex items-center gap-2 mt-3">
-                <Badge
-                  size="sm"
-                  color={getRoleBadgeColor(selectedTenant.role)}
-                  variant="light"
-                >
-                  <svg
-                    className="w-3 h-3 mr-1"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
+              <div className="space-y-2 mt-3">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    size="sm"
+                    color={getRoleBadgeColor(selectedTenant.role)}
+                    variant="light"
                   >
-                    <path
-                      fillRule="evenodd"
-                      d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                    <svg
+                      className="w-3 h-3 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
                       {roleInfo?.displayName || getRoleDisplayName(selectedTenant.role)}
-                </Badge>
-                <Badge size="sm" color="light" variant="light">
-                  {selectedTenant.tenants.name}
-                </Badge>
+                  </Badge>
+                  <Badge size="sm" color="light" variant="light">
+                    {selectedTenant.tenants.name}
+                  </Badge>
+                </div>
+                {/* Tenant ID Display */}
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                    Tenant ID: {selectedTenant.tenants.id}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(selectedTenant.tenants.id);
+                      setCopiedTenantId(selectedTenant.tenants.id);
+                      setTimeout(() => setCopiedTenantId(null), 2000);
+                    }}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    title="Copy tenant ID"
+                  >
+                    {copiedTenantId === selectedTenant.tenants.id ? (
+                      <CheckIcon className="w-3 h-3 text-green-600 dark:text-green-400" />
+                    ) : (
+                      <ClipboardDocumentIcon className="w-3 h-3" />
+                    )}
+                  </button>
+                </div>
               </div>
             )}
           </div>

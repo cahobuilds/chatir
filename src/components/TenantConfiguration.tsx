@@ -12,7 +12,8 @@ import {
   ArrowPathIcon,
   KeyIcon,
   EyeIcon,
-  EyeSlashIcon
+  EyeSlashIcon,
+  ClipboardDocumentIcon
 } from "@heroicons/react/24/outline";
 import { createClient } from "@/lib/supabase/client";
 
@@ -44,6 +45,7 @@ export default function TenantConfiguration() {
   const [showRetellApiKey, setShowRetellApiKey] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [isResellerTenant, setIsResellerTenant] = useState(false);
+  const [copiedTenantId, setCopiedTenantId] = useState(false);
 
   const supabase = createClient();
 
@@ -574,6 +576,29 @@ export default function TenantConfiguration() {
               {saving ? "Saving..." : "Save Name"}
             </button>
           </div>
+          {/* Tenant ID Display */}
+          {tenant && (
+            <div className="flex items-center gap-2 mt-3">
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                Tenant ID: {tenant.id}
+              </span>
+              <button
+                onClick={async () => {
+                  await navigator.clipboard.writeText(tenant.id);
+                  setCopiedTenantId(true);
+                  setTimeout(() => setCopiedTenantId(false), 2000);
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                title="Copy tenant ID"
+              >
+                {copiedTenantId ? (
+                  <CheckIcon className="w-3 h-3 text-green-600 dark:text-green-400" />
+                ) : (
+                  <ClipboardDocumentIcon className="w-3 h-3" />
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Branding Settings */}
