@@ -71,6 +71,18 @@ export async function POST(request: NextRequest) {
       maxRetries: 2,
     });
 
+    // First, verify the agent exists by checking if it's in the list
+    let agentExists = false;
+    try {
+      const agentList = await retellClient.agent.list();
+      agentExists = agentList.some((a: any) => {
+        const id = typeof a === 'string' ? a : (a as any).agent_id;
+        return id === retell_agent_id;
+      });
+    } catch (listError: any) {
+      console.warn('Could not verify agent existence via list:', listError.message);
+    }
+
     let retellAgent;
     try {
       retellAgent = await retellClient.agent.retrieve(retell_agent_id);
@@ -81,15 +93,26 @@ export async function POST(request: NextRequest) {
       const retellStatus = retellError?.response?.status || retellError?.status || 500;
       const retellErrorMessage = formatRetellError(retellError);
       
+      // Provide more specific error messages
+      let errorMessage = `Retell agent not found or inaccessible: ${retellErrorMessage}`;
+      
+      if (retellStatus === 400 && retellErrorMessage.includes('Invalid agent channel')) {
+        if (!agentExists) {
+          errorMessage = `Agent ID "${retell_agent_id}" does not exist in your Retell account. Please verify the agent ID is correct and exists in your Retell dashboard.`;
+        } else {
+          errorMessage = `Agent "${retell_agent_id}" exists but has an invalid channel configuration. Please check the agent settings in Retell dashboard.`;
+        }
+      } else if (retellStatus === 404 || !agentExists) {
+        errorMessage = `Agent ID "${retell_agent_id}" does not exist in your Retell account. Please verify the agent ID is correct. The agent may belong to a different Retell account.`;
+      }
+      
       // Return appropriate status code based on Retell's response
-      // 400 = Bad Request (invalid agent ID or channel issue)
-      // 404 = Not Found (agent doesn't exist)
-      // 500 = Server Error
       return NextResponse.json(
         { 
-          error: `Retell agent not found or inaccessible: ${retellErrorMessage}`,
+          error: errorMessage,
           retell_status: retellStatus,
           retell_error: retellError?.response?.data || retellError?.message,
+          agent_exists: agentExists,
         },
         { status: retellStatus >= 400 && retellStatus < 500 ? retellStatus : 500 }
       );
