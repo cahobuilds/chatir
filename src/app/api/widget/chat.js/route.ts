@@ -308,11 +308,53 @@ export async function GET(request: NextRequest) {
   }
   
   // Initialize widget when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', createWidget);
-  } else {
-    createWidget();
+  function initWidget() {
+    try {
+      // Check if widget already exists
+      if (document.getElementById('chat-widget-button')) {
+        console.log('Chat widget already initialized');
+        return;
+      }
+      
+      // Ensure body exists
+      if (!document.body) {
+        console.log('Document body not found, retrying in 100ms...');
+        setTimeout(initWidget, 100);
+        return;
+      }
+      
+      createWidget();
+      console.log('Chat widget initialized successfully');
+    } catch (error) {
+      console.error('Error initializing chat widget:', error);
+      // Retry after a delay if initialization fails
+      setTimeout(() => {
+        if (!document.getElementById('chat-widget-button')) {
+          console.log('Retrying widget initialization...');
+          initWidget();
+        }
+      }, 1000);
+    }
   }
+  
+  // Multiple initialization strategies to handle different page load scenarios
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWidget);
+  } else if (document.readyState === 'interactive' || document.readyState === 'complete') {
+    // DOM already loaded, initialize immediately
+    initWidget();
+  } else {
+    // Fallback: wait a bit and try
+    setTimeout(initWidget, 100);
+  }
+  
+  // Also try on window load as a fallback
+  window.addEventListener('load', () => {
+    if (!document.getElementById('chat-widget-button')) {
+      console.log('Window loaded, initializing widget...');
+      initWidget();
+    }
+  });
   
   // Add CSS animation for typing indicator
   const style = document.createElement('style');
@@ -321,8 +363,26 @@ export async function GET(request: NextRequest) {
       0%, 80%, 100% { transform: scale(0); }
       40% { transform: scale(1); }
     }
+    #chat-widget-button {
+      position: fixed !important;
+      z-index: 9999 !important;
+    }
+    #chat-widget-window {
+      position: fixed !important;
+      z-index: 9999 !important;
+    }
   \`;
-  document.head.appendChild(style);
+  
+  // Ensure head exists before appending style
+  if (document.head) {
+    document.head.appendChild(style);
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (document.head) {
+        document.head.appendChild(style);
+      }
+    });
+  }
 })();
 `;
 
