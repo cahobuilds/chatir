@@ -26,9 +26,11 @@ export async function GET(request: NextRequest) {
     return new NextResponse('// Error: agent_id parameter is required', {
       status: 400,
       headers: { 
-        'Content-Type': 'application/javascript',
+        'Content-Type': 'text/javascript; charset=utf-8',
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   }
