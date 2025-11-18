@@ -90,62 +90,68 @@ export async function POST(request: NextRequest) {
         const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
         
         if (retellApiKey) {
-          const retellClient = createRetellClient(retellApiKey);
+          const retellClient = createRetellClient(retellApiKey, {
+            timeout: 30 * 1000, // 30 seconds for chat operations
+            maxRetries: 2,
+          });
           
-          // For chat, we'll use Retell's LLM API if available
-          // For now, we'll create a simple response using the agent's configuration
-          // In a full implementation, you'd use Retell's chat API or websocket
+          // Get or create Retell chat session
+          let retellChatId: string;
           
-          // Get agent details from Retell
-          const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
+          // Check if we have an existing chat_id in interaction metadata
+          const { data: existingInteraction } = await adminSupabase
+            .from('interactions')
+            .select('metadata')
+            .eq('id', interactionId)
+            .single();
           
-          const config = typeof agent.configuration === 'string' 
-            ? JSON.parse(agent.configuration) 
-            : agent.configuration || {};
+          const interactionMetadata = existingInteraction?.metadata || {};
+          retellChatId = (interactionMetadata as any)?.retell_chat_id;
           
-          const responseEngine = retellAgent.response_engine;
-          const hasWebSocketUrl = responseEngine && 
-            typeof responseEngine === 'object' && 
-            responseEngine !== null &&
-            (responseEngine as any).llm_websocket_url;
-          
-          // If agent uses custom LLM WebSocket, we need to connect to it
-          // For now, use the agent's system prompt to generate a contextual response
-          const systemPrompt = config.prompt || 
-                              config.system_instructions || 
-                              (retellAgent as any).prompt ||
-                              'You are a helpful assistant.';
-          
-          // Build conversation context from transcript
-          const conversationContext = transcript
-            .slice(-10) // Last 10 messages for context
-            .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
-            .join('\n');
-          
-          // Generate a more contextual response based on the agent's prompt
-          // Note: This is a temporary solution. For production, integrate with the LLM WebSocket
-          let agentResponse: string;
-          
-          if (hasWebSocketUrl) {
-            // Agent uses custom LLM WebSocket - indicate this requires WebSocket connection
-            agentResponse = `I received your message: "${message}". This agent is configured to use a custom LLM via WebSocket. For real-time chat, please use the WebSocket connection.`;
-          } else {
-            // Try to generate a contextual response based on the prompt
-            // This is a simplified version - in production, you'd call the actual LLM
-            const userMessageLower = message.toLowerCase();
+          if (!retellChatId) {
+            // Create new chat session in Retell
+            const chatSession = await retellClient.chat.create({
+              agent_id: agent.retell_agent_id,
+              metadata: {
+                interaction_id: interactionId,
+                tenant_id: agent.tenant_id,
+                agent_id: agent.id,
+              },
+            });
             
-            // Check if it's a greeting
-            if (userMessageLower.match(/^(hi|hello|hey|greetings)/)) {
-              agentResponse = systemPrompt.includes('helpful') 
-                ? `Hello! ${systemPrompt.includes('customer') ? 'How can I help you today?' : 'How can I assist you?'}`
-                : `Hello! How can I help you?`;
-            } else if (userMessageLower.match(/(thank|thanks|appreciate)/)) {
-              agentResponse = `You're welcome! Is there anything else I can help you with?`;
-            } else {
-              // Generic contextual response based on system prompt
-              agentResponse = `Based on your message "${message}", I understand you're looking for assistance. ${systemPrompt.includes('support') ? 'I\'m here to help with your support needs.' : 'How can I assist you further?'}`;
-            }
+            retellChatId = chatSession.chat_id;
+            
+            // Store chat_id in interaction metadata
+            await adminSupabase
+              .from('interactions')
+              .update({
+                metadata: {
+                  ...interactionMetadata,
+                  retell_chat_id: retellChatId,
+                },
+              })
+              .eq('id', interactionId);
           }
+          
+          // Create chat completion with user message
+          const completion = await retellClient.chat.createChatCompletion({
+            chat_id: retellChatId,
+            content: message,
+          });
+          
+          // Extract agent response from completion messages
+          // The response will be in messages array with role 'agent'
+          const agentMessages = completion.messages.filter(
+            (msg: any) => msg.role === 'agent'
+          );
+          
+          if (agentMessages.length === 0) {
+            throw new Error('No agent response received from Retell');
+          }
+          
+          // Get the latest agent message (should be the response to our user message)
+          const latestAgentMessage = agentMessages[agentMessages.length - 1];
+          const agentResponse = latestAgentMessage.content || 'I apologize, but I couldn\'t generate a response.';
           
           // Add agent response to transcript
           transcript.push({
@@ -170,7 +176,14 @@ export async function POST(request: NextRequest) {
           });
         }
       } catch (retellError: any) {
-        console.error('Retell error:', retellError);
+        console.error('Retell chat error:', retellError);
+        // Log detailed error for debugging
+        if (retellError.response) {
+          console.error('Retell API error response:', {
+            status: retellError.response.status,
+            data: retellError.response.data,
+          });
+        }
         // Fall through to simple response
       }
     }
