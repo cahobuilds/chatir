@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function TestWidgetPage() {
+function TestWidgetContent() {
   const searchParams = useSearchParams();
   const [agentId, setAgentId] = useState<string>('');
   const [widgetLoaded, setWidgetLoaded] = useState(false);
@@ -213,5 +213,20 @@ export default function TestWidgetPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function TestWidgetPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold mb-2">Chat Widget Test Page</h1>
+          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+        </div>
+      </div>
+    }>
+      <TestWidgetContent />
+    </Suspense>
   );
 }
