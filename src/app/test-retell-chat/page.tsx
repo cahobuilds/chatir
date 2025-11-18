@@ -251,6 +251,28 @@ export default function RetellChatTestPage() {
           Direct connection to Retell Chat API for debugging connection issues
         </p>
 
+        {authError && (
+          <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/20 border border-red-400 dark:border-red-800 rounded-lg">
+            <p className="text-red-800 dark:text-red-200 font-semibold">Authentication Error:</p>
+            <p className="text-red-700 dark:text-red-300">{authError}</p>
+            <p className="text-red-700 dark:text-red-300 mt-2">
+              <a href="/auth/login" className="underline">Click here to log in</a>
+            </p>
+          </div>
+        )}
+
+        {isAuthenticated === false && !authError && (
+          <div className="mb-4 p-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-400 dark:border-yellow-800 rounded-lg">
+            <p className="text-yellow-800 dark:text-yellow-200 font-semibold">Not Authenticated</p>
+            <p className="text-yellow-700 dark:text-yellow-300">
+              Please log in to use this test page. API calls will fail with 401 Unauthorized until you are authenticated.
+            </p>
+            <p className="text-yellow-700 dark:text-yellow-300 mt-2">
+              <a href="/auth/login" className="underline">Click here to log in</a>
+            </p>
+          </div>
+        )}
+
         {error && (
           <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/20 border border-red-400 dark:border-red-800 rounded-lg">
             <p className="text-red-800 dark:text-red-200 font-semibold">Error:</p>
