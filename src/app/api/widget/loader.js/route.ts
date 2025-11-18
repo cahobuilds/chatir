@@ -56,7 +56,23 @@ export async function GET(request: NextRequest) {
   });
   
   // Determine API base URL
-  const apiUrl = scriptTag.getAttribute('data-api-url') || window.location.origin;
+  // Use data-api-url if provided, otherwise extract from script src
+  let apiUrl = scriptTag.getAttribute('data-api-url');
+  if (!apiUrl) {
+    // Extract base URL from script src
+    const scriptSrc = scriptTag.src || scriptTag.getAttribute('src');
+    if (scriptSrc) {
+      try {
+        const url = new URL(scriptSrc);
+        apiUrl = url.origin;
+      } catch (e) {
+        console.warn('[Chat Widget Loader] Could not parse script src, using current origin');
+        apiUrl = window.location.origin;
+      }
+    } else {
+      apiUrl = window.location.origin;
+    }
+  }
   const messageUrl = apiUrl + '/api/widget/chat/message';
   
   console.log('[Chat Widget Loader] API URL:', messageUrl);
