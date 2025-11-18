@@ -76,9 +76,22 @@ export async function POST(request: NextRequest) {
       retellAgent = await retellClient.agent.retrieve(retell_agent_id);
     } catch (retellError: any) {
       logRetellError(retellError, 'Agent Link - Retell Retrieve');
+      
+      // Get the actual status code from Retell error
+      const retellStatus = retellError?.response?.status || retellError?.status || 500;
+      const retellErrorMessage = formatRetellError(retellError);
+      
+      // Return appropriate status code based on Retell's response
+      // 400 = Bad Request (invalid agent ID or channel issue)
+      // 404 = Not Found (agent doesn't exist)
+      // 500 = Server Error
       return NextResponse.json(
-        { error: `Retell agent not found or inaccessible: ${formatRetellError(retellError)}` },
-        { status: 404 }
+        { 
+          error: `Retell agent not found or inaccessible: ${retellErrorMessage}`,
+          retell_status: retellStatus,
+          retell_error: retellError?.response?.data || retellError?.message,
+        },
+        { status: retellStatus >= 400 && retellStatus < 500 ? retellStatus : 500 }
       );
     }
 
