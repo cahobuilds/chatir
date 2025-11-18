@@ -79,27 +79,7 @@ export async function GET(request: NextRequest) {
     button.id = 'chat-widget-button';
     button.setAttribute('aria-label', 'Open chat');
     button.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="currentColor"/></svg>';
-    button.style.cssText = \`
-      position: fixed !important;
-      bottom: 20px !important;
-      right: 20px !important;
-      width: 60px !important;
-      height: 60px !important;
-      background-color: \${config.primaryColor} !important;
-      color: \${config.textColor} !important;
-      border-radius: 50% !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      cursor: pointer !important;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-      z-index: 9999 !important;
-      transition: transform 0.2s !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      border: none !important;
-      box-sizing: border-box !important;
-    \`;
+    button.style.cssText = 'position: fixed !important; bottom: 20px !important; right: 20px !important; width: 60px !important; height: 60px !important; background-color: ' + config.primaryColor + ' !important; color: ' + config.textColor + ' !important; border-radius: 50% !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; z-index: 9999 !important; transition: transform 0.2s !important; margin: 0 !important; padding: 0 !important; border: none !important; box-sizing: border-box !important;';
     button.addEventListener('click', toggleChat);
     button.addEventListener('mouseenter', () => {
       button.style.transform = 'scale(1.1)';
@@ -111,92 +91,32 @@ export async function GET(request: NextRequest) {
     // Create chat window
     chatWindow = document.createElement('div');
     chatWindow.id = 'chat-widget-window';
-    chatWindow.style.cssText = \`
-      position: fixed !important;
-      bottom: 90px !important;
-      right: 20px !important;
-      width: 380px !important;
-      height: 600px !important;
-      max-height: calc(100vh - 120px) !important;
-      background-color: \${config.backgroundColor} !important;
-      border-radius: \${config.borderRadius} !important;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important;
-      display: none !important;
-      flex-direction: column !important;
-      z-index: 9999 !important;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      border: none !important;
-      box-sizing: border-box !important;
-    \`;
+    chatWindow.style.cssText = 'position: fixed !important; bottom: 90px !important; right: 20px !important; width: 380px !important; height: 600px !important; max-height: calc(100vh - 120px) !important; background-color: ' + config.backgroundColor + ' !important; border-radius: ' + config.borderRadius + ' !important; box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important; display: none !important; flex-direction: column !important; z-index: 9999 !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important; margin: 0 !important; padding: 0 !important; border: none !important; box-sizing: border-box !important;';
     
     // Header
     const header = document.createElement('div');
-    header.style.cssText = \`
-      background-color: \${config.primaryColor};
-      color: \${config.textColor};
-      padding: 16px;
-      border-radius: \${config.borderRadius} \${config.borderRadius} 0 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    \`;
-    header.innerHTML = \`
-      <div>
-        <div style="font-weight: 600; font-size: 16px;">Chat Support</div>
-        <div style="font-size: 12px; opacity: 0.9;">We're here to help</div>
-      </div>
-      <button id="chat-widget-close" style="background: none; border: none; color: \${config.textColor}; cursor: pointer; font-size: 24px; line-height: 1;">&times;</button>
-    \`;
+    header.style.cssText = 'background-color: ' + config.primaryColor + '; color: ' + config.textColor + '; padding: 16px; border-radius: ' + config.borderRadius + ' ' + config.borderRadius + ' 0 0; display: flex; justify-content: space-between; align-items: center;';
+    header.innerHTML = '<div><div style="font-weight: 600; font-size: 16px;">Chat Support</div><div style="font-size: 12px; opacity: 0.9;">We\'re here to help</div></div><button id="chat-widget-close" style="background: none; border: none; color: ' + config.textColor + '; cursor: pointer; font-size: 24px; line-height: 1;">&times;</button>';
     header.querySelector('#chat-widget-close').addEventListener('click', toggleChat);
     
     // Messages container
     const messagesContainer = document.createElement('div');
     messagesContainer.id = 'chat-widget-messages';
-    messagesContainer.style.cssText = \`
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    \`;
+    messagesContainer.style.cssText = 'flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;';
     
     // Input container
     const inputContainer = document.createElement('div');
-    inputContainer.style.cssText = \`
-      padding: 16px;
-      border-top: 1px solid #e5e7eb;
-      display: flex;
-      gap: 8px;
-    \`;
+    inputContainer.style.cssText = 'padding: 16px; border-top: 1px solid #e5e7eb; display: flex; gap: 8px;';
     
     const input = document.createElement('input');
     input.id = 'chat-widget-input';
     input.type = 'text';
     input.placeholder = 'Type your message...';
-    input.style.cssText = \`
-      flex: 1;
-      padding: 12px;
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      font-size: 14px;
-      outline: none;
-    \`;
+    input.style.cssText = 'flex: 1; padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 14px; outline: none;';
     
     const sendButton = document.createElement('button');
     sendButton.innerHTML = 'Send';
-    sendButton.style.cssText = \`
-      padding: 12px 24px;
-      background-color: \${config.primaryColor};
-      color: \${config.textColor};
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-    \`;
+    sendButton.style.cssText = 'padding: 12px 24px; background-color: ' + config.primaryColor + '; color: ' + config.textColor + '; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;';
     
     sendButton.addEventListener('click', sendMessage);
     input.addEventListener('keypress', (e) => {
@@ -256,19 +176,10 @@ export async function GET(request: NextRequest) {
   function addMessage(role, content) {
     const messagesContainer = document.getElementById('chat-widget-messages');
     const messageDiv = document.createElement('div');
-    messageDiv.style.cssText = \`
-      display: flex;
-      justify-content: \${role === 'user' ? 'flex-end' : 'flex-start'};
-      margin-bottom: 8px;
-    \`;
+    messageDiv.style.cssText = 'display: flex; justify-content: ' + (role === 'user' ? 'flex-end' : 'flex-start') + '; margin-bottom: 8px;';
     
     const bubble = document.createElement('div');
-    bubble.style.cssText = \`
-      max-width: 75%;
-      padding: 10px 14px;
-      border-radius: 18px;
-      font-size: 14px;
-      line-height: 1.4;
+    bubble.style.cssText = 'max-width: 75%; padding: 10px 14px; border-radius: 18px; font-size: 14px; line-height: 1.4;';
       word-wrap: break-word;
       \${role === 'user' 
         ? \`background-color: \${config.primaryColor}; color: \${config.textColor};\`
@@ -295,11 +206,7 @@ export async function GET(request: NextRequest) {
     // Show typing indicator
     const typingIndicator = document.createElement('div');
     typingIndicator.id = 'typing-indicator';
-    typingIndicator.style.cssText = \`
-      display: flex;
-      justify-content: flex-start;
-      margin-bottom: 8px;
-    \`;
+    typingIndicator.style.cssText = 'display: flex; justify-content: flex-start; margin-bottom: 8px;';
     typingIndicator.innerHTML = '<div style="background-color: #f3f4f6; padding: 10px 14px; border-radius: 18px;"><div style="display: flex; gap: 4px;"><div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite;"></div><div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite 0.2s;"></div><div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite 0.4s;"></div></div></div>';
     document.getElementById('chat-widget-messages').appendChild(typingIndicator);
     
