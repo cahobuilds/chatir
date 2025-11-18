@@ -762,10 +762,24 @@ export default function AgentTestModal({
       return;
     }
 
+    const userMessageText = chatMessage.trim();
     setIsTesting(true);
     setError(null);
     setSuccess(null);
     setChatResponse(null);
+
+    // Add user message to conversation
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: "user",
+      text: userMessageText,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    // Clear input
+    const messageToSend = userMessageText;
+    setChatMessage("");
 
     try {
       const response = await fetch(`/api/agents/${agent.id}/test`, {
@@ -773,7 +787,7 @@ export default function AgentTestModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           test_type: "chat",
-          message: chatMessage.trim(),
+          message: messageToSend,
         }),
       });
 
@@ -784,18 +798,43 @@ export default function AgentTestModal({
           // Handle cases where response is OK but success is false
           const errorMsg = data.response || data.message || data.error || "Test failed";
           setError(errorMsg);
-          setChatResponse(null);
+          
+          // Add error message to conversation
+          const errorMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            type: "agent",
+            text: `Error: ${errorMsg}`,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, errorMessage]);
         } else {
-          // Success case
-          setChatResponse(data.response || "Test response received");
+          // Success case - add agent response to conversation
+          const agentResponseText = data.response || "Test response received";
+          setChatResponse(agentResponseText);
           setSuccess("Chat test completed successfully!");
           setTimeout(() => setSuccess(null), 3000);
+          
+          const agentMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            type: "agent",
+            text: agentResponseText,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, agentMessage]);
         }
       } else {
         // Error response
         const errorMsg = data.response || data.error || data.message || `Failed to test chat agent (${response.status})`;
         setError(errorMsg);
-        setChatResponse(null);
+        
+        // Add error message to conversation
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: "agent",
+          text: `Error: ${errorMsg}`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
         
         // Show specific guidance for common errors
         if (response.status === 422) {
@@ -808,8 +847,17 @@ export default function AgentTestModal({
       }
     } catch (error: any) {
       console.error("Chat test error:", error);
-      setError(error.message || "Failed to test chat agent. Please check your connection and try again.");
-      setChatResponse(null);
+      const errorMsg = error.message || "Failed to test chat agent. Please check your connection and try again.";
+      setError(errorMsg);
+      
+      // Add error message to conversation
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "agent",
+        text: `Error: ${errorMsg}`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsTesting(false);
     }
