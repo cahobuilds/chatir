@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
         is_published: isPublished,
       },
       validation_method: validationMethod || 'agent.retrieve()',
-      message: `Agent "${agent.name}" successfully linked to Retell agent "${retellAgentData.agent_name}" (${channel} channel)`,
+      message: `Agent "${agent.name}" successfully linked to Retell agent "${retellAgentData?.agent_name || retell_agent_id}" (${channel || 'unknown'} channel)`,
     });
   } catch (error: any) {
     logRetellError(error, 'Agent Link');
