@@ -179,13 +179,9 @@ export async function GET(request: NextRequest) {
     messageDiv.style.cssText = 'display: flex; justify-content: ' + (role === 'user' ? 'flex-end' : 'flex-start') + '; margin-bottom: 8px;';
     
     const bubble = document.createElement('div');
-    bubble.style.cssText = 'max-width: 75%; padding: 10px 14px; border-radius: 18px; font-size: 14px; line-height: 1.4;';
-      word-wrap: break-word;
-      \${role === 'user' 
-        ? \`background-color: \${config.primaryColor}; color: \${config.textColor};\`
-        : \`background-color: #f3f4f6; color: #1f2937;\`
-      }
-    \`;
+    const bubbleBgColor = role === 'user' ? config.primaryColor : '#f3f4f6';
+    const bubbleTextColor = role === 'user' ? config.textColor : '#1f2937';
+    bubble.style.cssText = 'max-width: 75%; padding: 10px 14px; border-radius: 18px; font-size: 14px; line-height: 1.4; word-wrap: break-word; background-color: ' + bubbleBgColor + '; color: ' + bubbleTextColor + ';';
     bubble.textContent = content;
     
     messageDiv.appendChild(bubble);
