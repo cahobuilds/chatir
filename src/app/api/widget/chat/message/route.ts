@@ -6,6 +6,17 @@ import { NextRequest, NextResponse } from 'next/server';
 // POST /api/widget/chat/message - Public endpoint for chat widget messages
 // No authentication required - uses agent_id for authorization
 export async function POST(request: NextRequest) {
+  // Handle CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
+    });
+  }
   try {
     const body = await request.json();
     const { agent_id, message, conversation_id, metadata } = body;
@@ -211,10 +222,23 @@ export async function POST(request: NextRequest) {
       conversation_id: interactionId,
       response: agentResponse,
       agent_name: agent.name,
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
     });
   } catch (error: any) {
     console.error('Chat widget error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { 
+      status: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
+    });
   }
 }
 

@@ -4,14 +4,19 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const agentId = searchParams.get('agent_id');
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
-                  'http://localhost:3000';
+  
+  // Dynamically determine base URL from request
+  const url = new URL(request.url);
+  const baseUrl = `${url.protocol}//${url.host}`;
 
   if (!agentId) {
     return new NextResponse('// Error: agent_id parameter is required', {
       status: 400,
-      headers: { 'Content-Type': 'application/javascript' },
+      headers: { 
+        'Content-Type': 'application/javascript',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET',
+      },
     });
   }
 
@@ -297,6 +302,8 @@ export async function GET(request: NextRequest) {
     headers: {
       'Content-Type': 'application/javascript',
       'Cache-Control': 'public, max-age=3600',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET',
     },
   });
 }
