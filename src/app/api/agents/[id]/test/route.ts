@@ -172,7 +172,48 @@ export async function POST(
           maxRetries: 2,
         });
 
+        // Check agent channel and publish status before attempting chat session
+        let isPublished = false;
+        let channel: string | null = null;
+        try {
+          const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
+          const retellAgentData = retellAgent as any;
+          isPublished = retellAgentData.is_published || false;
+          channel = retellAgentData.channel || null;
+          console.log(`[Agent Test] Agent ${agent.retell_agent_id} - Channel: ${channel}, Published: ${isPublished}`);
+        } catch (retrieveError: any) {
+          console.error('[Agent Test] Error checking agent status:', retrieveError.message);
+        }
+
+        // Check if agent is a chat agent
+        if (channel && channel !== 'chat') {
+          return NextResponse.json({
+            success: false,
+            message: 'Agent is not a chat agent',
+            response: `Cannot start a chat session: Agent "${agent.name}" is configured as a "${channel}" agent in Retell AI, not a chat agent. Please create or convert the agent to a chat agent in the Retell dashboard.`,
+            agent_id: agent.id,
+            retell_agent_id: agent.retell_agent_id,
+            channel: channel,
+            error: 'Agent is not a chat agent',
+            requires_chat_channel: true,
+          }, { status: 422 });
+        }
+
+        if (!isPublished) {
+          return NextResponse.json({
+            success: false,
+            message: 'Agent is not published',
+            response: `Cannot start a chat session: Agent "${agent.name}" is not published in Retell AI. Please publish the agent first using the publish button.`,
+            agent_id: agent.id,
+            retell_agent_id: agent.retell_agent_id,
+            channel: channel,
+            error: 'Agent not published',
+            requires_publish: true,
+          }, { status: 422 });
+        }
+
         // Create a new chat session for this test
+        console.log(`[Agent Test] Creating chat session for agent ${agent.retell_agent_id}`);
         const chatSession = await retellClient.chat.create({
           agent_id: agent.retell_agent_id,
           metadata: {
@@ -182,6 +223,7 @@ export async function POST(
             tenant_id: agent.tenant_id,
           },
         });
+        console.log(`[Agent Test] Chat session created: ${chatSession.chat_id}`);
 
         // Create chat completion with user message
         const completion = await retellClient.chat.createChatCompletion({
@@ -222,12 +264,33 @@ export async function POST(
           agent_id: agent.id,
         });
       } catch (retellError: any) {
-        console.error('Retell chat test error:', retellError);
+        console.error('[Agent Test] Retell chat test error:', retellError);
+        console.error('[Agent Test] Error details:', {
+          message: retellError?.message,
+          status: retellError?.response?.status,
+          statusText: retellError?.response?.statusText,
+          data: retellError?.response?.data,
+          agent_id: agent.retell_agent_id,
+        });
         
-        // Return error details for debugging
+        // Check if it's a 422 error (agent not published or invalid)
+        const statusCode = retellError?.response?.status || retellError?.status || 500;
         const errorMessage = retellError?.response?.data?.message || 
                            retellError?.message || 
                            'Failed to get response from Retell AI';
+        
+        // If 422, provide specific guidance about publishing
+        if (statusCode === 422 || errorMessage.includes('Cannot start a chat session')) {
+          return NextResponse.json({
+            success: false,
+            message: 'Cannot start chat session',
+            response: `Error: ${errorMessage}. The agent may not be published. Please use the publish button to publish the agent first.`,
+            agent_id: agent.id,
+            retell_agent_id: agent.retell_agent_id,
+            error: errorMessage,
+            requires_publish: true,
+          }, { status: 422 });
+        }
         
         return NextResponse.json({
           success: false,
@@ -235,7 +298,8 @@ export async function POST(
           response: `Error: ${errorMessage}. Please check the agent configuration in Retell AI.`,
           agent_id: agent.id,
           error: errorMessage,
-        }, { status: 500 });
+          status_code: statusCode,
+        }, { status: statusCode >= 400 && statusCode < 500 ? statusCode : 500 });
       }
     }
 

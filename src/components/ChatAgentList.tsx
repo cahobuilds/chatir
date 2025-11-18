@@ -35,6 +35,9 @@ interface Agent {
   };
   created_at: string;
   updated_at: string;
+  // Retell channel information (fetched from Retell API)
+  retell_channel?: "chat" | "voice" | null;
+  retell_is_published?: boolean | null;
 }
 
 type SortField = "name" | "status" | "created_at";
@@ -53,6 +56,9 @@ export default function ChatAgentList() {
   const [isEmbedModalOpen, setIsEmbedModalOpen] = useState(false);
   const [embeddingAgent, setEmbeddingAgent] = useState<Agent | null>(null);
   const [embedCodeCopied, setEmbedCodeCopied] = useState(false);
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [linkingAgent, setLinkingAgent] = useState<Agent | null>(null);
+  const [retellAgentIdInput, setRetellAgentIdInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -192,6 +198,54 @@ export default function ChatAgentList() {
     }
   };
 
+  const handleLinkRetellAgent = async (agentId: string, retellAgentId: string) => {
+    try {
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch('/api/agents/link-retell', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          agent_id: agentId,
+          retell_agent_id: retellAgentId.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Link failed');
+      }
+
+      const data = await response.json();
+      setSuccess(data.message || 'Agent linked successfully!');
+      
+      // Close modal and reset input
+      setIsLinkModalOpen(false);
+      setLinkingAgent(null);
+      setRetellAgentIdInput("");
+      
+      // Refresh agents to get updated channel info
+      await fetchAgents();
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err: any) {
+      console.error("Link error:", err);
+      setError(err.message || 'Failed to link agent');
+    }
+  };
+
+  const handleOpenLinkModal = (agent: Agent) => {
+    setLinkingAgent(agent);
+    setRetellAgentIdInput("");
+    setError(null);
+    setSuccess(null);
+    setIsLinkModalOpen(true);
+  };
+
   const fetchAgents = async () => {
     try {
       setLoading(true);
@@ -201,8 +255,43 @@ export default function ChatAgentList() {
       const response = await fetch(`/api/agents?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
-        // API already filters by type, so use directly
-        setAgents(data.agents || []);
+        const agentsList = data.agents || [];
+        
+        // Fetch channel and publish status for each agent with retell_agent_id
+        const agentsWithChannelInfo = await Promise.all(
+          agentsList.map(async (agent: Agent) => {
+            if (!agent.retell_agent_id) {
+              return agent;
+            }
+            
+            try {
+              const retellResponse = await fetch(`/api/retell/agents/${agent.id}`);
+              if (retellResponse.ok) {
+                const retellData = await retellResponse.json();
+                return {
+                  ...agent,
+                  retell_channel: retellData.channel || null,
+                  retell_is_published: retellData.is_published || false,
+                };
+              }
+            } catch (err) {
+              console.error(`Failed to fetch channel info for agent ${agent.id}:`, err);
+            }
+            
+            return agent;
+          })
+        );
+        
+        setAgents(agentsWithChannelInfo);
+        
+        // Update publish status from fetched data
+        const newPublishStatus: Record<string, boolean> = {};
+        agentsWithChannelInfo.forEach((agent: Agent) => {
+          if (agent.retell_is_published !== undefined && agent.retell_is_published !== null) {
+            newPublishStatus[agent.id] = agent.retell_is_published;
+          }
+        });
+        setPublishStatus(newPublishStatus);
       }
     } catch (error) {
       console.error("Failed to fetch agents:", error);
@@ -319,35 +408,11 @@ export default function ChatAgentList() {
       const data = await response.json();
       const localAgentId = data.agent.id;
 
-      // Step 2: Create agent in Retell AI (for chat agents, this enables real responses)
-      try {
-        const retellResponse = await fetch("/api/retell/agents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tenant_id: currentOrganization.id,
-            agent_id: localAgentId,
-            agent_name: formData.name.trim(),
-            // For chat agents, don't include voice_id - Retell will use default LLM
-            // The API will automatically fetch an available LLM if none is specified
-          }),
-        });
-
-        if (!retellResponse.ok) {
-          const retellError = await retellResponse.json();
-          console.warn("Agent created locally but Retell creation failed:", retellError);
-          // Still show success, but warn that Retell integration failed
-          setSuccess("Agent created locally, but Retell integration failed. You can sync agents later.");
-          setTimeout(() => setSuccess(null), 5000);
-        } else {
-          setSuccess("Agent created successfully and linked to Retell AI!");
-        }
-      } catch (retellError: any) {
-        console.error("Failed to create agent in Retell:", retellError);
-        // Still show success for local creation
-        setSuccess("Agent created locally. Retell integration failed - you can sync agents later.");
-        setTimeout(() => setSuccess(null), 5000);
-      }
+      // Step 2: Skip Retell creation - user should create chat agent in Retell dashboard
+      // API-created agents default to "voice" channel, so we skip automatic creation
+      // User can link manually created chat agent using the "Link Retell Agent" button
+      setSuccess("Agent created locally! Next steps: 1) Create a chat agent in Retell dashboard, 2) Use 'Link Retell Agent' button to connect it");
+      setTimeout(() => setSuccess(null), 10000);
 
       setIsCreateModalOpen(false);
       await fetchAgents();
@@ -619,10 +684,19 @@ export default function ChatAgentList() {
                       </span>
                       <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
                         ID: {agent.retell_agent_id || agent.id.slice(0, 8)}...
-                        {agent.retell_agent_id && publishStatus[agent.id] !== undefined && (
-                          <span className={`ml-2 ${publishStatus[agent.id] ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
-                            • {publishStatus[agent.id] ? 'Published' : 'Not Published'}
-                          </span>
+                        {agent.retell_agent_id && (
+                          <>
+                            {agent.retell_channel && (
+                              <span className={`ml-2 ${agent.retell_channel === 'chat' ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                                • {agent.retell_channel === 'chat' ? 'Chat' : 'Voice'} Channel
+                              </span>
+                            )}
+                            {publishStatus[agent.id] !== undefined && (
+                              <span className={`ml-2 ${publishStatus[agent.id] ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+                                • {publishStatus[agent.id] ? 'Published' : 'Not Published'}
+                              </span>
+                            )}
+                          </>
                         )}
                       </span>
                     </TableCell>
@@ -650,26 +724,41 @@ export default function ChatAgentList() {
                     </TableCell>
                     <TableCell className="px-5 py-4 text-start">
                       <div className="flex items-center gap-2">
-                        {agent.retell_agent_id && (
+                        {agent.retell_agent_id ? (
+                          <>
+                            {agent.retell_channel === 'chat' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handlePublishAgent(agent)}
+                                title={publishStatus[agent.id] ? "Published - Click to republish" : "Publish Agent"}
+                                disabled={publishing[agent.id]}
+                                className={publishStatus[agent.id] ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : ""}
+                              >
+                                <CloudArrowUpIcon className={`w-4 h-4 ${publishing[agent.id] ? 'animate-bounce' : ''}`} />
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleTest(agent)}
+                              title={agent.retell_channel === 'voice' ? "Warning: Agent is voice channel, chat test may fail" : "Test Agent"}
+                              disabled={agent.retell_channel === 'voice'}
+                            >
+                              <PlayIcon className="w-4 h-4" />
+                            </Button>
+                          </>
+                        ) : (
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handlePublishAgent(agent)}
-                            title={publishStatus[agent.id] ? "Published - Click to republish" : "Publish Agent"}
-                            disabled={publishing[agent.id]}
-                            className={publishStatus[agent.id] ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : ""}
+                            onClick={() => handleOpenLinkModal(agent)}
+                            title="Link to Retell Agent"
+                            className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
                           >
-                            <CloudArrowUpIcon className={`w-4 h-4 ${publishing[agent.id] ? 'animate-bounce' : ''}`} />
+                            Link Retell Agent
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleTest(agent)}
-                          title="Test Agent"
-                        >
-                          <PlayIcon className="w-4 h-4" />
-                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -935,6 +1024,89 @@ export default function ChatAgentList() {
             </div>
           </Form>
         </div>
+      </Modal>
+
+      {/* Link Retell Agent Modal */}
+      <Modal
+        isOpen={isLinkModalOpen}
+        onClose={() => {
+          setIsLinkModalOpen(false);
+          setLinkingAgent(null);
+          setRetellAgentIdInput("");
+          setError(null);
+          setSuccess(null);
+        }}
+        title="Link Retell Agent"
+      >
+        {linkingAgent && (
+          <div className="space-y-4 px-6 py-4">
+            {error && (
+              <div className="mb-4">
+                <Alert variant="error" title="Error" message={error} />
+              </div>
+            )}
+
+            {success && (
+              <div className="mb-4">
+                <Alert variant="success" title="Success" message={success} />
+              </div>
+            )}
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+              <h4 className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
+                Instructions
+              </h4>
+              <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-decimal list-inside">
+                <li>Create a <strong>chat agent</strong> in the Retell dashboard</li>
+                <li>Copy the Retell Agent ID (starts with <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">agent_</code>)</li>
+                <li>Paste it below and click "Link Agent"</li>
+                <li>Publish the agent in Retell dashboard when ready</li>
+              </ol>
+            </div>
+
+            <div>
+              <Label htmlFor="retell-agent-id">Retell Agent ID</Label>
+              <Input
+                type="text"
+                id="retell-agent-id"
+                placeholder="agent_xxxxxxxxxxxxx"
+                value={retellAgentIdInput}
+                onChange={(e) => setRetellAgentIdInput(e.target.value)}
+                className="mt-1"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Agent: <strong>{linkingAgent.name}</strong> (Type: {linkingAgent.type})
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsLinkModalOpen(false);
+                  setLinkingAgent(null);
+                  setRetellAgentIdInput("");
+                  setError(null);
+                  setSuccess(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!retellAgentIdInput.trim()) {
+                    setError("Please enter a Retell Agent ID");
+                    return;
+                  }
+                  handleLinkRetellAgent(linkingAgent.id, retellAgentIdInput.trim());
+                }}
+                disabled={!retellAgentIdInput.trim()}
+              >
+                Link Agent
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </>
   );

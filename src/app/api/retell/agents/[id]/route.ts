@@ -64,8 +64,18 @@ export async function GET(
 
     // Get Retell AI agent details using reseller's API key
     const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
+    const retellAgentData = retellAgent as any;
 
-    return NextResponse.json({ retell_agent: retellAgent });
+    // Extract channel information for chat agent detection
+    const channel = retellAgentData.channel || null;
+    const isPublished = retellAgentData.is_published || false;
+
+    return NextResponse.json({ 
+      retell_agent: retellAgent,
+      channel: channel, // 'chat' or 'voice'
+      is_published: isPublished,
+      is_chat_agent: channel === 'chat',
+    });
   } catch (error: any) {
     // Log error with context
     logRetellError(error, 'Agent Retrieval');
