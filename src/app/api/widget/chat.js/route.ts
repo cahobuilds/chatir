@@ -220,9 +220,22 @@ export async function GET(request: NextRequest) {
     // Append to body
     if (document.body) {
       document.body.appendChild(widgetContainer);
-      console.log('Widget container appended to body');
+      console.log('[Chat Widget] Widget container appended to body');
+      
+      // Verify it was added
+      const addedButton = document.getElementById('chat-widget-button');
+      if (addedButton) {
+        console.log('[Chat Widget] Button verified in DOM');
+        const computedStyle = window.getComputedStyle(addedButton);
+        console.log('[Chat Widget] Button display:', computedStyle.display);
+        console.log('[Chat Widget] Button visibility:', computedStyle.visibility);
+        console.log('[Chat Widget] Button position:', computedStyle.position);
+        console.log('[Chat Widget] Button z-index:', computedStyle.zIndex);
+      } else {
+        console.error('[Chat Widget] Button not found in DOM after append!');
+      }
     } else {
-      console.error('Cannot append widget: document.body is null');
+      console.error('[Chat Widget] Cannot append widget: document.body is null');
       return;
     }
     
