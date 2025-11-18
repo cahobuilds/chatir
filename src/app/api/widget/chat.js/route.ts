@@ -68,11 +68,13 @@ export async function GET(request: NextRequest) {
   function createWidget() {
     // Check if already created
     if (document.getElementById('chat-widget-button')) {
-      console.log('Widget already exists');
+      console.log('[Chat Widget] Widget already exists, skipping');
       return;
     }
     
-    console.log('Creating chat widget for agent:', agentId);
+    console.log('[Chat Widget] Creating widget for agent:', agentId);
+    
+    try {
     
     // Create button
     const button = document.createElement('div');
