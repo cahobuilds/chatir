@@ -58,6 +58,7 @@ export default function RetellChatTestPage() {
       const response = await fetch('/api/test-retell-chat/create-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify({ retell_agent_id: retellAgentId }),
       });
 
@@ -115,6 +116,7 @@ export default function RetellChatTestPage() {
       const response = await fetch('/api/test-retell-chat/send-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify({ chat_id: chatId, message: userMessage }),
       });
 
