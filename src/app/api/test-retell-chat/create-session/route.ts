@@ -10,8 +10,18 @@ export async function POST(request: NextRequest) {
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      console.error('[Test Retell Chat] Authentication error:', {
+        authError: authError?.message || 'No error object',
+        hasUser: !!user,
+        errorDetails: authError,
+      });
+      return NextResponse.json({ 
+        error: 'Unauthorized',
+        details: authError?.message || 'User not authenticated'
+      }, { status: 401 });
     }
+    
+    console.log('[Test Retell Chat] User authenticated:', user.id);
 
     const body = await request.json();
     const { retell_agent_id, agent_id } = body;

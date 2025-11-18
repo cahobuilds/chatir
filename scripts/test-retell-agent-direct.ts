@@ -49,151 +49,241 @@ async function getResellerRetellConfig(organizationTenantId: string): Promise<st
   return null;
 }
 
-async function testRetellAgent(retellAgentId: string) {
-  console.log(`Testing Retell Agent ID: ${retellAgentId}\n`);
+async function testRetellAgentDirect(retellAgentId: string) {
+  console.log(`Testing Retell Agent: ${retellAgentId}\n`);
   console.log('============================================================\n');
 
-  // First, find which tenant/agent uses this Retell agent ID
-  const { data: agents, error: agentsError } = await supabase
+  // First, try to find which tenant this agent belongs to
+  console.log('1. Looking up agent in database...');
+  const { data: agents, error: agentError } = await supabase
     .from('agents')
-    .select('id, name, type, tenant_id, retell_agent_id')
-    .eq('retell_agent_id', retellAgentId)
-    .limit(1);
+    .select('id, name, type, tenant_id, retell_agent_id, is_active, created_at')
+    .eq('retell_agent_id', retellAgentId);
 
-  if (agentsError) {
-    console.error('Error querying agents:', agentsError);
-  }
-
-  let tenantId: string | null = null;
-  if (agents && agents.length > 0) {
-    tenantId = agents[0].tenant_id;
-    console.log('✅ Found agent in database:');
-    console.log(`   Name: ${agents[0].name}`);
-    console.log(`   Type: ${agents[0].type}`);
-    console.log(`   Tenant ID: ${tenantId}\n`);
-  } else {
-    console.log('⚠️  Agent not found in database. Will try to get Retell API key from first reseller.\n');
-    
-    // Try to find any reseller with Retell API key
-    const { data: resellers } = await supabase
-      .from('tenants')
-      .select('id, retell_api_key')
-      .eq('is_reseller', true)
-      .not('retell_api_key', 'is', null)
-      .limit(1);
-    
-    if (resellers && resellers.length > 0) {
-      tenantId = resellers[0].id;
-      console.log(`Using reseller tenant ID: ${tenantId}\n`);
-    }
-  }
-
-  if (!tenantId) {
-    console.error('❌ Could not determine tenant ID. Cannot test Retell agent.');
+  if (agentError) {
+    console.error('❌ Error querying database:', agentError.message);
     return;
   }
 
-  const retellApiKey = await getResellerRetellConfig(tenantId);
+  if (!agents || agents.length === 0) {
+    console.log('⚠️  Agent not found in database.');
+    console.log('   This agent may have been created directly in Retell dashboard.\n');
+    console.log('   Attempting to test with first available tenant...\n');
+    
+    // Try to get any tenant with Retell configured
+    const { data: tenants } = await supabase
+      .from('tenants')
+      .select('id, name, is_reseller, retell_api_key')
+      .eq('is_reseller', true)
+      .not('retell_api_key', 'is', null)
+      .limit(1);
+
+    if (!tenants || tenants.length === 0) {
+      console.error('❌ No reseller tenants with Retell API key found.');
+      console.log('   Cannot test agent without API key.\n');
+      return;
+    }
+
+    const tenant = tenants[0];
+    console.log(`   Using reseller tenant: ${tenant.name} (${tenant.id})\n`);
+    
+    const retellApiKey = tenant.retell_api_key;
+    if (!retellApiKey) {
+      console.error('❌ No Retell API key found for this tenant.');
+      return;
+    }
+
+    await testAgentWithApiKey(retellAgentId, retellApiKey, null);
+    return;
+  }
+
+  console.log(`✅ Found ${agents.length} agent(s) in database:\n`);
+  agents.forEach((agent, index) => {
+    console.log(`   ${index + 1}. ${agent.name}`);
+    console.log(`      Database ID: ${agent.id}`);
+    console.log(`      Type: ${agent.type}`);
+    console.log(`      Active: ${agent.is_active}`);
+    console.log(`      Tenant ID: ${agent.tenant_id}`);
+    console.log(`      Created: ${agent.created_at}\n`);
+  });
+
+  // Test with the first agent's tenant
+  const firstAgent = agents[0];
+  const retellApiKey = await getResellerRetellConfig(firstAgent.tenant_id);
 
   if (!retellApiKey) {
     console.error('❌ Retell API key not configured for this tenant or its reseller.');
     return;
   }
 
-  console.log('✅ Retell API key found');
-  console.log(`   API Key (first 10 chars): ${retellApiKey.substring(0, 10)}...\n`);
+  console.log(`✅ Retell API key found for tenant: ${firstAgent.tenant_id}\n`);
 
+  await testAgentWithApiKey(retellAgentId, retellApiKey, firstAgent.tenant_id);
+}
+
+async function testAgentWithApiKey(retellAgentId: string, retellApiKey: string, tenantId: string | null) {
   console.log('============================================================');
-  console.log('Testing Retell API Agent Retrieve\n');
+  console.log('2. Testing agent with Retell API...\n');
 
   try {
     const retellClient = new Retell({
       apiKey: retellApiKey,
       timeout: 30 * 1000,
-      maxRetries: 2,
+      maxRetries: 3,
     });
 
-    console.log('1. Attempting to retrieve agent from Retell...');
-    console.log(`   Agent ID: ${retellAgentId}\n`);
+    console.log(`   Retrieving agent: ${retellAgentId}...\n`);
 
-    const retellAgent = await retellClient.agent.retrieve(retellAgentId);
-    const agentData = retellAgent as any;
-
-    console.log('✅ SUCCESS! Agent retrieved successfully\n');
-    console.log('📊 Agent Details:');
-    console.log(`   Agent Name: ${agentData.agent_name || 'N/A'}`);
-    console.log(`   Agent ID: ${agentData.agent_id || 'N/A'}`);
-    console.log(`   Channel: ${agentData.channel || 'N/A'}`);
-    console.log(`   Published: ${agentData.is_published ? '✅ YES' : '❌ NO'}`);
-    console.log(`   Has voice_id: ${!!agentData.voice_id}`);
-    console.log(`   Has response_engine: ${!!agentData.response_engine}`);
+    // Try to retrieve agent details
+    let agentData: any = null;
+    let canRetrieveAgent = true;
     
-    if (agentData.response_engine) {
-      console.log(`   Response Engine Type: ${agentData.response_engine.type || 'N/A'}`);
-      if (agentData.response_engine.llm_id) {
-        console.log(`   LLM ID: ${agentData.response_engine.llm_id}`);
+    try {
+      const retellAgent = await retellClient.agent.retrieve(retellAgentId);
+      agentData = retellAgent as any;
+
+      console.log('✅ Agent retrieved successfully!\n');
+      console.log('📊 Agent Details:');
+      console.log(`   Agent Name: ${agentData.agent_name || 'N/A'}`);
+      console.log(`   Agent ID: ${agentData.agent_id || retellAgentId}`);
+      console.log(`   Published: ${agentData.is_published ? '✅ YES' : '❌ NO'}`);
+      console.log(`   Channel: ${agentData.channel || 'N/A'}`);
+      console.log(`   Has voice_id: ${!!agentData.voice_id}`);
+      console.log(`   Has response_engine: ${!!agentData.response_engine}`);
+      if (agentData.response_engine) {
+        console.log(`   Response Engine Type: ${agentData.response_engine.type}`);
+        if (agentData.response_engine.llm_id) {
+          console.log(`   LLM ID: ${agentData.response_engine.llm_id}`);
+        }
+      }
+      console.log('');
+    } catch (retrieveError: any) {
+      const errorStatus = retrieveError?.response?.status || retrieveError?.status || 500;
+      const errorMessage = retrieveError?.message || 'Unknown error';
+      
+      if (errorStatus === 400 && errorMessage.includes('Invalid agent channel')) {
+        console.log('⚠️  Agent cannot be retrieved via API (likely created in dashboard as chat agent)');
+        console.log('   Error: "Invalid agent channel"');
+        console.log('   This is expected for chat agents created in Retell dashboard.\n');
+        console.log('   Proceeding to test chat session creation directly...\n');
+        canRetrieveAgent = false;
+        agentData = { channel: 'chat' }; // Assume it's a chat agent
+      } else {
+        throw retrieveError; // Re-throw other errors
       }
     }
-    
-    console.log('\n✅ Agent is accessible and valid!\n');
+
+    // Test creating a chat session
+    // For dashboard-created chat agents, we can't check publish status via API
+    // but we can try to create a chat session directly
+    if (agentData?.channel === 'chat' || !canRetrieveAgent) {
+      console.log('============================================================');
+      console.log('3. Testing chat session creation...\n');
+
+      try {
+        const chatSession = await retellClient.chat.create({
+          agent_id: retellAgentId,
+          metadata: {
+            test: true,
+            test_script: 'test-retell-agent-direct',
+            tenant_id: tenantId || 'unknown',
+          },
+        });
+
+        console.log('✅ Chat session created successfully!\n');
+        console.log('📊 Chat Session Details:');
+        console.log(`   Chat ID: ${chatSession.chat_id}`);
+        console.log(`   Chat Status: ${chatSession.chat_status || 'N/A'}`);
+        console.log('');
+
+        // Test sending a message
+        console.log('============================================================');
+        console.log('4. Testing message sending...\n');
+
+        try {
+          const completion = await retellClient.chat.createChatCompletion({
+            chat_id: chatSession.chat_id,
+            content: 'Hello, this is a test message',
+          });
+
+          console.log('✅ Message sent successfully!\n');
+          console.log('📊 Completion Details:');
+          console.log(`   Messages received: ${completion.messages?.length || 0}`);
+
+          const agentMessages = completion.messages?.filter(
+            (msg: any) => msg.role === 'agent' && 'content' in msg && typeof msg.content === 'string'
+          ) || [];
+
+          if (agentMessages.length > 0) {
+            const latestMessage = agentMessages[agentMessages.length - 1] as { content: string };
+            console.log(`   Agent Response: "${latestMessage.content}"\n`);
+          } else {
+            console.log('   ⚠️  No agent response content found\n');
+          }
+
+          // End the chat session
+          try {
+            await retellClient.chat.end(chatSession.chat_id);
+            console.log('✅ Chat session ended successfully\n');
+          } catch (endError: any) {
+            console.warn('⚠️  Could not end chat session:', endError.message);
+          }
+
+        } catch (msgError: any) {
+          console.error('❌ Error sending message:', msgError.message);
+          if (msgError.response) {
+            console.error('   Status:', msgError.response.status);
+            console.error('   Data:', JSON.stringify(msgError.response.data, null, 2));
+          }
+        }
+
+      } catch (chatError: any) {
+        console.error('❌ Error creating chat session:', chatError.message);
+        if (chatError.response) {
+          console.error('   Status:', chatError.response.status);
+          console.error('   Data:', JSON.stringify(chatError.response.data, null, 2));
+        }
+        console.log('\n   Possible reasons:');
+        console.log('   - Agent is not published');
+        console.log('   - Agent channel is not "chat"');
+        console.log('   - Agent configuration is invalid');
+      }
+    } else {
+      console.log('⚠️  Agent channel is not "chat", skipping chat session test');
+      console.log(`   Channel: ${agentData.channel}`);
+    }
+
+    // List agent versions
+    console.log('============================================================');
+    console.log('5. Agent Versions:\n');
+    try {
+      const versions = await retellClient.agent.getVersions(retellAgentId);
+      if (versions && versions.length > 0) {
+        versions.forEach((v: any) => {
+          console.log(`   Version ${v.version}:`);
+          console.log(`      Published: ${v.is_published ? '✅' : '❌'}`);
+          console.log(`      Channel: ${v.channel || 'N/A'}`);
+          console.log(`      Last Modified: ${new Date(v.last_modification_timestamp).toISOString()}`);
+          console.log('');
+        });
+      } else {
+        console.log('   (No version details available)\n');
+      }
+    } catch (versionError: any) {
+      console.warn('   ⚠️  Could not retrieve versions:', versionError.message);
+    }
 
   } catch (error: any) {
-    console.error('❌ ERROR retrieving agent from Retell\n');
-    console.error('Error Details:');
-    console.error(`   Message: ${error.message || 'Unknown error'}`);
-    console.error(`   Status: ${error.response?.status || error.status || 'N/A'}`);
-    console.error(`   Status Text: ${error.response?.statusText || 'N/A'}`);
-    
-    // Log full error object to see structure
-    console.error('\n   Full Error Object:');
-    console.error(JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-    
+    console.error('❌ Error testing agent:', error.message);
     if (error.response) {
-      console.error('\n   Response Object:');
-      console.error(JSON.stringify(error.response, Object.getOwnPropertyNames(error.response), 2));
+      console.error('   Status:', error.response.status);
+      console.error('   Data:', JSON.stringify(error.response.data, null, 2));
     }
-    
-    if (error.response?.data) {
-      console.error('\n   Response Data:');
-      console.error(JSON.stringify(error.response.data, null, 2));
-    }
-    
-    if (error.response?.headers) {
-      console.error('\n   Response Headers:');
-      console.error(JSON.stringify(error.response.headers, null, 2));
-    }
-    
-    // Check for Retell-specific error fields
-    if (error.body) {
-      console.error('\n   Error Body:');
-      console.error(JSON.stringify(error.body, null, 2));
-    }
-    
-    if (error.error_message) {
-      console.error(`\n   Error Message: ${error.error_message}`);
-    }
-
-    console.error('\n🔍 Analysis:');
-    
-    if (error.response?.status === 400) {
-      console.error('   → 400 Bad Request: The agent ID format may be invalid or the agent has configuration issues');
-      if (error.response?.data?.error_message) {
-        console.error(`   → Retell Error: ${error.response.data.error_message}`);
-      }
-    } else if (error.response?.status === 401) {
-      console.error('   → 401 Unauthorized: API key authentication failed');
-      console.error('   → Check if the Retell API key is valid and has proper permissions');
-    } else if (error.response?.status === 404) {
-      console.error('   → 404 Not Found: Agent does not exist in Retell');
-      console.error('   → Verify the agent ID is correct and exists in your Retell dashboard');
-    } else if (error.response?.status === 403) {
-      console.error('   → 403 Forbidden: API key does not have access to this agent');
-      console.error('   → The agent may belong to a different Retell account');
-    } else {
-      console.error(`   → ${error.response?.status || 'Unknown'} Error: Unexpected error occurred`);
-    }
-    
-    console.error('');
+    console.log('\n   Possible reasons:');
+    console.log('   - Invalid agent ID');
+    console.log('   - Agent does not exist');
+    console.log('   - API key does not have access to this agent');
+    console.log('   - Network error');
   }
 
   console.log('============================================================');
@@ -201,7 +291,7 @@ async function testRetellAgent(retellAgentId: string) {
 }
 
 const retellAgentId = process.argv[2] || 'agent_f2dde9e9e53c98cac611da2b69';
-testRetellAgent(retellAgentId)
+testRetellAgentDirect(retellAgentId)
   .then(() => {
     process.exit(0);
   })
@@ -209,4 +299,3 @@ testRetellAgent(retellAgentId)
     console.error('Script error:', error);
     process.exit(1);
   });
-
