@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Get agent and verify access
     const { data: agent } = await supabase
       .from('agents')
-      .select('id, name, type, tenant_id, retell_agent_id')
+      .select('id, name, type, tenant_id, retell_agent_id, configuration')
       .eq('id', agent_id)
       .single();
 
