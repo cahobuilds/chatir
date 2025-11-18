@@ -45,9 +45,18 @@ export async function GET(request: NextRequest) {
   let conversationId = null;
   
   function createWidget() {
+    // Check if already created
+    if (document.getElementById('chat-widget-button')) {
+      console.log('Widget already exists');
+      return;
+    }
+    
+    console.log('Creating chat widget for agent:', agentId);
+    
     // Create button
     const button = document.createElement('div');
     button.id = 'chat-widget-button';
+    button.setAttribute('aria-label', 'Open chat');
     button.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="currentColor"/></svg>';
     button.style.cssText = \`
       position: fixed;
@@ -175,12 +184,23 @@ export async function GET(request: NextRequest) {
     chatWindow.appendChild(inputContainer);
     
     widgetContainer = document.createElement('div');
+    widgetContainer.id = 'chat-widget-container';
     widgetContainer.appendChild(button);
     widgetContainer.appendChild(chatWindow);
-    document.body.appendChild(widgetContainer);
+    
+    // Append to body
+    if (document.body) {
+      document.body.appendChild(widgetContainer);
+      console.log('Widget container appended to body');
+    } else {
+      console.error('Cannot append widget: document.body is null');
+      return;
+    }
     
     // Add welcome message
     addMessage('assistant', 'Hello! How can I help you today?');
+    
+    console.log('Chat widget created successfully');
   }
   
   function toggleChat() {
