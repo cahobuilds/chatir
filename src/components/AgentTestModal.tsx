@@ -1099,7 +1099,7 @@ export default function AgentTestModal({
             )}
 
             {/* Chat Interface - Show conversation-style UI */}
-            {(chatResponse || error || messages.length > 0) && (
+            {(messages.length > 0 || chatMessage) && (
               <div className="flex flex-col h-[400px] border border-gray-200 rounded-lg dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
                 {/* Messages Area */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
@@ -1133,6 +1133,8 @@ export default function AgentTestModal({
                         className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${
                           message.type === "user"
                             ? "bg-indigo-600 text-white rounded-br-sm"
+                            : message.text.startsWith("Error:")
+                            ? "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-bl-sm"
                             : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-bl-sm"
                         }`}
                       >
@@ -1149,13 +1151,17 @@ export default function AgentTestModal({
                     </div>
                   ))}
 
-                  {chatResponse && (
+                  {isTesting && (
                     <div className="flex items-start gap-3 justify-start">
                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
                         <ChatBubbleLeftRightIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                       </div>
-                      <div className="max-w-[75%] rounded-2xl rounded-bl-sm px-4 py-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 shadow-sm">
-                        <p className="text-sm whitespace-pre-wrap">{chatResponse}</p>
+                      <div className="max-w-[75%] rounded-2xl rounded-bl-sm px-4 py-2.5 bg-gray-100 dark:bg-gray-700 shadow-sm">
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
                       </div>
                     </div>
                   )}
