@@ -141,8 +141,9 @@ export async function POST(request: NextRequest) {
           
           // Extract agent response from completion messages
           // The response will be in messages array with role 'agent'
+          // Filter for messages that have 'content' property (Message type, not ToolCallInvocationMessage, etc.)
           const agentMessages = completion.messages.filter(
-            (msg: any) => msg.role === 'agent'
+            (msg: any) => msg.role === 'agent' && 'content' in msg && typeof msg.content === 'string'
           );
           
           if (agentMessages.length === 0) {
@@ -150,7 +151,7 @@ export async function POST(request: NextRequest) {
           }
           
           // Get the latest agent message (should be the response to our user message)
-          const latestAgentMessage = agentMessages[agentMessages.length - 1];
+          const latestAgentMessage = agentMessages[agentMessages.length - 1] as { content: string; role: 'agent' };
           const agentResponse = latestAgentMessage.content || 'I apologize, but I couldn\'t generate a response.';
           
           // Add agent response to transcript
