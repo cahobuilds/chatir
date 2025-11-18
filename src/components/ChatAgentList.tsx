@@ -100,7 +100,8 @@ export default function ChatAgentList() {
         },
         body: JSON.stringify({ 
           tenant_id: currentOrganization.id,
-          type: 'chat' // Only sync chat agents
+          type: 'chat', // Only sync chat agents
+          published_only: true // Only sync published agents
         }),
       });
 
@@ -112,10 +113,12 @@ export default function ChatAgentList() {
       const data = await response.json();
       const createdCount = data.agents?.filter((a: any) => a.action === 'created').length || 0;
       const updatedCount = data.agents?.filter((a: any) => a.action === 'updated').length || 0;
+      const skippedPublished = data.skipped_by_published || 0;
       
-      let message = `Successfully synced ${data.synced} agent(s)!`;
+      let message = `Successfully synced ${data.synced} published agent(s)!`;
       if (createdCount > 0) message += ` ${createdCount} created`;
       if (updatedCount > 0) message += ` ${updatedCount} updated`;
+      if (skippedPublished > 0) message += ` (${skippedPublished} unpublished skipped)`;
       if (data.errors > 0) message += ` (${data.errors} error(s))`;
       
       setSuccess(message);

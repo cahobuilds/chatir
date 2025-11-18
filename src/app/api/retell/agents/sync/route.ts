@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { tenant_id, type } = body;
+    const { tenant_id, type, published_only } = body;
 
     if (!tenant_id) {
       return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
@@ -24,6 +24,9 @@ export async function POST(request: NextRequest) {
     if (type && !['chat', 'voice'].includes(type)) {
       return NextResponse.json({ error: 'type must be "chat" or "voice"' }, { status: 400 });
     }
+
+    // Validate published_only if provided
+    const filterPublished = published_only === true || published_only === 'true';
 
     // Verify user has access to this tenant
     const { data: userTenant } = await supabase
@@ -56,6 +59,68 @@ export async function POST(request: NextRequest) {
     if (type) {
       console.log(`[Sync] Filtering for type: ${type}`);
     }
+    if (filterPublished) {
+      console.log(`[Sync] Filtering for published agents only`);
+    }
+
+    // If filtering by published status, check each agent's published status
+    // Note: agent.list() may not include is_published, so we need to retrieve each agent
+    let agentsToSync = retellAgents;
+    if (filterPublished) {
+      console.log(`[Sync] Checking published status for ${retellAgents.length} agents...`);
+      const publishedAgents = [];
+      let checkedCount = 0;
+      
+      // Check if list response already includes is_published
+      const firstAgent = retellAgents[0] as any;
+      const hasPublishedInList = firstAgent && 'is_published' in firstAgent;
+      
+      if (hasPublishedInList) {
+        // List response includes is_published, filter directly
+        console.log(`[Sync] List response includes is_published, filtering directly...`);
+        agentsToSync = retellAgents.filter((agent: any) => agent.is_published === true);
+        console.log(`[Sync] Found ${agentsToSync.length} published agents out of ${retellAgents.length} total`);
+      } else {
+        // Need to retrieve each agent to check published status
+        // Process in batches to avoid overwhelming the API
+        const batchSize = 10;
+        for (let i = 0; i < retellAgents.length; i += batchSize) {
+          const batch = retellAgents.slice(i, i + batchSize);
+          const batchPromises = batch.map(async (retellAgent) => {
+            try {
+              // Retrieve full agent details to check published status
+              const agentDetails = await retellClient.agent.retrieve(retellAgent.agent_id);
+              const agentData = agentDetails as any;
+              const isPublished = agentData.is_published || false;
+              
+              if (isPublished) {
+                return retellAgent;
+              } else {
+                console.log(`[Sync] Skipping unpublished agent: ${retellAgent.agent_id} (${retellAgent.agent_name})`);
+                return null;
+              }
+            } catch (error: any) {
+              // If we can't retrieve the agent (e.g., chat agents return 400), skip it
+              console.warn(`[Sync] Could not check published status for agent ${retellAgent.agent_id}:`, error.message);
+              // For chat agents created in dashboard, we can't check via API
+              // Skip them to be safe - user can link them manually
+              return null;
+            }
+          });
+          
+          const batchResults = await Promise.all(batchPromises);
+          publishedAgents.push(...batchResults.filter(Boolean) as typeof retellAgents);
+          
+          checkedCount += batch.length;
+          if (checkedCount % 20 === 0 || checkedCount === retellAgents.length) {
+            console.log(`[Sync] Checked ${checkedCount}/${retellAgents.length} agents...`);
+          }
+        }
+        
+        agentsToSync = publishedAgents;
+        console.log(`[Sync] Found ${publishedAgents.length} published agents out of ${retellAgents.length} total`);
+      }
+    }
 
     // Get existing agents for this tenant (including type to check for type changes)
     const { data: existingAgents } = await supabase
@@ -72,9 +137,10 @@ export async function POST(request: NextRequest) {
     const syncedAgents: Array<{ action: 'created' | 'updated'; agent: any }> = [];
     const errors: Array<{ retell_agent_id: string; error: string }> = [];
     let skippedByType = 0;
+    let skippedByPublished = filterPublished ? retellAgents.length - agentsToSync.length : 0;
 
     // Sync each Retell agent
-    for (const retellAgent of retellAgents) {
+    for (const retellAgent of agentsToSync) {
       try {
         // Determine agent type based on Retell agent configuration
         // Priority: llm_websocket_url (chat) > voice_id (voice) > response_engine type > default to chat
@@ -206,6 +272,10 @@ export async function POST(request: NextRequest) {
     
     console.log(`[Sync] Summary for tenant ${tenant_id}:`);
     console.log(`  - Total Retell agents: ${retellAgents.length}`);
+    if (filterPublished) {
+      console.log(`  - Published agents: ${agentsToSync.length}`);
+      console.log(`  - Skipped unpublished: ${skippedByPublished}`);
+    }
     console.log(`  - Skipped by type filter: ${skippedByType}`);
     console.log(`  - Created: ${createdCount}`);
     console.log(`  - Updated: ${updatedCount}`);
@@ -216,7 +286,9 @@ export async function POST(request: NextRequest) {
       synced: syncedAgents.length,
       created: createdCount,
       updated: updatedCount,
-      skipped: skippedByType,
+      skipped: skippedByType + skippedByPublished,
+      skipped_by_type: skippedByType,
+      skipped_by_published: skippedByPublished,
       errors: errors.length,
       agents: syncedAgents,
       errors_list: errors,
