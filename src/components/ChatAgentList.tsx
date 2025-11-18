@@ -244,6 +244,7 @@ export default function ChatAgentList() {
     setIsSubmitting(true);
 
     try {
+      // Step 1: Create agent locally
       const response = await fetch("/api/agents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -260,28 +261,60 @@ export default function ChatAgentList() {
         }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setSuccess("Agent created successfully!");
-        setIsCreateModalOpen(false);
-        await fetchAgents();
-        
-        // Reset form
-        setFormData({
-          name: "",
-          description: "",
-          type: "chat",
-          is_active: true,
-          model: "gpt-4",
-          language: "en-US",
-        });
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(null), 3000);
-      } else {
+      if (!response.ok) {
         const errorData = await response.json();
         setError(errorData.error || "Failed to save agent");
+        return;
       }
+
+      const data = await response.json();
+      const localAgentId = data.agent.id;
+
+      // Step 2: Create agent in Retell AI (for chat agents, this enables real responses)
+      try {
+        const retellResponse = await fetch("/api/retell/agents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenant_id: currentOrganization.id,
+            agent_id: localAgentId,
+            agent_name: formData.name.trim(),
+            // For chat agents, don't include voice_id - Retell will use default LLM
+            // The API will automatically fetch an available LLM if none is specified
+          }),
+        });
+
+        if (!retellResponse.ok) {
+          const retellError = await retellResponse.json();
+          console.warn("Agent created locally but Retell creation failed:", retellError);
+          // Still show success, but warn that Retell integration failed
+          setSuccess("Agent created locally, but Retell integration failed. You can sync agents later.");
+          setTimeout(() => setSuccess(null), 5000);
+        } else {
+          setSuccess("Agent created successfully and linked to Retell AI!");
+        }
+      } catch (retellError: any) {
+        console.error("Failed to create agent in Retell:", retellError);
+        // Still show success for local creation
+        setSuccess("Agent created locally. Retell integration failed - you can sync agents later.");
+        setTimeout(() => setSuccess(null), 5000);
+      }
+
+      setIsCreateModalOpen(false);
+      await fetchAgents();
+      
+      // Reset form
+      setFormData({
+        name: "",
+        description: "",
+        type: "chat",
+        is_active: true,
+        model: "gpt-4",
+        language: "en-US",
+      });
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(null), 3000);
     } catch (error: any) {
       console.error("Failed to save agent:", error);
       setError(error.message || "Failed to save agent");
