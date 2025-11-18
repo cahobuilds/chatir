@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/widget/chat.js - Serves the embeddable chat widget script
+// Handle CORS preflight
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const agentId = searchParams.get('agent_id');
@@ -388,10 +401,13 @@ export async function GET(request: NextRequest) {
 
   return new NextResponse(widgetScript, {
     headers: {
-      'Content-Type': 'application/javascript',
+      'Content-Type': 'application/javascript; charset=utf-8',
       'Cache-Control': 'public, max-age=3600',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'X-Content-Type-Options': 'nosniff',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     },
   });
 }
