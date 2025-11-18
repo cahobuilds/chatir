@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
 
 interface ChatMessage {
   role: 'user' | 'agent';
@@ -26,6 +27,29 @@ export default function RetellChatTestPage() {
   const [error, setError] = useState<string | null>(null);
   const [apiCalls, setApiCalls] = useState<ApiCall[]>([]);
   const [chatId, setChatId] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Check authentication status on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
+          setIsAuthenticated(false);
+          setAuthError('You must be logged in to use this test page. Please log in first.');
+        } else {
+          setIsAuthenticated(true);
+          setAuthError(null);
+        }
+      } catch (err: any) {
+        setIsAuthenticated(false);
+        setAuthError('Failed to check authentication status: ' + (err.message || 'Unknown error'));
+      }
+    };
+    checkAuth();
+  }, []);
 
   const addApiCall = (call: Omit<ApiCall, 'timestamp'>) => {
     setApiCalls(prev => [...prev, { ...call, timestamp: new Date().toISOString() }]);
