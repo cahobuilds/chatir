@@ -13,6 +13,8 @@ export default function KnowledgeBasePage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
 
   // Set page title
@@ -43,43 +45,6 @@ export default function KnowledgeBasePage() {
 
   // Fetch knowledge bases from API
   useEffect(() => {
-    const fetchKnowledgeBases = async () => {
-      if (!user) return;
-      
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const response = await fetch("/api/knowledge-bases");
-        if (!response.ok) {
-          throw new Error(`Failed to fetch knowledge bases: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        const kbList: KnowledgeBase[] = (data.knowledge_bases || []).map((kb: any) => ({
-          id: kb.id,
-          name: kb.name,
-          type: kb.type as "notion" | "web" | "file" | "text",
-          pageCount: kb.page_count || 0,
-          lastSynced: kb.last_synced_at 
-            ? new Date(kb.last_synced_at).toLocaleDateString() 
-            : undefined,
-          status: kb.status as "synced" | "syncing" | "error" | undefined,
-        }));
-        
-        setKnowledgeBases(kbList);
-        // Only set selected if we don't have one already
-        if (kbList.length > 0 && !selectedKb) {
-          setSelectedKb(kbList[0]);
-        }
-      } catch (err: any) {
-        console.error("Error fetching knowledge bases:", err);
-        setError(err.message || "Failed to load knowledge bases");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchKnowledgeBases();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -139,9 +104,92 @@ export default function KnowledgeBasePage() {
     console.log("Edit knowledge base:", selectedKb?.id);
   };
 
-  const handleSync = () => {
-    // TODO: Trigger sync
-    console.log("Sync knowledge base:", selectedKb?.id);
+  const handleSync = async () => {
+    if (!currentTenantId) {
+      setError("No tenant selected. Please select an organization.");
+      return;
+    }
+
+    try {
+      setSyncing(true);
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch('/api/retell/knowledge-bases/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          tenant_id: currentTenantId,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Sync failed');
+      }
+
+      const data = await response.json();
+      const createdCount = data.created || 0;
+      const updatedCount = data.updated || 0;
+      const errorsCount = data.errors || 0;
+      
+      let message = `Successfully synced ${data.synced || 0} knowledge base(s)!`;
+      if (createdCount > 0) message += ` ${createdCount} created`;
+      if (updatedCount > 0) message += ` ${updatedCount} updated`;
+      if (errorsCount > 0) message += ` (${errorsCount} error(s))`;
+      
+      setSuccess(message);
+      
+      // Refresh knowledge bases list
+      await fetchKnowledgeBases();
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err: any) {
+      console.error("Sync error:", err);
+      setError(err.message || 'Failed to sync knowledge bases from Retell');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const fetchKnowledgeBases = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch("/api/knowledge-bases");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch knowledge bases: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      const kbList: KnowledgeBase[] = (data.knowledge_bases || []).map((kb: any) => ({
+        id: kb.id,
+        name: kb.name,
+        type: kb.type as "notion" | "web" | "file" | "text",
+        pageCount: kb.page_count || 0,
+        lastSynced: kb.last_synced_at 
+          ? new Date(kb.last_synced_at).toLocaleDateString() 
+          : undefined,
+        status: kb.status as "synced" | "syncing" | "error" | undefined,
+      }));
+      
+      setKnowledgeBases(kbList);
+      // Only set selected if we don't have one already
+      if (kbList.length > 0 && !selectedKb) {
+        setSelectedKb(kbList[0]);
+      }
+    } catch (err: any) {
+      console.error("Error fetching knowledge bases:", err);
+      setError(err.message || "Failed to load knowledge bases");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -183,12 +231,25 @@ export default function KnowledgeBasePage() {
   return (
     <div className="flex h-[calc(100vh-12rem)] -mx-4 md:-mx-6 overflow-hidden">
       {error && (
-        <div className="fixed top-4 right-4 bg-red-100 dark:bg-red-900/20 border border-red-400 dark:border-red-800 rounded-lg p-4 z-50">
+        <div className="fixed top-4 right-4 bg-red-100 dark:bg-red-900/20 border border-red-400 dark:border-red-800 rounded-lg p-4 z-50 max-w-md">
           <p className="text-red-800 dark:text-red-200 font-semibold">Error:</p>
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
             onClick={() => setError(null)}
             className="mt-2 text-sm text-red-600 dark:text-red-400 hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {success && (
+        <div className="fixed top-4 right-4 bg-green-100 dark:bg-green-900/20 border border-green-400 dark:border-green-800 rounded-lg p-4 z-50 max-w-md">
+          <p className="text-green-800 dark:text-green-200 font-semibold">Success:</p>
+          <p className="text-green-700 dark:text-green-300">{success}</p>
+          <button
+            onClick={() => setSuccess(null)}
+            className="mt-2 text-sm text-green-600 dark:text-green-400 hover:underline"
           >
             Dismiss
           </button>
@@ -201,6 +262,8 @@ export default function KnowledgeBasePage() {
         selectedId={selectedKb?.id || null}
         onSelect={handleSelect}
         onAddNew={handleAddNew}
+        onSync={handleSync}
+        syncing={syncing}
       />
 
       {/* Right Content Area */}

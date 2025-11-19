@@ -4,7 +4,8 @@ import React, { useState } from "react";
 import { 
   DocumentTextIcon, 
   PlusIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  ArrowPathIcon
 } from "@heroicons/react/24/outline";
 
 export interface KnowledgeBase {
@@ -21,6 +22,8 @@ interface KnowledgeBaseSidebarProps {
   selectedId?: string | null;
   onSelect: (kb: KnowledgeBase) => void;
   onAddNew: () => void;
+  onSync?: () => void;
+  syncing?: boolean;
 }
 
 export default function KnowledgeBaseSidebar({
@@ -28,6 +31,8 @@ export default function KnowledgeBaseSidebar({
   selectedId,
   onSelect,
   onAddNew,
+  onSync,
+  syncing = false,
 }: KnowledgeBaseSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -56,13 +61,25 @@ export default function KnowledgeBaseSidebar({
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Knowledge Base
           </h2>
-          <button
-            onClick={onAddNew}
-            className="p-1.5 rounded-lg bg-gray-900 dark:bg-gray-700 text-white hover:bg-gray-800 dark:hover:bg-gray-600 transition-colors"
-            title="Add Knowledge Base"
-          >
-            <PlusIcon className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onSync && (
+              <button
+                onClick={onSync}
+                disabled={syncing}
+                className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Sync from Retell"
+              >
+                <ArrowPathIcon className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              </button>
+            )}
+            <button
+              onClick={onAddNew}
+              className="p-1.5 rounded-lg bg-gray-900 dark:bg-gray-700 text-white hover:bg-gray-800 dark:hover:bg-gray-600 transition-colors"
+              title="Add Knowledge Base"
+            >
+              <PlusIcon className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         
         {/* Search */}

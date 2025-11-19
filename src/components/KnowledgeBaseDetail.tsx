@@ -58,7 +58,7 @@ export default function KnowledgeBaseDetail({
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
             >
               <ArrowPathIcon className="w-4 h-4" />
-              Sync Webpages
+              Sync from Retell
             </button>
             <button
               onClick={onDelete}
