@@ -24,7 +24,7 @@ export async function middleware(request: NextRequest) {
     request,
   });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -32,6 +32,9 @@ export async function middleware(request: NextRequest) {
     // Allow request to continue but auth will fail gracefully
     return supabaseResponse;
   }
+
+  // Clean up URL - remove any trailing whitespace/newlines that might cause issues
+  supabaseUrl = supabaseUrl.trim();
 
   const supabase = createServerClient(
     supabaseUrl,

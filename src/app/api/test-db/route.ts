@@ -7,7 +7,7 @@ export async function GET() {
     const supabase = await createClient();
     
     // Test 1: Check environment variables
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     
     if (!supabaseUrl || !supabaseAnonKey) {
@@ -20,6 +20,9 @@ export async function GET() {
         },
       }, { status: 500 });
     }
+
+    // Clean up URL - remove any trailing whitespace/newlines
+    supabaseUrl = supabaseUrl.trim();
 
     // Test 2: Try to get current user session
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -34,6 +37,8 @@ export async function GET() {
       success: true,
       environment: {
         supabaseUrl: supabaseUrl,
+        urlLength: supabaseUrl.length,
+        urlHasNewline: supabaseUrl.includes('\n'),
         urlValid: supabaseUrl.startsWith('https://'),
         hasAnonKey: !!supabaseAnonKey,
       },

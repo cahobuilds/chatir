@@ -3,7 +3,7 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
 export async function createClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -13,6 +13,9 @@ export async function createClient() {
     });
     throw new Error('Supabase configuration is missing. Please check your environment variables.');
   }
+
+  // Clean up URL - remove any trailing whitespace/newlines that might cause issues
+  supabaseUrl = supabaseUrl.trim();
 
   // Validate URL format
   try {
@@ -51,7 +54,7 @@ export async function createClient() {
 // Admin client with service role key (server-side only)
 // Uses regular Supabase client since admin operations don't need cookies
 export function createAdminClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
@@ -61,6 +64,9 @@ export function createAdminClient() {
     });
     throw new Error('Supabase admin configuration is missing. Please check your environment variables.');
   }
+
+  // Clean up URL - remove any trailing whitespace/newlines that might cause issues
+  supabaseUrl = supabaseUrl.trim();
 
   // Validate URL format
   try {
