@@ -252,28 +252,28 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Call ID
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Time
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Caller
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Duration
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[200px] max-w-[250px]">
                 Agent
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Sentiment
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -281,7 +281,7 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {callRecords.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                <td colSpan={8} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
                   No call records found
                 </td>
               </tr>
@@ -291,11 +291,11 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
                   key={call.id} 
                   className="hover:bg-gray-50 dark:hover:bg-gray-900"
                 >
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4">
                     <div className="flex items-center space-x-2">
-                      <span className="text-lg">{getDirectionIcon(call.direction)}</span>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      <span className="text-lg flex-shrink-0">{getDirectionIcon(call.direction)}</span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {call.id.substring(0, 8)}...
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -304,7 +304,7 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900 dark:text-white">
                       {new Date(call.timestamp).toLocaleDateString()}
                     </div>
@@ -312,7 +312,7 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
                       {new Date(call.timestamp).toLocaleTimeString()}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900 dark:text-white">
                       {call.caller}
                     </div>
@@ -320,7 +320,7 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
                       {call.language}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900 dark:text-white">
                       {call.duration}
                     </div>
@@ -328,28 +328,28 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
                       {call.outcome}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 dark:text-white">
+                  <td className="px-4 py-4">
+                    <div className="text-sm text-gray-900 dark:text-white line-clamp-2 break-words max-w-[250px]">
                       {call.agent}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(call.status)}`}>
                       {call.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-1">
                       <span className={`text-sm ${getSentimentColor(call.sentiment)}`}>
                         {call.sentiment === 'positive' ? '😊' : call.sentiment === 'neutral' ? '😐' : '😞'}
                       </span>
-                      <span className={`text-sm ${getSentimentColor(call.sentiment)}`}>
+                      <span className={`text-xs ${getSentimentColor(call.sentiment)} hidden sm:inline`}>
                         {call.sentiment}
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-1">
                       {call.hasRecording && (
                         <span className="text-indigo-600 dark:text-indigo-400" title="Has Recording">
                           🎵
@@ -368,7 +368,7 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
                           e.stopPropagation();
                           window.open(`/calls/history/${call.id}`, '_blank');
                         }}
-                        className="rounded-lg bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+                        className="rounded-lg bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 whitespace-nowrap"
                         title="View Details"
                       >
                         Details
