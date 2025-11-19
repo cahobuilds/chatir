@@ -22,7 +22,7 @@ async function enrichInteraction(supabase: any, interaction: any) {
       .in('id', agentIds);
     
     if (agents) {
-      agents.forEach(agent => {
+      agents.forEach((agent: { id: string; name: string; type: string }) => {
         agentsMap[agent.id] = { name: agent.name, type: agent.type };
       });
     }
@@ -35,7 +35,7 @@ async function enrichInteraction(supabase: any, interaction: any) {
       .in('id', tenantIdsToFetch);
     
     if (tenants) {
-      tenants.forEach(tenant => {
+      tenants.forEach((tenant: { id: string; name: string }) => {
         tenantsMap[tenant.id] = { name: tenant.name };
       });
     }

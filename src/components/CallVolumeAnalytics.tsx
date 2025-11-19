@@ -175,12 +175,12 @@ export default function CallVolumeAnalytics() {
               <span className="text-green-600 dark:text-green-400">📞</span>
             </div>
           </div>
-          {data?.growthMetrics.monthOverMonth !== null && (
+          {data?.growthMetrics?.monthOverMonth !== null && data?.growthMetrics?.monthOverMonth !== undefined && (
             <p className={`mt-2 text-xs ${
               (data.growthMetrics.monthOverMonth || 0) >= 0 ? 'text-green-600' : 'text-red-600'
             }`}>
               {(data.growthMetrics.monthOverMonth || 0) >= 0 ? '+' : ''}
-              {data.growthMetrics.monthOverMonth?.toFixed(1)}% MoM
+              {data.growthMetrics.monthOverMonth.toFixed(1)}% MoM
             </p>
           )}
         </div>
@@ -220,14 +220,14 @@ export default function CallVolumeAnalytics() {
                 </p>
               </div>
             )}
-            {data.growthMetrics.yearOverYear !== null && (
+            {data.growthMetrics?.yearOverYear !== null && data.growthMetrics?.yearOverYear !== undefined && (
               <div>
                 <p className="text-gray-500 dark:text-gray-400">Year over Year</p>
                 <p className={`text-lg font-semibold ${
                   (data.growthMetrics.yearOverYear || 0) >= 0 ? 'text-green-600' : 'text-red-600'
                 }`}>
                   {(data.growthMetrics.yearOverYear || 0) >= 0 ? '+' : ''}
-                  {data.growthMetrics.yearOverYear?.toFixed(1)}%
+                  {data.growthMetrics.yearOverYear.toFixed(1)}%
                 </p>
               </div>
             )}
