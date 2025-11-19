@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/context/OrganizationContext";
 import { createClient } from "@/lib/supabase/client";
+import ChatHistoryFilters from "@/components/ChatHistoryFilters";
+import ChatHistoryTable from "@/components/ChatHistoryTable";
 
 export default function ChatHistoryPage() {
   const { user, loading: authLoading } = useAuth();
@@ -12,6 +14,13 @@ export default function ChatHistoryPage() {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkingAdmin, setCheckingAdmin] = useState(true);
+  const [filters, setFilters] = useState<{
+    tenant_id?: string;
+    agent_id?: string;
+    status?: string;
+    dateRange?: string;
+    searchQuery?: string;
+  }>({});
   const supabase = createClient();
 
   useEffect(() => {
@@ -71,7 +80,7 @@ export default function ChatHistoryPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Chat History
+            Chat History & Conversations
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             Complete chat conversation log with transcripts and analytics
@@ -87,14 +96,11 @@ export default function ChatHistoryPage() {
         </div>
       </div>
 
-      {/* Placeholder for Chat History Table */}
-      <div className="rounded-lg bg-white shadow-sm dark:bg-gray-800 p-6">
-        <div className="text-center py-12">
-          <p className="text-gray-500 dark:text-gray-400">
-            Chat history functionality coming soon. This will display all chat conversations.
-          </p>
-        </div>
-      </div>
+      {/* Filters */}
+      <ChatHistoryFilters onFiltersChange={setFilters} />
+
+      {/* Main Content */}
+      <ChatHistoryTable filters={filters} />
     </div>
   );
 }
