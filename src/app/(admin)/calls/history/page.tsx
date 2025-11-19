@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/context/OrganizationContext";
 import CallHistoryFilters from "@/components/CallHistoryFilters";
 import CallHistoryTable from "@/components/CallHistoryTable";
-import CallDetailsPanel from "@/components/CallDetailsPanel";
 import { createClient } from "@/lib/supabase/client";
 
 export default function CallHistoryPage() {
@@ -194,14 +193,7 @@ export default function CallHistoryPage() {
       <CallHistoryFilters onFiltersChange={setFilters} />
 
       {/* Main Content */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <CallHistoryTable filters={filters} />
-        </div>
-        <div>
-          <CallDetailsPanel />
-        </div>
-      </div>
+      <CallHistoryTable filters={filters} />
     </div>
   );
 }

@@ -289,10 +289,7 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
               callRecords.map((call) => (
                 <tr 
                   key={call.id} 
-                  className={`hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer ${
-                    selectedCall === call.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
-                  }`}
-                  onClick={() => setSelectedCall(selectedCall === call.id ? null : call.id)}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-900"
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
@@ -354,20 +351,27 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
                       {call.hasRecording && (
-                        <button className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400" title="Has Recording">
+                        <span className="text-indigo-600 dark:text-indigo-400" title="Has Recording">
                           🎵
-                        </button>
+                        </span>
                       )}
                       {call.hasTranscript && (
-                        <button className="text-green-600 hover:text-green-900 dark:text-green-400" title="Has Transcript">
+                        <span className="text-green-600 dark:text-green-400" title="Has Transcript">
                           📝
-                        </button>
+                        </span>
                       )}
                       {call.transferred && (
                         <span className="text-blue-600 dark:text-blue-400" title="Transferred">🔄</span>
                       )}
-                      <button className="text-gray-600 hover:text-gray-900 dark:text-gray-400" title="View Details">
-                        👁️
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/calls/history/${call.id}`, '_blank');
+                        }}
+                        className="rounded-lg bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+                        title="View Details"
+                      >
+                        Details
                       </button>
                     </div>
                   </td>
