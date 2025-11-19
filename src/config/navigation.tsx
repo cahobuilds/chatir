@@ -73,6 +73,15 @@ export const navigationConfig: NavItem[] = [
     description: "View call history and recordings",
   },
   {
+    name: "Chat History",
+    icon: <ChatIcon />,
+    category: "dashboard",
+    path: "/chats/history",
+    type: "functional",
+    badge: "new",
+    description: "View chat conversation history",
+  },
+  {
     name: "Knowledge Base",
     icon: <DocumentTextIcon className="w-5 h-5" />,
     category: "dashboard",
@@ -103,24 +112,6 @@ export const navigationConfig: NavItem[] = [
         type: "functional",
         badge: "new",
         description: "Manage roles and permissions",
-      },
-      {
-        name: "Call History",
-        path: "/calls/history",
-        type: "functional",
-        badge: "new",
-        description: "View call history and recordings",
-        icon: <ClockIcon className="w-5 h-5" />,
-        adminOnly: true,
-      },
-      {
-        name: "Chat History",
-        path: "/chats/history",
-        type: "functional",
-        badge: "new",
-        description: "View chat conversation history",
-        icon: <ClockIcon className="w-5 h-5" />,
-        adminOnly: true,
       },
       // Future functional items can be added here
       // {
