@@ -101,7 +101,7 @@ export async function GET(
                     });
 
                     // Fetch latest chat data from Retell
-                    const retellChat = await retellClient.chat.retrieve(chatIdToFetch);
+                    const retellChat: any = await retellClient.chat.retrieve(chatIdToFetch);
                     
                     // Extract messages
                     let extractedMessages: any[] = [];
