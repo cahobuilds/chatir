@@ -123,12 +123,10 @@ export default function KnowledgeBaseDetail({
       // Refresh sources
       await fetchSources();
       
-      // Refresh knowledge base list (call parent refresh)
-      if (onSync) {
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      }
+      // Refresh knowledge base list
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (error: any) {
       alert(error.message || 'Failed to add sources');
     } finally {
