@@ -130,12 +130,13 @@ export async function GET(
           
           // Try chat.retrieve() first (faster if it works)
           try {
-            const retrievedChat = await retellClient.chat.retrieve(interaction.retell_conversation_id);
+            const retrievedChat: any = await retellClient.chat.retrieve(interaction.retell_conversation_id);
             
             // Check if retrieve() returned transcript/messages
+            // Use type assertion since Retell SDK types may be incomplete
             const hasTranscript = retrievedChat?.transcript || 
                                  retrievedChat?.message_with_tool_calls || 
-                                 retrievedChat?.messages;
+                                 (retrievedChat as any)?.messages;
             
             if (hasTranscript) {
               retellChatData = retrievedChat;
