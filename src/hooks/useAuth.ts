@@ -30,9 +30,25 @@ export function useAuth() {
   }, [supabase]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/auth/login');
-    router.refresh();
+    try {
+      // Check if Supabase URL is configured
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+        console.error('Supabase URL not configured');
+        // Still redirect to login even if Supabase is not configured
+        router.push('/auth/login');
+        router.refresh();
+        return;
+      }
+
+      await supabase.auth.signOut();
+      router.push('/auth/login');
+      router.refresh();
+    } catch (error) {
+      console.error('Error signing out:', error);
+      // Still redirect to login even if sign out fails
+      router.push('/auth/login');
+      router.refresh();
+    }
   };
 
   return {

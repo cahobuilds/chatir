@@ -7,6 +7,7 @@ import {
   CallIcon,
   ChatIcon,
 } from "../icons";
+import { DocumentTextIcon, ClockIcon } from "@heroicons/react/24/outline";
 
 export type PageType = "functional" | "template";
 export type NavCategory = "dashboard" | "admin" | "settings" | "templates";
@@ -17,6 +18,8 @@ export interface NavSubItem {
   type: PageType;
   badge?: "new" | "pro" | "demo";
   description?: string;
+  icon?: React.ReactNode;
+  adminOnly?: boolean; // If true, only show for admin users
 }
 
 export interface NavItem {
@@ -59,6 +62,33 @@ export const navigationConfig: NavItem[] = [
     type: "functional",
     badge: "new",
     description: "Manage chat AI agents",
+  },
+  {
+    name: "Call History",
+    icon: <ClockIcon className="w-5 h-5" />,
+    category: "dashboard",
+    path: "/calls/history",
+    type: "functional",
+    badge: "new",
+    description: "View call history and recordings",
+  },
+  {
+    name: "Chat History",
+    icon: <ChatIcon />,
+    category: "dashboard",
+    path: "/chats/history",
+    type: "functional",
+    badge: "new",
+    description: "View chat conversation history",
+  },
+  {
+    name: "Knowledge Base",
+    icon: <DocumentTextIcon className="w-5 h-5" />,
+    category: "dashboard",
+    path: "/knowledge",
+    type: "functional",
+    badge: "new",
+    description: "Manage knowledge bases and content",
   },
 
   // Admin - Functional features
@@ -178,20 +208,6 @@ export const navigationConfig: NavItem[] = [
         type: "template",
         badge: "demo",
         description: "Quality assurance template",
-      },
-      {
-        name: "Call History",
-        path: "/calls/history",
-        type: "template",
-        badge: "demo",
-        description: "Call history template",
-      },
-      {
-        name: "Knowledge Base",
-        path: "/knowledge",
-        type: "template",
-        badge: "demo",
-        description: "Knowledge base template",
       },
       {
         name: "Conversation Flows",

@@ -18,6 +18,7 @@ interface Interaction {
   metadata: any;
   started_at: string;
   ended_at: string | null;
+  created_at: string;
   agents?: {
     name: string;
     type: string;
@@ -27,23 +28,18 @@ interface Interaction {
   };
 }
 
-interface CallRecord {
+interface ChatRecord {
   id: string;
   timestamp: string;
-  caller: string;
-  direction: "inbound" | "outbound";
+  participant: string;
   duration: string;
   agent: string;
-  status: "completed" | "missed" | "failed" | "busy" | "in_progress";
-  sentiment: "positive" | "neutral" | "negative";
-  hasRecording: boolean;
+  status: "completed" | "failed" | "in_progress";
+  messageCount: number;
   hasTranscript: boolean;
-  transferred: boolean;
-  language: string;
-  outcome: string;
 }
 
-interface CallHistoryTableProps {
+interface ChatHistoryTableProps {
   filters?: {
     tenant_id?: string;
     agent_id?: string;
@@ -51,13 +47,11 @@ interface CallHistoryTableProps {
     dateRange?: string;
     searchQuery?: string;
   };
-  onFiltersChange?: (filters: any) => void;
 }
 
-export default function CallHistoryTable({ filters = {}, onFiltersChange }: CallHistoryTableProps) {
+export default function ChatHistoryTable({ filters = {} }: ChatHistoryTableProps) {
   const { currentOrganization } = useOrganization();
-  const [selectedCall, setSelectedCall] = useState<string | null>(null);
-  const [callRecords, setCallRecords] = useState<CallRecord[]>([]);
+  const [chatRecords, setChatRecords] = useState<ChatRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
@@ -71,7 +65,7 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
       if (!currentOrganization?.id) return;
       
       try {
-        const response = await fetch(`/api/agents?tenant_id=${currentOrganization.id}&type=voice`);
+        const response = await fetch(`/api/agents?tenant_id=${currentOrganization.id}&type=chat`);
         if (response.ok) {
           const data = await response.json();
           setAgents(data.agents || []);
@@ -98,7 +92,7 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
       try {
         const params = new URLSearchParams({
           tenant_id: currentOrganization.id,
-          type: 'voice', // Only fetch voice interactions
+          type: 'chat', // Only fetch chat interactions
           limit: pageSize.toString(),
           offset: ((currentPage - 1) * pageSize).toString(),
         });
@@ -114,52 +108,52 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
         const response = await fetch(`/api/interactions?${params.toString()}`);
         
         if (!response.ok) {
-          throw new Error('Failed to fetch interactions');
+          throw new Error('Failed to fetch chat history');
         }
 
         const data = await response.json();
         const interactions: Interaction[] = data.interactions || [];
+        setTotal(data.total || 0);
         
-        // Map to CallRecord format (already filtered by API)
-        const mappedRecords: CallRecord[] = interactions.map((interaction) => {
+        // Map to ChatRecord format
+        const mappedRecords: ChatRecord[] = interactions.map((interaction) => {
           const durationSeconds = interaction.duration || 0;
           const minutes = Math.floor(durationSeconds / 60);
           const seconds = durationSeconds % 60;
-          const durationStr = `${minutes}m ${seconds}s`;
+          const durationStr = durationSeconds > 0 ? `${minutes}m ${seconds}s` : 'N/A';
 
-          // Extract sentiment from metadata if available
-          const sentiment = (interaction.metadata?.sentiment || 'neutral') as "positive" | "neutral" | "negative";
-          
-          // Check if transcript exists
-          const hasTranscript = !!interaction.transcript;
-          
-          // Check if recording exists (from metadata or retell_call_id)
-          const hasRecording = !!interaction.retell_call_id;
+          // Extract message count from transcript or metadata
+          let messageCount = 0;
+          if (interaction.transcript) {
+            if (Array.isArray(interaction.transcript)) {
+              messageCount = interaction.transcript.length;
+            } else if (typeof interaction.transcript === 'object') {
+              messageCount = Object.keys(interaction.transcript).length;
+            }
+          }
+          if (interaction.metadata?.message_count) {
+            messageCount = interaction.metadata.message_count;
+          }
+
+          // Get participant identifier
+          const participant = interaction.customer_email || interaction.customer_phone || 'Anonymous';
 
           return {
             id: interaction.id,
             timestamp: interaction.started_at,
-            caller: interaction.customer_phone || 'Unknown',
-            direction: "inbound" as const, // Most calls are inbound, could be enhanced
+            participant: participant,
             duration: durationStr,
-            agent: interaction.agents?.name || 'Unknown Agent',
+            agent: interaction.agents?.name || "Unknown Agent",
             status: interaction.status === 'completed' ? 'completed' : 
-                   interaction.status === 'failed' ? 'failed' : 
-                   interaction.status === 'in_progress' ? 'in_progress' : 'completed',
-            sentiment,
-            hasRecording,
-            hasTranscript,
-            transferred: interaction.metadata?.transferred || false,
-            language: interaction.metadata?.language || 'EN',
-            outcome: interaction.metadata?.outcome || (interaction.status === 'completed' ? 'Completed' : 'In Progress'),
+                    interaction.status === 'failed' ? 'failed' : 'in_progress',
+            messageCount: messageCount,
+            hasTranscript: !!interaction.transcript,
           };
         });
-
-        setCallRecords(mappedRecords);
-        setTotal(data.total || 0);
+        setChatRecords(mappedRecords);
       } catch (err: any) {
-        console.error('Error fetching interactions:', err);
-        setError(err.message || 'Failed to load call history');
+        console.error("Error fetching chat history:", err);
+        setError(err.message || "Failed to load chat history");
       } finally {
         setLoading(false);
       }
@@ -171,32 +165,10 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
-      case "missed": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
-      case "failed": return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300";
-      case "busy": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
+      case "failed": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
       case "in_progress": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
       default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300";
     }
-  };
-
-  const getSentimentColor = (sentiment: string) => {
-    switch (sentiment) {
-      case "positive": return "text-green-600 dark:text-green-400";
-      case "neutral": return "text-yellow-600 dark:text-yellow-400";
-      case "negative": return "text-red-600 dark:text-red-400";
-      default: return "text-gray-600 dark:text-gray-400";
-    }
-  };
-
-  const getDirectionIcon = (direction: string) => {
-    return direction === "inbound" ? "📞" : "📞";
-  };
-
-  const formatDuration = (seconds: number | null) => {
-    if (!seconds) return "0m 0s";
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes}m ${secs}s`;
   };
 
   const totalPages = Math.ceil(total / pageSize);
@@ -232,11 +204,11 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
       <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Call Records
+            Chat Conversations
           </h3>
           <div className="flex items-center space-x-2">
             <span className="text-sm text-gray-500 dark:text-gray-400">
-              {total} calls found
+              {total} conversations found
             </span>
             <button
               onClick={() => window.location.reload()}
@@ -253,25 +225,25 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Call ID
+                Chat ID
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Time
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Caller
+                Participant
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Duration
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[200px] max-w-[250px]">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Agent
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Status
+                Messages
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Sentiment
+                Status
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Actions
@@ -279,96 +251,69 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {callRecords.length === 0 ? (
+            {chatRecords.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
-                  No call records found
+                  No chat conversations found
                 </td>
               </tr>
             ) : (
-              callRecords.map((call) => (
+              chatRecords.map((chat) => (
                 <tr 
-                  key={call.id} 
+                  key={chat.id} 
                   className="hover:bg-gray-50 dark:hover:bg-gray-900"
                 >
                   <td className="px-4 py-4">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-lg flex-shrink-0">{getDirectionIcon(call.direction)}</span>
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {call.id.substring(0, 8)}...
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {call.direction}
-                        </div>
-                      </div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-white font-mono">
+                      {chat.id.substring(0, 8)}...
                     </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900 dark:text-white">
-                      {new Date(call.timestamp).toLocaleDateString()}
+                      {new Date(chat.timestamp).toLocaleDateString()}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {new Date(call.timestamp).toLocaleTimeString()}
+                      {new Date(chat.timestamp).toLocaleTimeString()}
                     </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900 dark:text-white">
-                      {call.caller}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {call.language}
+                      {chat.participant}
                     </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900 dark:text-white">
-                      {call.duration}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {call.outcome}
+                      {chat.duration}
                     </div>
                   </td>
                   <td className="px-4 py-4">
                     <div className="text-sm text-gray-900 dark:text-white line-clamp-2 break-words max-w-[250px]">
-                      {call.agent}
+                      {chat.agent}
                     </div>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(call.status)}`}>
-                      {call.status}
+                    <div className="text-sm text-gray-900 dark:text-white">
+                      {chat.messageCount}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(chat.status)}`}>
+                      {chat.status}
                     </span>
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-1">
-                      <span className={`text-sm ${getSentimentColor(call.sentiment)}`}>
-                        {call.sentiment === 'positive' ? '😊' : call.sentiment === 'neutral' ? '😐' : '😞'}
-                      </span>
-                      <span className={`text-xs ${getSentimentColor(call.sentiment)} hidden sm:inline`}>
-                        {call.sentiment}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-1">
-                      {call.hasRecording && (
-                        <span className="text-indigo-600 dark:text-indigo-400" title="Has Recording">
-                          🎵
-                        </span>
-                      )}
-                      {call.hasTranscript && (
+                    <div className="flex items-center space-x-2">
+                      {chat.hasTranscript && (
                         <span className="text-green-600 dark:text-green-400" title="Has Transcript">
                           📝
                         </span>
                       )}
-                      {call.transferred && (
-                        <span className="text-blue-600 dark:text-blue-400" title="Transferred">🔄</span>
-                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          window.open(`/calls/history/${call.id}`, '_blank');
+                          window.open(`/chats/history/${chat.id}`, '_blank');
                         }}
-                        className="rounded-lg bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 whitespace-nowrap"
+                        className="rounded-lg bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 whitespace-nowrap"
                         title="View Details"
                       >
                         Details
@@ -388,7 +333,7 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-500 dark:text-gray-400">
-                Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, total)} of {total} calls
+                Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, total)} of {total} conversations
               </span>
             </div>
             <div className="flex items-center space-x-2">
@@ -438,3 +383,4 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
     </div>
   );
 }
+

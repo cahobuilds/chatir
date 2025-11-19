@@ -4,11 +4,24 @@ import { NextRequest, NextResponse } from 'next/server';
 // GET /api/agents - Get agents for current user's tenant(s)
 export async function GET(request: NextRequest) {
   try {
+    // Check environment variables before creating clients
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('[Agents API] Missing Supabase environment variables');
+      return NextResponse.json(
+        { 
+          error: 'Server configuration error: Supabase not configured',
+          details: 'Please check server environment variables'
+        },
+        { status: 500 }
+      );
+    }
+    
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
+      console.error('[Agents API] Auth error:', authError?.message);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

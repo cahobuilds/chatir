@@ -4,11 +4,11 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/context/OrganizationContext";
-import CallHistoryFilters from "@/components/CallHistoryFilters";
-import CallHistoryTable from "@/components/CallHistoryTable";
 import { createClient } from "@/lib/supabase/client";
+import ChatHistoryFilters from "@/components/ChatHistoryFilters";
+import ChatHistoryTable from "@/components/ChatHistoryTable";
 
-export default function CallHistoryPage() {
+export default function ChatHistoryPage() {
   const { user, loading: authLoading } = useAuth();
   const { currentOrganization } = useOrganization();
   const router = useRouter();
@@ -64,6 +64,55 @@ export default function CallHistoryPage() {
     checkAdminAccess();
   }, [user, currentOrganization, router, supabase]);
 
+  const handleSync = async () => {
+    if (!currentOrganization?.id || syncing) return;
+
+    setSyncing(true);
+    setSyncResult(null);
+
+    try {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+
+      const response = await fetch('/api/retell/chats/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          tenant_id: currentOrganization.id,
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+          limit: 1000,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to sync chats');
+      }
+
+      setSyncResult({
+        success: true,
+        message: `Successfully synced ${data.synced || 0} chats. ${data.skipped || 0} skipped.`,
+      });
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error: any) {
+      setSyncResult({
+        success: false,
+        message: error.message || 'Failed to sync chats',
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (authLoading || checkingAdmin) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -76,67 +125,16 @@ export default function CallHistoryPage() {
     return null; // Will redirect
   }
 
-  const handleSync = async () => {
-    if (!currentOrganization?.id || syncing) return;
-
-    setSyncing(true);
-    setSyncResult(null);
-
-    try {
-      // Calculate date range (last 30 days by default)
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 30);
-
-      const response = await fetch('/api/retell/calls/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          tenant_id: currentOrganization.id,
-          start_date: startDate.toISOString(),
-          end_date: endDate.toISOString(),
-          limit: 1000, // Sync up to 1000 calls
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to sync calls');
-      }
-
-      setSyncResult({
-        success: true,
-        message: `Successfully synced ${data.synced || 0} calls. ${data.skipped || 0} skipped.`,
-      });
-
-      // Refresh the table after sync
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    } catch (error: any) {
-      setSyncResult({
-        success: false,
-        message: error.message || 'Failed to sync calls',
-      });
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Call History & Recordings
+            Chat History & Conversations
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Complete call log with recordings, transcripts, and analytics
+            Complete chat conversation log with transcripts and analytics
           </p>
         </div>
         <div className="flex items-center space-x-4">
@@ -190,10 +188,11 @@ export default function CallHistoryPage() {
       )}
 
       {/* Filters */}
-      <CallHistoryFilters onFiltersChange={setFilters} />
+      <ChatHistoryFilters onFiltersChange={setFilters} />
 
       {/* Main Content */}
-      <CallHistoryTable filters={filters} />
+      <ChatHistoryTable filters={filters} />
     </div>
   );
 }
+

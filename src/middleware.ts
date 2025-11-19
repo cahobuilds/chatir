@@ -24,9 +24,21 @@ export async function middleware(request: NextRequest) {
     request,
   });
 
+  let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('[Middleware] Missing Supabase environment variables');
+    // Allow request to continue but auth will fail gracefully
+    return supabaseResponse;
+  }
+
+  // Clean up URL - remove any trailing whitespace/newlines that might cause issues
+  supabaseUrl = supabaseUrl.trim();
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {

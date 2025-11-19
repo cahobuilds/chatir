@@ -11,10 +11,24 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    
+    // Check environment variables before creating client
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('[Retell Agent API] Missing Supabase environment variables');
+      return NextResponse.json(
+        { 
+          error: 'Server configuration error: Supabase not configured',
+          details: 'Please check server environment variables'
+        },
+        { status: 500 }
+      );
+    }
+    
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
+      console.error('[Retell Agent API] Auth error:', authError?.message);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
