@@ -5,9 +5,11 @@ import KnowledgeBaseSidebar, { type KnowledgeBase } from "@/components/Knowledge
 import KnowledgeBaseDetail from "@/components/KnowledgeBaseDetail";
 import AddKnowledgeBaseModal from "@/components/AddKnowledgeBaseModal";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/context/OrganizationContext";
 
 export default function KnowledgeBasePage() {
   const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [selectedKb, setSelectedKb] = useState<KnowledgeBase | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -15,33 +17,12 @@ export default function KnowledgeBasePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
 
   // Set page title
   useEffect(() => {
     document.title = "Knowledge Base Management | AI Customer Care - TinAdmin";
   }, []);
 
-  // Get current tenant ID from profile
-  useEffect(() => {
-    const fetchTenantId = async () => {
-      if (!user) return;
-      
-      try {
-        const response = await fetch("/api/profile");
-        if (response.ok) {
-          const data = await response.json();
-          if (data.profile?.tenants && data.profile.tenants.length > 0) {
-            // Use the first active tenant
-            setCurrentTenantId(data.profile.tenants[0].tenant_id || data.profile.tenants[0].id);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch tenant ID:", err);
-      }
-    };
-    fetchTenantId();
-  }, [user]);
 
   // Fetch knowledge bases from API
   useEffect(() => {
@@ -58,8 +39,8 @@ export default function KnowledgeBasePage() {
   };
 
   const handleSaveNew = async (name: string, type: "notion" | "web" | "file" | "text") => {
-    if (!currentTenantId) {
-      setError("No tenant selected. Please select an organization.");
+    if (!currentOrganization?.id) {
+      setError("No organization selected. Please select an organization.");
       return;
     }
 
@@ -70,7 +51,7 @@ export default function KnowledgeBasePage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          tenant_id: currentTenantId,
+          tenant_id: currentOrganization.id,
           name,
           type,
         }),
@@ -105,8 +86,8 @@ export default function KnowledgeBasePage() {
   };
 
   const handleSync = async () => {
-    if (!currentTenantId) {
-      setError("No tenant selected. Please select an organization.");
+    if (!currentOrganization?.id) {
+      setError("No organization selected. Please select an organization.");
       return;
     }
 
@@ -121,7 +102,7 @@ export default function KnowledgeBasePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          tenant_id: currentTenantId,
+          tenant_id: currentOrganization.id,
         }),
       });
 

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       .select('role')
       .eq('user_id', user.id)
       .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'system_admin'])
+      .eq('status', 'active')
       .single();
 
     if (!userTenant) {
