@@ -15,31 +15,31 @@ async function enrichInteraction(supabase: any, interaction: any) {
   let agentsMap: Record<string, { name: string; type: string }> = {};
   let tenantsMap: Record<string, { name: string }> = {};
 
-  if (agentIds.length > 0) {
-    const { data: agents } = await supabase
-      .from('agents')
-      .select('id, name, type')
-      .in('id', agentIds);
-    
-    if (agents) {
-      agents.forEach(agent => {
-        agentsMap[agent.id] = { name: agent.name, type: agent.type };
-      });
+    if (agentIds.length > 0) {
+      const { data: agents } = await supabase
+        .from('agents')
+        .select('id, name, type')
+        .in('id', agentIds);
+      
+      if (agents) {
+        agents.forEach((agent: { id: string; name: string; type: string }) => {
+          agentsMap[agent.id] = { name: agent.name, type: agent.type };
+        });
+      }
     }
-  }
 
-  if (tenantIdsToFetch.length > 0) {
-    const { data: tenants } = await supabase
-      .from('tenants')
-      .select('id, name')
-      .in('id', tenantIdsToFetch);
-    
-    if (tenants) {
-      tenants.forEach(tenant => {
-        tenantsMap[tenant.id] = { name: tenant.name };
-      });
+    if (tenantIdsToFetch.length > 0) {
+      const { data: tenants } = await supabase
+        .from('tenants')
+        .select('id, name')
+        .in('id', tenantIdsToFetch);
+      
+      if (tenants) {
+        tenants.forEach((tenant: { id: string; name: string }) => {
+          tenantsMap[tenant.id] = { name: tenant.name };
+        });
+      }
     }
-  }
 
   // Fetch chat conversation details from Retell if retell_conversation_id exists
   let retellChatData: any = null;
