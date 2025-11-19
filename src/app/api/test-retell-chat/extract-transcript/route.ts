@@ -8,6 +8,19 @@ import { createRetellClient } from '@/lib/retell';
  * POST /api/test-retell-chat/extract-transcript
  * Body: { chat_id: string, interaction_id?: string }
  */
+
+// Handle OPTIONS for CORS
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
