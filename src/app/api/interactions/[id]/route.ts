@@ -113,8 +113,13 @@ export async function GET(
     // Fetch chat conversation details from Retell if retell_conversation_id exists
     // According to Retell API docs: chat.list() includes transcript and chat_analysis fields
     // chat.retrieve() may not include transcript, so we use chat.list() and filter by chat_id
+    // Also check metadata.retell_chat_id (stored by widget chat API)
     let retellChatData: any = null;
-    if (interaction.retell_conversation_id && interaction.type === 'chat') {
+    const chatIdToFetch = interaction.retell_conversation_id || 
+                          (interaction.metadata as any)?.retell_chat_id ||
+                          (interaction.metadata as any)?.chat_id;
+    
+    if (chatIdToFetch && interaction.type === 'chat') {
       try {
         const { getResellerRetellConfig } = await import('@/lib/reseller');
         const { createRetellClient } = await import('@/lib/retell');
@@ -126,11 +131,12 @@ export async function GET(
             maxRetries: 2,
           });
           
-          console.log(`[Interactions API] Fetching Retell chat data for chat_id: ${interaction.retell_conversation_id}`);
+          console.log(`[Interactions API] Fetching Retell chat data for chat_id: ${chatIdToFetch}`);
+          console.log(`[Interactions API] Source: retell_conversation_id=${interaction.retell_conversation_id}, metadata.retell_chat_id=${(interaction.metadata as any)?.retell_chat_id}`);
           
           // Try chat.retrieve() first (faster if it works)
           try {
-            const retrievedChat: any = await retellClient.chat.retrieve(interaction.retell_conversation_id);
+            const retrievedChat: any = await retellClient.chat.retrieve(chatIdToFetch);
             
             // Check if retrieve() returned transcript/messages
             // Use type assertion since Retell SDK types may be incomplete
@@ -153,8 +159,16 @@ export async function GET(
             const chatListResponse = await retellClient.chat.list();
             const chats = Array.isArray(chatListResponse) ? chatListResponse : (chatListResponse as any).chats || [];
             
-            // Find the specific chat by chat_id
-            retellChatData = chats.find((chat: any) => chat.chat_id === interaction.retell_conversation_id);
+            // Find the specific chat by chat_id (try exact match first, then partial)
+            retellChatData = chats.find((chat: any) => chat.chat_id === chatIdToFetch);
+            
+            // If not found, try partial match (in case of ID format differences)
+            if (!retellChatData) {
+              retellChatData = chats.find((chat: any) => 
+                chat.chat_id?.includes(chatIdToFetch) || 
+                chatIdToFetch.includes(chat.chat_id)
+              );
+            }
             
             if (retellChatData) {
               console.log(`[Interactions API] Found chat in list`);
