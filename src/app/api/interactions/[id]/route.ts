@@ -139,10 +139,13 @@ export async function GET(
       } : null,
       // Add Retell chat data (messages, metadata, etc.)
       retell_chat_data: retellChatData ? {
+        chat_id: retellChatData.chat_id || interaction.retell_conversation_id,
         messages: retellChatData.message_with_tool_calls || retellChatData.messages || [],
         start_timestamp: retellChatData.start_timestamp,
         end_timestamp: retellChatData.end_timestamp,
         chat_status: retellChatData.chat_status,
+        chat_analysis: retellChatData.chat_analysis,
+        chat_cost: retellChatData.chat_cost,
         collected_dynamic_variables: retellChatData.collected_dynamic_variables,
         metadata: retellChatData.metadata,
         agent_id: retellChatData.agent_id,
