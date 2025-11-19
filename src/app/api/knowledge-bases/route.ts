@@ -1,6 +1,8 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { getResellerRetellConfig } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 // GET /api/knowledge-bases - Get knowledge bases for current user's tenant(s)
 export async function GET(request: NextRequest) {
@@ -147,36 +149,49 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get Retell API key
+    // Get Retell API key - REQUIRED for knowledge base creation
     const retellApiKey = await getResellerRetellConfig(tenant_id);
-    let retellKBId: string | null = null;
 
-    // Create knowledge base in Retell if API key is available
-    if (retellApiKey) {
-      try {
-        const { createRetellClient } = await import('@/lib/retell');
-        const retellClient = createRetellClient(retellApiKey);
-        
-        const retellKB = await retellClient.knowledgeBase.create({
-          knowledge_base_name: name,
-          enable_auto_refresh: false,
-        });
+    if (!retellApiKey) {
+      return NextResponse.json(
+        { 
+          error: 'Retell AI not configured for this organization\'s reseller. Knowledge bases must be created in Retell to inform agents. Please contact your reseller administrator.' 
+        },
+        { status: 400 }
+      );
+    }
 
-        retellKBId = retellKB.knowledge_base_id;
-        console.log(`[KB API] Created Retell knowledge base: ${retellKBId}`);
-      } catch (retellError: any) {
-        console.error('[KB API] Error creating Retell knowledge base:', retellError);
-        // Continue with local creation even if Retell creation fails
-      }
+    // Create knowledge base in Retell - REQUIRED for agents to use the KB
+    let retellKBId: string;
+    try {
+      const { createRetellClient } = await import('@/lib/retell');
+      const retellClient = createRetellClient(retellApiKey);
+      
+      const retellKB = await retellClient.knowledgeBase.create({
+        knowledge_base_name: name,
+        enable_auto_refresh: false,
+      });
+
+      retellKBId = retellKB.knowledge_base_id;
+      console.log(`[KB API] Created Retell knowledge base: ${retellKBId}`);
+    } catch (retellError: any) {
+      console.error('[KB API] Error creating Retell knowledge base:', retellError);
+      const errorMessage = retellError?.message || retellError?.toString() || 'Unknown error';
+      return NextResponse.json(
+        { 
+          error: `Failed to create knowledge base in Retell AI: ${errorMessage}. Knowledge bases must be created in Retell to inform agents.` 
+        },
+        { status: 500 }
+      );
     }
 
     // Use admin client for system admin to bypass RLS, regular client for others
     const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
 
-    // Create knowledge base locally
+    // Create knowledge base locally - only after successful Retell creation
     const kbConfig = {
       ...(configuration || {}),
-      ...(retellKBId ? { retell_knowledge_base_id: retellKBId } : {}),
+      retell_knowledge_base_id: retellKBId, // Always store Retell KB ID
     };
 
     const { data: knowledgeBase, error: kbError } = await clientToUse
@@ -187,7 +202,7 @@ export async function POST(request: NextRequest) {
         type,
         description: description || null,
         configuration: kbConfig,
-        status: retellKBId ? 'synced' : 'pending',
+        status: 'synced', // Always synced since we just created it in Retell
         page_count: 0,
       })
       .select()
@@ -195,6 +210,19 @@ export async function POST(request: NextRequest) {
 
     if (kbError) {
       return NextResponse.json({ error: kbError.message }, { status: 500 });
+    }
+
+    // Create directory for knowledge base files (if not in serverless environment)
+    try {
+      // Only create directories if we're in a file system environment
+      // This will work in local/dev but gracefully fail in serverless environments
+      const kbDirectory = path.join(process.cwd(), 'knowledge-bases', tenant_id, knowledgeBase.id);
+      await fs.mkdir(kbDirectory, { recursive: true });
+      console.log(`[KB API] Created directory for knowledge base: ${kbDirectory}`);
+    } catch (dirError: any) {
+      // Directory creation is optional - log but don't fail the request
+      // This is expected in serverless environments (Vercel, etc.)
+      console.log(`[KB API] Could not create directory (may be serverless environment): ${dirError.message}`);
     }
 
     return NextResponse.json({ knowledge_base: knowledgeBase }, { status: 201 });
