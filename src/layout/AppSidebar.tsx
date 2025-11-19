@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { useOrganization } from "../context/OrganizationContext";
+import { useAuth } from "@/hooks/useAuth";
 import {
   ChevronDownIcon,
   HorizontaLDots,
@@ -18,6 +19,7 @@ import {
 } from "../config/navigation";
 import Input from "../components/form/input/InputField";
 import Badge from "../components/ui/badge/Badge";
+import { createClient } from "@/lib/supabase/client";
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
