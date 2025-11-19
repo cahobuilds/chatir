@@ -209,7 +209,7 @@ export async function GET(
       else if (typeof retellChatData.transcript === 'string' && retellChatData.transcript.trim()) {
         // Parse string transcript into message objects
         // Format: "Agent: message\nUser: message\n..."
-        const transcriptLines = retellChatData.transcript.split('\n').filter(line => line.trim());
+        const transcriptLines = retellChatData.transcript.split('\n').filter((line: string) => line.trim());
         extractedMessages = transcriptLines.map((line: string, index: number) => {
           const match = line.match(/^(Agent|User|System):\s*(.+)$/);
           if (match) {
