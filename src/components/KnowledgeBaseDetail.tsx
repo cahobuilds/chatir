@@ -152,11 +152,9 @@ export default function KnowledgeBaseDetail({
       await fetchSources();
       
       // Refresh knowledge base list
-      if (onSync) {
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      }
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (error: any) {
       alert(error.message || 'Failed to delete source');
     }
