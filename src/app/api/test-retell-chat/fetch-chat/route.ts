@@ -73,7 +73,8 @@ export async function POST(request: NextRequest) {
     console.log(`[Test Fetch Chat] Fetching chat ${chat_id} from Retell...`);
 
     // Fetch chat data from Retell
-    const chatData = await retellClient.chat.retrieve(chat_id);
+    // Use type assertion since Retell SDK types may be incomplete
+    const chatData: any = await retellClient.chat.retrieve(chat_id);
 
     // Log the full response structure
     console.log('[Test Fetch Chat] Full Retell chat response:');
