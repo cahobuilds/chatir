@@ -161,8 +161,22 @@ export default function KnowledgeBasePage() {
       }));
       
       setKnowledgeBases(kbList);
-      // Only set selected if we don't have one already
-      if (kbList.length > 0 && !selectedKb) {
+      
+      // Preserve selected knowledge base if it still exists, otherwise select first
+      if (selectedKb) {
+        const stillExists = kbList.find(kb => kb.id === selectedKb.id);
+        if (stillExists) {
+          // Update the selected KB with latest data
+          setSelectedKb(stillExists);
+        } else if (kbList.length > 0) {
+          // Selected KB was deleted, select first one
+          setSelectedKb(kbList[0]);
+        } else {
+          // No knowledge bases left
+          setSelectedKb(null);
+        }
+      } else if (kbList.length > 0) {
+        // No selection yet, select first
         setSelectedKb(kbList[0]);
       }
     } catch (err: any) {
@@ -253,6 +267,7 @@ export default function KnowledgeBasePage() {
         onEdit={handleEdit}
         onSync={handleSync}
         onDelete={handleDelete}
+        onRefresh={fetchKnowledgeBases}
       />
 
       {/* Add Knowledge Base Modal */}
