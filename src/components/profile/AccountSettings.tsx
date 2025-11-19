@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Badge from "../ui/badge/Badge";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -49,6 +49,8 @@ interface AccountSettingsProps {
 export default function AccountSettings({ profile, selectedTenant, onTenantChange }: AccountSettingsProps) {
   const { roleInfo } = usePermissions(selectedTenant?.tenants.id || null);
   const [copiedTenantId, setCopiedTenantId] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(profile?.avatar_url || null);
 
   if (!profile) {
     return (
@@ -75,16 +77,85 @@ export default function AccountSettings({ profile, selectedTenant, onTenantChang
     }
   };
 
+  // Update avatar preview when profile changes
+  useEffect(() => {
+    if (profile?.avatar_url) {
+      setAvatarPreview(profile.avatar_url);
+    }
+  }, [profile?.avatar_url]);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Invalid file type. Allowed: JPEG, PNG, GIF, WebP');
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      alert('File size exceeds 5MB limit');
+      return;
+    }
+
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload to server
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/profile/avatar', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAvatarPreview(data.avatar_url);
+        // Refresh the page to update profile data
+        window.location.reload();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to upload avatar');
+        // Revert preview on error
+        setAvatarPreview(profile?.avatar_url || null);
+      }
+    } catch (error) {
+      console.error('Failed to upload avatar:', error);
+      alert('Failed to upload avatar');
+      // Revert preview on error
+      setAvatarPreview(profile?.avatar_url || null);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   return (
     <ComponentCard title="Account Settings">
       <div className="space-y-6">
         {/* User Profile Section */}
         <div className="flex items-start gap-4 pb-6 border-b border-gray-200 dark:border-gray-700">
           <div className="relative">
-            <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-              {profile.avatar_url ? (
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center relative">
+              {uploadingAvatar ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                </div>
+              ) : null}
+              {avatarPreview ? (
                 <Image
-                  src={profile.avatar_url}
+                  src={avatarPreview}
                   alt={profile.name}
                   width={80}
                   height={80}
@@ -96,7 +167,14 @@ export default function AccountSettings({ profile, selectedTenant, onTenantChang
                 </span>
               )}
             </div>
-            <button className="absolute bottom-0 right-0 p-1.5 bg-blue-600 rounded-full text-white hover:bg-blue-700 transition-colors">
+            <label className="absolute bottom-0 right-0 p-1.5 bg-blue-600 rounded-full text-white hover:bg-blue-700 transition-colors cursor-pointer">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="hidden"
+                disabled={uploadingAvatar}
+              />
               <svg
                 className="w-4 h-4"
                 fill="none"
@@ -116,7 +194,7 @@ export default function AccountSettings({ profile, selectedTenant, onTenantChang
                   d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
                 />
               </svg>
-            </button>
+            </label>
           </div>
           <div className="flex-1">
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">

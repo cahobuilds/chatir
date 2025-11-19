@@ -67,7 +67,7 @@ export default function KnowledgeBaseSidebar({
                 onClick={onSync}
                 disabled={syncing}
                 className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Sync from Retell"
+                title="Database Sync"
               >
                 <ArrowPathIcon className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
               </button>

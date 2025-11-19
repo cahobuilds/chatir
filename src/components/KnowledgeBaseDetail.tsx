@@ -29,6 +29,7 @@ interface KnowledgeBaseDetailProps {
   onEdit: () => void;
   onSync: () => void;
   onDelete: () => void;
+  onRefresh?: () => void;
 }
 
 export default function KnowledgeBaseDetail({
@@ -36,6 +37,7 @@ export default function KnowledgeBaseDetail({
   onEdit,
   onSync,
   onDelete,
+  onRefresh,
 }: KnowledgeBaseDetailProps) {
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,7 +53,11 @@ export default function KnowledgeBaseDetail({
   useEffect(() => {
     if (knowledgeBase?.id) {
       fetchSources();
+    } else {
+      // Clear sources if no knowledge base selected
+      setSources([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [knowledgeBase?.id]);
 
   const fetchSources = async () => {
@@ -162,13 +168,13 @@ export default function KnowledgeBaseDetail({
       setSelectedFiles([]);
       setShowAddSource(false);
       
-      // Refresh sources
+      // Refresh sources for current knowledge base
       await fetchSources();
       
-      // Refresh knowledge base list
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Refresh knowledge base list in parent (to update page count, etc.)
+      if (onRefresh) {
+        onRefresh();
+      }
     } catch (error: any) {
       alert(error.message || 'Failed to add sources');
     } finally {
@@ -190,13 +196,13 @@ export default function KnowledgeBaseDetail({
         throw new Error(error.error || 'Failed to delete source');
       }
 
-      // Refresh sources
+      // Refresh sources for current knowledge base
       await fetchSources();
       
-      // Refresh knowledge base list
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Refresh knowledge base list in parent (to update page count, etc.)
+      if (onRefresh) {
+        onRefresh();
+      }
     } catch (error: any) {
       alert(error.message || 'Failed to delete source');
     }
@@ -286,7 +292,7 @@ export default function KnowledgeBaseDetail({
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
             >
               <ArrowPathIcon className="w-4 h-4" />
-              Sync from Retell
+              Database Sync
             </button>
             <button
               onClick={onDelete}

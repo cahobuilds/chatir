@@ -311,7 +311,7 @@ export default function ChatHistoryTable({ filters = {} }: ChatHistoryTableProps
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          window.open(`/chats/history/${chat.id}`, '_blank');
+                          window.location.href = `/chats/history/${chat.id}`;
                         }}
                         className="rounded-lg bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 whitespace-nowrap"
                         title="View Details"
