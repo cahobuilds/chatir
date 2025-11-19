@@ -6,17 +6,16 @@ import { NextRequest, NextResponse } from 'next/server';
 // GET /api/knowledge-bases/[id]/sources - Get sources for a knowledge base
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { id } = params;
 
     // Get knowledge base
     const { data: knowledgeBase, error: kbError } = await supabase
@@ -64,17 +63,16 @@ export async function GET(
 // POST /api/knowledge-bases/[id]/sources - Add sources to a knowledge base
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { id } = params;
     const formData = await request.formData();
 
     // Get knowledge base
