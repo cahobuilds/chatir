@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import React from "react";
 import AnalyticsOverview from "@/components/AnalyticsOverview";
+import RealTimeMetrics from "@/components/RealTimeMetrics";
 import CallVolumeAnalytics from "@/components/CallVolumeAnalytics";
+import AdvancedCallAnalytics from "@/components/AdvancedCallAnalytics";
 import PerformanceMetrics from "@/components/PerformanceMetrics";
 import QualityMetrics from "@/components/QualityMetrics";
 import AgentPerformance from "@/components/AgentPerformance";
+import CustomerExperienceMetrics from "@/components/CustomerExperienceMetrics";
 
 export const metadata: Metadata = {
   title:
@@ -41,16 +44,25 @@ export default function AnalyticsPage() {
       {/* Overview Cards */}
       <AnalyticsOverview />
 
+      {/* Real-Time Analytics */}
+      <RealTimeMetrics />
+
       {/* Main Analytics Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <CallVolumeAnalytics />
         <PerformanceMetrics />
       </div>
 
+      {/* Advanced Call Analytics */}
+      <AdvancedCallAnalytics />
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <QualityMetrics />
         <AgentPerformance />
       </div>
+
+      {/* Customer Experience Metrics */}
+      <CustomerExperienceMetrics />
     </div>
   );
 }
