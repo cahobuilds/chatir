@@ -30,6 +30,25 @@ interface Interaction {
   tenants?: {
     name: string;
   };
+  retell_call_data?: {
+    transcript?: string;
+    transcript_object?: Array<{
+      role: 'agent' | 'user';
+      content: string;
+      start: number;
+      end: number;
+      words?: Array<{
+        word: string;
+        start: number;
+        end: number;
+      }>;
+    }>;
+    transcript_with_tool_calls?: any[];
+    recording_url?: string;
+    recording_multi_channel_url?: string;
+    scrubbed_recording_url?: string;
+    call_analysis?: any;
+  } | null;
 }
 
 export default function CallDetailPage() {
@@ -162,12 +181,55 @@ export default function CallDetailPage() {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <button className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700">
-            Download Recording
-          </button>
-          <button className="rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-            Export Transcript
-          </button>
+          {interaction.retell_call_data?.recording_url || interaction.retell_call_data?.scrubbed_recording_url ? (
+            <button
+              onClick={() => {
+                const recordingUrl = interaction.retell_call_data?.recording_url || 
+                                   interaction.retell_call_data?.scrubbed_recording_url;
+                if (recordingUrl) {
+                  const link = document.createElement('a');
+                  link.href = recordingUrl;
+                  link.download = `call-${interaction.retell_call_id || interaction.id}.mp3`;
+                  link.target = '_blank';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }
+              }}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 flex items-center space-x-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Download Recording</span>
+            </button>
+          ) : null}
+          {interaction.retell_call_data?.transcript || interaction.transcript ? (
+            <button
+              onClick={() => {
+                const transcript = interaction.retell_call_data?.transcript || interaction.transcript;
+                const transcriptText = typeof transcript === 'string' 
+                  ? transcript 
+                  : JSON.stringify(transcript, null, 2);
+                
+                const blob = new Blob([transcriptText], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `call-transcript-${interaction.retell_call_id || interaction.id}.txt`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+              }}
+              className="rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex items-center space-x-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Export Transcript</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -267,22 +329,65 @@ export default function CallDetailPage() {
 
           {activeTab === "transcript" && (
             <div className="space-y-4">
-              {interaction.transcript ? (
-                <div className="prose dark:prose-invert max-w-none">
-                  <pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-                    {typeof interaction.transcript === 'string' 
-                      ? interaction.transcript 
-                      : JSON.stringify(interaction.transcript, null, 2)}
-                  </pre>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="text-4xl mb-4">📝</div>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    No transcript available for this call
-                  </p>
-                </div>
-              )}
+              {(() => {
+                // Prefer Retell transcript, fallback to stored transcript
+                const transcript = interaction.retell_call_data?.transcript || interaction.transcript;
+                const transcriptObject = interaction.retell_call_data?.transcript_object;
+                
+                if (transcriptObject && Array.isArray(transcriptObject)) {
+                  // Format transcript with timestamps
+                  return (
+                    <div className="space-y-4">
+                      {transcriptObject.map((utterance, index) => (
+                        <div
+                          key={index}
+                          className={`p-4 rounded-lg ${
+                            utterance.role === 'agent'
+                              ? 'bg-indigo-50 dark:bg-indigo-900/20 border-l-4 border-indigo-500'
+                              : 'bg-gray-50 dark:bg-gray-900 border-l-4 border-gray-400'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`text-xs font-semibold ${
+                              utterance.role === 'agent'
+                                ? 'text-indigo-700 dark:text-indigo-300'
+                                : 'text-gray-700 dark:text-gray-300'
+                            }`}>
+                              {utterance.role === 'agent' ? 'Agent' : 'User'}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {Math.floor(utterance.start)}s - {Math.floor(utterance.end)}s
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+                            {utterance.content}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                } else if (transcript) {
+                  // Plain text transcript
+                  return (
+                    <div className="prose dark:prose-invert max-w-none">
+                      <pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+                        {typeof transcript === 'string' 
+                          ? transcript 
+                          : JSON.stringify(transcript, null, 2)}
+                      </pre>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="text-center py-12">
+                      <div className="text-4xl mb-4">📝</div>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        No transcript available for this call
+                      </p>
+                    </div>
+                  );
+                }
+              })()}
             </div>
           )}
 
@@ -299,24 +404,89 @@ export default function CallDetailPage() {
 
           {activeTab === "recording" && (
             <div className="space-y-4">
-              {interaction.retell_call_id ? (
-                <div className="text-center py-12">
-                  <div className="text-4xl mb-4">🎵</div>
-                  <p className="text-gray-500 dark:text-gray-400 mb-4">
-                    Recording available for call: {interaction.retell_call_id}
-                  </p>
-                  <p className="text-sm text-gray-400 dark:text-gray-500">
-                    Audio player integration coming soon
-                  </p>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="text-4xl mb-4">🎵</div>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    No recording available for this call
-                  </p>
-                </div>
-              )}
+              {(() => {
+                const recordingUrl = interaction.retell_call_data?.recording_url || 
+                                   interaction.retell_call_data?.scrubbed_recording_url ||
+                                   interaction.retell_call_data?.recording_multi_channel_url;
+                
+                if (recordingUrl) {
+                  return (
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 dark:bg-gray-900 p-6 rounded-lg">
+                        <audio
+                          controls
+                          className="w-full"
+                          src={recordingUrl}
+                        >
+                          Your browser does not support the audio element.
+                        </audio>
+                      </div>
+                      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            Recording URL
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 break-all">
+                            {recordingUrl}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = recordingUrl;
+                            link.download = `call-${interaction.retell_call_id || interaction.id}.mp3`;
+                            link.target = '_blank';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}
+                          className="ml-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 flex items-center space-x-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          <span>Download</span>
+                        </button>
+                      </div>
+                      {interaction.retell_call_data?.recording_multi_channel_url && (
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                          <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
+                            Multi-channel recording also available
+                          </p>
+                          <button
+                            onClick={() => {
+                              const link = document.createElement('a');
+                              link.href = interaction.retell_call_data!.recording_multi_channel_url!;
+                              link.download = `call-${interaction.retell_call_id || interaction.id}-multichannel.mp3`;
+                              link.target = '_blank';
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            Download Multi-channel Recording
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="text-center py-12">
+                      <div className="text-4xl mb-4">🎵</div>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        No recording available for this call
+                      </p>
+                      {interaction.retell_call_id && (
+                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                          Recording may still be processing. Please check back later.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+              })()}
             </div>
           )}
         </div>

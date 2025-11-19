@@ -77,11 +77,43 @@ export async function GET(
       }
     }
 
+    // Fetch call details from Retell if retell_call_id exists
+    let retellCallData: any = null;
+    if (interaction.retell_call_id) {
+      try {
+        const { getResellerRetellConfig } = await import('@/lib/reseller');
+        const { createRetellClient } = await import('@/lib/retell');
+        
+        const retellApiKey = await getResellerRetellConfig(interaction.tenant_id);
+        if (retellApiKey) {
+          const retellClient = createRetellClient(retellApiKey, {
+            timeout: 20 * 1000,
+            maxRetries: 2,
+          });
+          
+          retellCallData = await retellClient.call.retrieve(interaction.retell_call_id);
+        }
+      } catch (error: any) {
+        console.error('[Interactions API] Error fetching Retell call data:', error);
+        // Don't fail the request if Retell fetch fails
+      }
+    }
+
     // Enrich interaction with agent and tenant data
     const enrichedInteraction = {
       ...interaction,
       agents: agentsMap[interaction.agent_id] || null,
       tenants: tenantsMap[interaction.tenant_id] || null,
+      // Add Retell call data (transcript, recording URLs, etc.)
+      retell_call_data: retellCallData ? {
+        transcript: retellCallData.transcript,
+        transcript_object: retellCallData.transcript_object,
+        transcript_with_tool_calls: retellCallData.transcript_with_tool_calls,
+        recording_url: retellCallData.recording_url,
+        recording_multi_channel_url: retellCallData.recording_multi_channel_url,
+        scrubbed_recording_url: retellCallData.scrubbed_recording_url,
+        call_analysis: retellCallData.call_analysis,
+      } : null,
     };
 
     return NextResponse.json({ interaction: enrichedInteraction });
