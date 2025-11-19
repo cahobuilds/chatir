@@ -7,6 +7,7 @@ import {
   CallIcon,
   ChatIcon,
 } from "../icons";
+import { DocumentTextIcon } from "@heroicons/react/24/outline";
 
 export type PageType = "functional" | "template";
 export type NavCategory = "dashboard" | "admin" | "settings" | "templates";
@@ -59,6 +60,15 @@ export const navigationConfig: NavItem[] = [
     type: "functional",
     badge: "new",
     description: "Manage chat AI agents",
+  },
+  {
+    name: "Knowledge Base",
+    icon: <DocumentTextIcon className="w-5 h-5" />,
+    category: "dashboard",
+    path: "/knowledge",
+    type: "functional",
+    badge: "new",
+    description: "Manage knowledge bases and content",
   },
 
   // Admin - Functional features
@@ -185,13 +195,6 @@ export const navigationConfig: NavItem[] = [
         type: "template",
         badge: "demo",
         description: "Call history template",
-      },
-      {
-        name: "Knowledge Base",
-        path: "/knowledge",
-        type: "template",
-        badge: "demo",
-        description: "Knowledge base template",
       },
       {
         name: "Conversation Flows",
