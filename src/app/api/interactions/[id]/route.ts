@@ -189,32 +189,64 @@ export async function GET(
     }
 
     // Extract messages from Retell chat data
-    // According to Retell API docs: chat.list() includes 'transcript' field with full chat transcript
-    // Also check 'message_with_tool_calls' which is used in sync route
+    // According to Retell API docs: 
+    // - chat.retrieve() returns transcript as a STRING (full conversation text)
+    // - chat.list() includes 'transcript' field (can be string or array) and 'message_with_tool_calls' (array)
+    // Priority: message_with_tool_calls (structured) > transcript array > transcript string > messages
     let extractedMessages: any[] = [];
     if (retellChatData) {
-      // Priority order based on Retell API docs:
-      // 1. transcript (from chat.list() - full chat transcript with agent + user messages)
-      // 2. message_with_tool_calls (also from chat.list())
-      // 3. messages (fallback)
-      if (Array.isArray(retellChatData.transcript)) {
-        extractedMessages = retellChatData.transcript;
-        console.log(`[Interactions API] Using transcript field: ${extractedMessages.length} messages`);
-      } else if (Array.isArray(retellChatData.message_with_tool_calls)) {
+      // Priority 1: message_with_tool_calls (structured array with role, content, timestamps)
+      if (Array.isArray(retellChatData.message_with_tool_calls)) {
         extractedMessages = retellChatData.message_with_tool_calls;
         console.log(`[Interactions API] Using message_with_tool_calls field: ${extractedMessages.length} messages`);
-      } else if (Array.isArray(retellChatData.messages)) {
+      } 
+      // Priority 2: transcript as array (from chat.list())
+      else if (Array.isArray(retellChatData.transcript)) {
+        extractedMessages = retellChatData.transcript;
+        console.log(`[Interactions API] Using transcript array field: ${extractedMessages.length} messages`);
+      } 
+      // Priority 3: transcript as string (from chat.retrieve()) - parse into messages
+      else if (typeof retellChatData.transcript === 'string' && retellChatData.transcript.trim()) {
+        // Parse string transcript into message objects
+        // Format: "Agent: message\nUser: message\n..."
+        const transcriptLines = retellChatData.transcript.split('\n').filter(line => line.trim());
+        extractedMessages = transcriptLines.map((line: string, index: number) => {
+          const match = line.match(/^(Agent|User|System):\s*(.+)$/);
+          if (match) {
+            return {
+              role: match[1].toLowerCase() === 'agent' ? 'assistant' : match[1].toLowerCase(),
+              content: match[2],
+              timestamp: retellChatData.start_timestamp ? retellChatData.start_timestamp + (index * 1000) : undefined,
+            };
+          }
+          return {
+            role: 'system',
+            content: line,
+            timestamp: retellChatData.start_timestamp,
+          };
+        });
+        console.log(`[Interactions API] Parsed transcript string into ${extractedMessages.length} messages`);
+      }
+      // Priority 4: messages field (fallback)
+      else if (Array.isArray(retellChatData.messages)) {
         extractedMessages = retellChatData.messages;
         console.log(`[Interactions API] Using messages field: ${extractedMessages.length} messages`);
-      } else if (Array.isArray(retellChatData.transcript_object)) {
+      } 
+      // Priority 5: transcript_object (alternative format)
+      else if (Array.isArray(retellChatData.transcript_object)) {
         extractedMessages = retellChatData.transcript_object;
         console.log(`[Interactions API] Using transcript_object field: ${extractedMessages.length} messages`);
-      } else if (retellChatData.message_with_tool_calls && typeof retellChatData.message_with_tool_calls === 'object') {
-        // If it's an object, try to convert to array
+      } 
+      // Priority 6: message_with_tool_calls as object (convert to array)
+      else if (retellChatData.message_with_tool_calls && typeof retellChatData.message_with_tool_calls === 'object' && !Array.isArray(retellChatData.message_with_tool_calls)) {
         extractedMessages = Object.values(retellChatData.message_with_tool_calls);
         console.log(`[Interactions API] Converted message_with_tool_calls object to array: ${extractedMessages.length} messages`);
-      } else {
+      } 
+      else {
         console.log('[Interactions API] No messages found in Retell response');
+        console.log('[Interactions API] Available fields:', Object.keys(retellChatData));
+        console.log('[Interactions API] transcript type:', typeof retellChatData.transcript);
+        console.log('[Interactions API] transcript value:', retellChatData.transcript ? String(retellChatData.transcript).substring(0, 200) : 'null/undefined');
       }
     }
     
