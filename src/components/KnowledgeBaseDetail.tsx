@@ -81,6 +81,39 @@ export default function KnowledgeBaseDetail({
     setExpandedSources(newExpanded);
   };
 
+  const formatUrl = (url: string): string => {
+    const trimmed = url.trim();
+    if (!trimmed) return trimmed;
+    
+    // If URL doesn't start with http:// or https://, add https://
+    if (!trimmed.match(/^https?:\/\//i)) {
+      return `https://${trimmed}`;
+    }
+    return trimmed;
+  };
+
+  const validateUrls = (urlString: string): { valid: boolean; urls: string[]; error?: string } => {
+    const lines = urlString.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    const formattedUrls: string[] = [];
+    
+    for (const line of lines) {
+      const formatted = formatUrl(line);
+      try {
+        // Validate URL format
+        new URL(formatted);
+        formattedUrls.push(formatted);
+      } catch (e) {
+        return {
+          valid: false,
+          urls: [],
+          error: `Invalid URL: "${line}". Please enter a valid URL (e.g., https://example.com)`,
+        };
+      }
+    }
+    
+    return { valid: true, urls: formattedUrls };
+  };
+
   const handleAddSources = async () => {
     if (!knowledgeBase?.id) return;
 
@@ -89,7 +122,15 @@ export default function KnowledgeBaseDetail({
       const formData = new FormData();
       
       if (addSourceType === 'url' && urls.trim()) {
-        formData.append('urls', urls);
+        // Validate and format URLs
+        const validation = validateUrls(urls);
+        if (!validation.valid) {
+          alert(validation.error || 'Invalid URLs');
+          setAdding(false);
+          return;
+        }
+        // Join formatted URLs with newlines
+        formData.append('urls', validation.urls.join('\n'));
       } else if (addSourceType === 'text' && textContent.trim()) {
         formData.append('text_title', textTitle || 'Untitled');
         formData.append('text_content', textContent);
@@ -109,8 +150,9 @@ export default function KnowledgeBaseDetail({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to add sources');
+        const error = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
+        const errorMessage = error.error || error.message || `Server error: ${response.status} ${response.statusText}`;
+        throw new Error(errorMessage);
       }
 
       // Reset form

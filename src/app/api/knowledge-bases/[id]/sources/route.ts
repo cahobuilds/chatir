@@ -130,8 +130,25 @@ export async function POST(
     // Extract URLs
     const urlInput = formData.get('urls') as string;
     if (urlInput) {
-      const urlList = urlInput.split('\n').map(u => u.trim()).filter(u => u && u.startsWith('http'));
-      urls.push(...urlList);
+      const urlLines = urlInput.split('\n').map(u => u.trim()).filter(u => u);
+      for (const line of urlLines) {
+        let url = line;
+        // Add https:// if protocol is missing
+        if (!url.match(/^https?:\/\//i)) {
+          url = `https://${url}`;
+        }
+        // Validate URL format
+        try {
+          new URL(url);
+          urls.push(url);
+        } catch (e) {
+          console.error(`[KB Sources API] Invalid URL: ${line}`);
+          return NextResponse.json(
+            { error: `Invalid URL format: "${line}". URLs must be valid (e.g., https://example.com)` },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     // Extract text sources
