@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/context/OrganizationContext";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { logger } from "@/lib/logger";
 
 interface Interaction {
   id: string;
@@ -64,53 +65,45 @@ export default function ChatDetailPage() {
   const [activeTab, setActiveTab] = useState("conversation");
   const [isStreaming, setIsStreaming] = useState(false);
 
+  // SSE for real-time updates - this replaces the initial fetch
   useEffect(() => {
-    const fetchInteraction = async () => {
-      if (!params.id || !currentOrganization?.id) {
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(`/api/interactions/${params.id}`);
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to fetch chat conversation');
-        }
-
-        const data = await response.json();
-        setInteraction(data.interaction);
-      } catch (err: any) {
-        console.error("Error fetching chat conversation:", err);
-        setError(err.message || "Failed to load chat details");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInteraction();
-  }, [params.id, currentOrganization]);
-
-  // SSE for real-time updates
-  useEffect(() => {
-    if (!params.id || !interaction || interaction.status === 'completed') {
-      return; // Don't stream if completed or not loaded
+    if (!params.id || !currentOrganization?.id) {
+      setLoading(false);
+      return;
     }
+
+    logger.info('Initializing SSE connection', { interactionId: params.id });
+    setLoading(true);
+    setError(null);
 
     const eventSource = new EventSource(`/api/interactions/${params.id}/stream`);
 
+    // Handle initial data load
+    eventSource.addEventListener('initial', (event: any) => {
+      try {
+        const data = JSON.parse(event.data);
+        logger.info('Received initial interaction data', { 
+          interactionId: params.id,
+          hasMessages: !!(data.interaction?.retell_chat_data?.messages?.length)
+        });
+        setInteraction(data.interaction);
+        setLoading(false);
+      } catch (err) {
+        logger.error('Error parsing initial data', err, { interactionId: params.id });
+        setError('Failed to load chat details');
+        setLoading(false);
+      }
+    });
+
     eventSource.addEventListener('connected', (event: any) => {
-      console.log('[SSE] Connected:', event.data);
+      logger.sse('connected', params.id as string);
       setIsStreaming(true);
     });
 
     eventSource.addEventListener('messages', (event: any) => {
       try {
         const data = JSON.parse(event.data);
+        logger.sse('messages', params.id as string, { messageCount: data.messageCount });
         setInteraction((prev) => {
           if (!prev) return prev;
           return {
@@ -122,7 +115,7 @@ export default function ChatDetailPage() {
           };
         });
       } catch (err) {
-        console.error('[SSE] Error parsing messages:', err);
+        logger.error('Error parsing messages event', err, { interactionId: params.id });
       }
     });
 
@@ -142,7 +135,7 @@ export default function ChatDetailPage() {
           };
         });
       } catch (err) {
-        console.error('[SSE] Error parsing status:', err);
+        logger.error('Error parsing status event', err, { interactionId: params.id });
       }
     });
 
@@ -164,7 +157,7 @@ export default function ChatDetailPage() {
           };
         });
       } catch (err) {
-        console.error('[SSE] Error parsing cost:', err);
+        logger.error('Error parsing cost event', err, { interactionId: params.id });
       }
     });
 
@@ -186,7 +179,7 @@ export default function ChatDetailPage() {
           };
         });
       } catch (err) {
-        console.error('[SSE] Error parsing analysis:', err);
+        logger.error('Error parsing analysis event', err, { interactionId: params.id });
       }
     });
 
@@ -201,24 +194,41 @@ export default function ChatDetailPage() {
           };
         });
       } catch (err) {
-        console.error('[SSE] Error parsing transcript:', err);
+        logger.error('Error parsing transcript event', err, { interactionId: params.id });
       }
     });
 
     eventSource.addEventListener('error', (event: any) => {
-      console.error('[SSE] Error event:', event);
+      try {
+        const data = JSON.parse(event.data);
+        logger.error('SSE error event', new Error(data.message || 'Unknown error'), { 
+          interactionId: params.id,
+          errorData: data
+        });
+        if (!interaction) {
+          setError(data.message || 'Failed to load chat details');
+          setLoading(false);
+        }
+      } catch (err) {
+        logger.error('Error parsing error event', err, { interactionId: params.id });
+      }
     });
 
     eventSource.onerror = (error) => {
-      console.error('[SSE] Connection error:', error);
+      logger.error('SSE connection error', error, { interactionId: params.id });
+      if (!interaction) {
+        setError('Failed to connect to chat stream');
+        setLoading(false);
+      }
       // Don't close on error - EventSource will auto-reconnect
     };
 
     return () => {
+      logger.info('Closing SSE connection', { interactionId: params.id });
       eventSource.close();
       setIsStreaming(false);
     };
-  }, [params.id, interaction?.id, interaction?.status]);
+  }, [params.id, currentOrganization?.id]);
 
   if (authLoading || loading) {
     return (
