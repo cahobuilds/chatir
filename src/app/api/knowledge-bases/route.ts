@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { getResellerRetellConfig } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/knowledge-bases - Get knowledge bases for current user's tenant(s)
@@ -146,10 +147,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Get Retell API key
+    const retellApiKey = await getResellerRetellConfig(tenant_id);
+    let retellKBId: string | null = null;
+
+    // Create knowledge base in Retell if API key is available
+    if (retellApiKey) {
+      try {
+        const { createRetellClient } = await import('@/lib/retell');
+        const retellClient = createRetellClient(retellApiKey);
+        
+        const retellKB = await retellClient.knowledgeBase.create({
+          knowledge_base_name: name,
+          enable_auto_refresh: false,
+        });
+
+        retellKBId = retellKB.knowledge_base_id;
+        console.log(`[KB API] Created Retell knowledge base: ${retellKBId}`);
+      } catch (retellError: any) {
+        console.error('[KB API] Error creating Retell knowledge base:', retellError);
+        // Continue with local creation even if Retell creation fails
+      }
+    }
+
     // Use admin client for system admin to bypass RLS, regular client for others
     const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
 
-    // Create knowledge base
+    // Create knowledge base locally
+    const kbConfig = {
+      ...(configuration || {}),
+      ...(retellKBId ? { retell_knowledge_base_id: retellKBId } : {}),
+    };
+
     const { data: knowledgeBase, error: kbError } = await clientToUse
       .from('knowledge_bases')
       .insert({
@@ -157,8 +186,8 @@ export async function POST(request: NextRequest) {
         name,
         type,
         description: description || null,
-        configuration: configuration || {},
-        status: 'synced',
+        configuration: kbConfig,
+        status: retellKBId ? 'synced' : 'pending',
         page_count: 0,
       })
       .select()
