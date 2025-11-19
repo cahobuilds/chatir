@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     const tenant_id = searchParams.get('tenant_id');
     const agent_id = searchParams.get('agent_id');
     const status = searchParams.get('status');
+    const type = searchParams.get('type'); // Filter by interaction type: 'voice' or 'chat'
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
@@ -49,6 +50,10 @@ export async function GET(request: NextRequest) {
 
     if (status) {
       query = query.eq('status', status);
+    }
+
+    if (type) {
+      query = query.eq('type', type);
     }
 
     const { data: interactions, error: interactionsError, count } = await query;

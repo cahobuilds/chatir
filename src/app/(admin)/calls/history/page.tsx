@@ -15,6 +15,13 @@ export default function CallHistoryPage() {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkingAdmin, setCheckingAdmin] = useState(true);
+  const [filters, setFilters] = useState<{
+    tenant_id?: string;
+    agent_id?: string;
+    status?: string;
+    dateRange?: string;
+    searchQuery?: string;
+  }>({});
   const supabase = createClient();
 
   useEffect(() => {
@@ -91,12 +98,12 @@ export default function CallHistoryPage() {
       </div>
 
       {/* Filters */}
-      <CallHistoryFilters />
+      <CallHistoryFilters onFiltersChange={setFilters} />
 
       {/* Main Content */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <CallHistoryTable />
+          <CallHistoryTable filters={filters} />
         </div>
         <div>
           <CallDetailsPanel />
