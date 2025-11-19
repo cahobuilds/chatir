@@ -64,6 +64,15 @@ export const navigationConfig: NavItem[] = [
     description: "Manage chat AI agents",
   },
   {
+    name: "Call History",
+    icon: <ClockIcon className="w-5 h-5" />,
+    category: "dashboard",
+    path: "/calls/history",
+    type: "functional",
+    badge: "new",
+    description: "View call history and recordings",
+  },
+  {
     name: "Knowledge Base",
     icon: <DocumentTextIcon className="w-5 h-5" />,
     category: "dashboard",
@@ -208,13 +217,6 @@ export const navigationConfig: NavItem[] = [
         type: "template",
         badge: "demo",
         description: "Quality assurance template",
-      },
-      {
-        name: "Call History",
-        path: "/calls/history",
-        type: "template",
-        badge: "demo",
-        description: "Call history template",
       },
       {
         name: "Conversation Flows",
