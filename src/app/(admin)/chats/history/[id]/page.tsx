@@ -62,6 +62,7 @@ export default function ChatDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("conversation");
+  const [isStreaming, setIsStreaming] = useState(false);
 
   useEffect(() => {
     const fetchInteraction = async () => {
@@ -93,6 +94,131 @@ export default function ChatDetailPage() {
 
     fetchInteraction();
   }, [params.id, currentOrganization]);
+
+  // SSE for real-time updates
+  useEffect(() => {
+    if (!params.id || !interaction || interaction.status === 'completed') {
+      return; // Don't stream if completed or not loaded
+    }
+
+    const eventSource = new EventSource(`/api/interactions/${params.id}/stream`);
+
+    eventSource.addEventListener('connected', (event: any) => {
+      console.log('[SSE] Connected:', event.data);
+      setIsStreaming(true);
+    });
+
+    eventSource.addEventListener('messages', (event: any) => {
+      try {
+        const data = JSON.parse(event.data);
+        setInteraction((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            retell_chat_data: {
+              ...prev.retell_chat_data,
+              messages: data.messages,
+            },
+          };
+        });
+      } catch (err) {
+        console.error('[SSE] Error parsing messages:', err);
+      }
+    });
+
+    eventSource.addEventListener('status', (event: any) => {
+      try {
+        const data = JSON.parse(event.data);
+        setInteraction((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: data.status || data.chat_status || prev.status,
+            ended_at: data.ended_at || prev.ended_at,
+            retell_chat_data: {
+              ...prev.retell_chat_data,
+              chat_status: data.chat_status || data.status,
+            },
+          };
+        });
+      } catch (err) {
+        console.error('[SSE] Error parsing status:', err);
+      }
+    });
+
+    eventSource.addEventListener('cost', (event: any) => {
+      try {
+        const data = JSON.parse(event.data);
+        setInteraction((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            retell_chat_data: {
+              ...prev.retell_chat_data,
+              chat_cost: data.cost,
+            },
+            metadata: {
+              ...prev.metadata,
+              chat_cost: data.cost,
+            },
+          };
+        });
+      } catch (err) {
+        console.error('[SSE] Error parsing cost:', err);
+      }
+    });
+
+    eventSource.addEventListener('analysis', (event: any) => {
+      try {
+        const data = JSON.parse(event.data);
+        setInteraction((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            retell_chat_data: {
+              ...prev.retell_chat_data,
+              chat_analysis: data.analysis,
+            },
+            metadata: {
+              ...prev.metadata,
+              chat_analysis: data.analysis,
+            },
+          };
+        });
+      } catch (err) {
+        console.error('[SSE] Error parsing analysis:', err);
+      }
+    });
+
+    eventSource.addEventListener('transcript', (event: any) => {
+      try {
+        const data = JSON.parse(event.data);
+        setInteraction((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            transcript: data.transcript,
+          };
+        });
+      } catch (err) {
+        console.error('[SSE] Error parsing transcript:', err);
+      }
+    });
+
+    eventSource.addEventListener('error', (event: any) => {
+      console.error('[SSE] Error event:', event);
+    });
+
+    eventSource.onerror = (error) => {
+      console.error('[SSE] Connection error:', error);
+      // Don't close on error - EventSource will auto-reconnect
+    };
+
+    return () => {
+      eventSource.close();
+      setIsStreaming(false);
+    };
+  }, [params.id, interaction?.id, interaction?.status]);
 
   if (authLoading || loading) {
     return (
@@ -167,6 +293,13 @@ export default function ChatDetailPage() {
       year: 'numeric'
     });
     return `${timeStr}, ${dateStr}`;
+  };
+
+  const formatCost = (cost: any): string => {
+    if (cost === undefined || cost === null) return "N/A";
+    const numCost = typeof cost === 'number' ? cost : parseFloat(cost);
+    if (isNaN(numCost)) return "N/A";
+    return `$${numCost.toFixed(3)}`;
   };
 
   // Get messages from retell_chat_data or transcript
@@ -252,6 +385,15 @@ export default function ChatDetailPage() {
                 <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
                   Chat ID: {chatId}
                 </p>
+              )}
+              {isStreaming && interaction.status !== 'completed' && (
+                <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  <span>Live updates</span>
+                </div>
               )}
             </div>
           </div>
@@ -367,7 +509,7 @@ export default function ChatDetailPage() {
                           Cost
                         </label>
                         <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          ${chatCost.toFixed(3)}
+                          {formatCost(chatCost)}
                         </p>
                       </div>
                     )}
@@ -481,7 +623,7 @@ export default function ChatDetailPage() {
                   <div>
                     <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Cost</label>
                     <p className="mt-1 text-sm text-gray-900 dark:text-white">
-                      ${chatCost.toFixed(3)}
+                      {formatCost(chatCost)}
                     </p>
                   </div>
                 )}
@@ -637,7 +779,7 @@ export default function ChatDetailPage() {
                     <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                       <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Cost</label>
                       <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-                        ${chatCost.toFixed(3)}
+                        {formatCost(chatCost)}
                       </p>
                     </div>
                   )}
