@@ -99,6 +99,29 @@ export async function GET(
       }
     }
 
+    // Fetch chat conversation details from Retell if retell_conversation_id exists
+    let retellChatData: any = null;
+    if (interaction.retell_conversation_id && interaction.type === 'chat') {
+      try {
+        const { getResellerRetellConfig } = await import('@/lib/reseller');
+        const { createRetellClient } = await import('@/lib/retell');
+        
+        const retellApiKey = await getResellerRetellConfig(interaction.tenant_id);
+        if (retellApiKey) {
+          const retellClient = createRetellClient(retellApiKey, {
+            timeout: 20 * 1000,
+            maxRetries: 2,
+          });
+          
+          // Retell SDK: chat.retrieve(chat_id) - fetch conversation details
+          retellChatData = await retellClient.chat.retrieve(interaction.retell_conversation_id);
+        }
+      } catch (error: any) {
+        console.error('[Interactions API] Error fetching Retell chat data:', error);
+        // Don't fail the request if Retell fetch fails
+      }
+    }
+
     // Enrich interaction with agent and tenant data
     const enrichedInteraction = {
       ...interaction,
@@ -113,6 +136,16 @@ export async function GET(
         recording_multi_channel_url: retellCallData.recording_multi_channel_url,
         scrubbed_recording_url: retellCallData.scrubbed_recording_url,
         call_analysis: retellCallData.call_analysis,
+      } : null,
+      // Add Retell chat data (messages, metadata, etc.)
+      retell_chat_data: retellChatData ? {
+        messages: retellChatData.message_with_tool_calls || retellChatData.messages || [],
+        start_timestamp: retellChatData.start_timestamp,
+        end_timestamp: retellChatData.end_timestamp,
+        chat_status: retellChatData.chat_status,
+        collected_dynamic_variables: retellChatData.collected_dynamic_variables,
+        metadata: retellChatData.metadata,
+        agent_id: retellChatData.agent_id,
       } : null,
     };
 

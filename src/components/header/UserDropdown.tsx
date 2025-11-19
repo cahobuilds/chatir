@@ -25,19 +25,29 @@ export default function UserDropdown() {
 
   const userName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'User';
   const userEmail = user?.email || 'user@example.com';
+  const avatarUrl = user?.user_metadata?.avatar_url;
+  const userInitial = userName.charAt(0).toUpperCase();
+  
   return (
     <div className="relative">
       <button
         onClick={toggleDropdown}
         className="flex items-center dropdown-toggle text-gray-700 dark:text-gray-400 dropdown-toggle"
       >
-        <span className="mr-3 overflow-hidden rounded-full h-11 w-11">
-          <Image
-            width={44}
-            height={44}
-            src="/images/user/owner.png"
-            alt="User"
-          />
+        <span className="mr-3 overflow-hidden rounded-full h-11 w-11 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+          {avatarUrl ? (
+            <Image
+              width={44}
+              height={44}
+              src={avatarUrl}
+              alt={userName}
+              className="object-cover"
+            />
+          ) : (
+            <span className="text-lg font-semibold text-gray-600 dark:text-gray-300">
+              {userInitial}
+            </span>
+          )}
         </span>
 
         <span className="block mr-1 font-medium text-theme-sm">{userName}</span>
