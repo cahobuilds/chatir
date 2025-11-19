@@ -7,7 +7,7 @@ import {
   CallIcon,
   ChatIcon,
 } from "../icons";
-import { DocumentTextIcon } from "@heroicons/react/24/outline";
+import { DocumentTextIcon, ClockIcon } from "@heroicons/react/24/outline";
 
 export type PageType = "functional" | "template";
 export type NavCategory = "dashboard" | "admin" | "settings" | "templates";
@@ -18,6 +18,8 @@ export interface NavSubItem {
   type: PageType;
   badge?: "new" | "pro" | "demo";
   description?: string;
+  icon?: React.ReactNode;
+  adminOnly?: boolean; // If true, only show for admin users
 }
 
 export interface NavItem {
@@ -92,6 +94,24 @@ export const navigationConfig: NavItem[] = [
         type: "functional",
         badge: "new",
         description: "Manage roles and permissions",
+      },
+      {
+        name: "Call History",
+        path: "/calls/history",
+        type: "functional",
+        badge: "new",
+        description: "View call history and recordings",
+        icon: <ClockIcon className="w-5 h-5" />,
+        adminOnly: true,
+      },
+      {
+        name: "Chat History",
+        path: "/chats/history",
+        type: "functional",
+        badge: "new",
+        description: "View chat conversation history",
+        icon: <ClockIcon className="w-5 h-5" />,
+        adminOnly: true,
       },
       // Future functional items can be added here
       // {

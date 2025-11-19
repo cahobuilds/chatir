@@ -26,10 +26,49 @@ const AppSidebar: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [organizationLogo, setOrganizationLogo] = useState<string | null>(null);
   const [organizationWordmark, setOrganizationWordmark] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
+  const { user } = useAuth();
+  const supabase = createClient();
   // Track multiple open submenus using Set of keys
   const [openSubmenus, setOpenSubmenus] = useState<Set<string>>(new Set());
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user || !currentOrganization?.id) {
+        setIsAdmin(false);
+        setCheckingAdmin(false);
+        return;
+      }
+
+      try {
+        const { data: userTenant } = await supabase
+          .from('user_tenants')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('tenant_id', currentOrganization.id)
+          .eq('status', 'active')
+          .single();
+
+        if (userTenant) {
+          const isAdminRole = ['tenant_admin', 'super_admin', 'system_admin'].includes(userTenant.role);
+          setIsAdmin(isAdminRole);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+      } finally {
+        setCheckingAdmin(false);
+      }
+    };
+
+    checkAdminStatus();
+  }, [user, currentOrganization, supabase]);
 
   // Fetch organization logo and wordmark when organization changes
   useEffect(() => {
@@ -273,7 +312,15 @@ const AppSidebar: React.FC = () => {
               }}
             >
               <ul className="mt-2 space-y-1 ml-9">
-                {nav.subItems.map((subItem) => (
+                {nav.subItems
+                  .filter((subItem) => {
+                    // Filter out admin-only items if user is not admin
+                    if (subItem.adminOnly && !isAdmin) {
+                      return false;
+                    }
+                    return true;
+                  })
+                  .map((subItem) => (
                   <li key={subItem.name}>
                     <Link
                       href={subItem.path}
@@ -283,6 +330,11 @@ const AppSidebar: React.FC = () => {
                           : "menu-dropdown-item-inactive"
                       }`}
                     >
+                      {subItem.icon && (
+                        <span className="mr-2 flex-shrink-0">
+                          {subItem.icon}
+                        </span>
+                      )}
                       {subItem.name}
                       <span className="flex items-center gap-1 ml-auto">
                         {subItem.badge === "new" && (

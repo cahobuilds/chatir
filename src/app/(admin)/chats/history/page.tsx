@@ -4,12 +4,9 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/context/OrganizationContext";
-import CallHistoryFilters from "@/components/CallHistoryFilters";
-import CallHistoryTable from "@/components/CallHistoryTable";
-import CallDetailsPanel from "@/components/CallDetailsPanel";
 import { createClient } from "@/lib/supabase/client";
 
-export default function CallHistoryPage() {
+export default function ChatHistoryPage() {
   const { user, loading: authLoading } = useAuth();
   const { currentOrganization } = useOrganization();
   const router = useRouter();
@@ -74,10 +71,10 @@ export default function CallHistoryPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Call History & Recordings
+            Chat History
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Complete call log with recordings, transcripts, and analytics
+            Complete chat conversation log with transcripts and analytics
           </p>
         </div>
         <div className="flex items-center space-x-4">
@@ -90,18 +87,15 @@ export default function CallHistoryPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <CallHistoryFilters />
-
-      {/* Main Content */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <CallHistoryTable />
-        </div>
-        <div>
-          <CallDetailsPanel />
+      {/* Placeholder for Chat History Table */}
+      <div className="rounded-lg bg-white shadow-sm dark:bg-gray-800 p-6">
+        <div className="text-center py-12">
+          <p className="text-gray-500 dark:text-gray-400">
+            Chat history functionality coming soon. This will display all chat conversations.
+          </p>
         </div>
       </div>
     </div>
   );
 }
+
