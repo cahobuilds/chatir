@@ -339,7 +339,9 @@ async function main() {
     console.log(`   Status: ${interaction.status || 'N/A'}`);
     
     // Get Retell API key
-    retellApiKey = await getResellerRetellConfig(tenantId);
+    if (tenantId) {
+      retellApiKey = await getResellerRetellConfig(tenantId);
+    }
     if (retellApiKey) {
       console.log(`✅ Retell API key found\n`);
     } else {
