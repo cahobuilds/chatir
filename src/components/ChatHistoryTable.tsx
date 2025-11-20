@@ -303,11 +303,6 @@ export default function ChatHistoryTable({ filters = {} }: ChatHistoryTableProps
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
-                      {chat.hasTranscript && (
-                        <span className="text-green-600 dark:text-green-400" title="Has Transcript">
-                          📝
-                        </span>
-                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -318,6 +313,11 @@ export default function ChatHistoryTable({ filters = {} }: ChatHistoryTableProps
                       >
                         Details
                       </button>
+                      {chat.hasTranscript && (
+                        <span className="text-green-600 dark:text-green-400" title="Has Transcript">
+                          📝
+                        </span>
+                      )}
                     </div>
                   </td>
                 </tr>
