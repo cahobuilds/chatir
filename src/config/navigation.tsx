@@ -7,10 +7,10 @@ import {
   CallIcon,
   ChatIcon,
 } from "../icons";
-import { DocumentTextIcon, ClockIcon } from "@heroicons/react/24/outline";
+import { DocumentTextIcon, ClockIcon, ChartBarIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 
 export type PageType = "functional" | "template";
-export type NavCategory = "dashboard" | "admin" | "settings" | "templates";
+export type NavCategory = "dashboard" | "admin" | "settings" | "analytics" | "templates";
 
 export interface NavSubItem {
   name: string;
@@ -129,6 +129,45 @@ export const navigationConfig: NavItem[] = [
     ],
   },
 
+  // Analytics - Performance and reporting
+  {
+    name: "Analytics",
+    icon: <ChartBarIcon className="w-5 h-5" />,
+    category: "analytics",
+    type: "functional",
+    defaultOpen: true,
+    subItems: [
+      {
+        name: "Overview",
+        path: "/analytics",
+        type: "functional",
+        badge: "new",
+        description: "Comprehensive analytics dashboard",
+      },
+      {
+        name: "Agent Performance",
+        path: "/analytics/agents",
+        type: "functional",
+        badge: "new",
+        description: "Individual agent performance metrics",
+      },
+      {
+        name: "Call Analytics",
+        path: "/analytics/calls",
+        type: "functional",
+        badge: "new",
+        description: "Advanced call analytics and outcomes",
+      },
+      {
+        name: "Customer Experience",
+        path: "/analytics/customer-experience",
+        type: "functional",
+        badge: "new",
+        description: "Customer satisfaction and sentiment",
+      },
+    ],
+  },
+
   // Settings - Configuration pages
   {
     name: "Settings",
@@ -188,13 +227,6 @@ export const navigationConfig: NavItem[] = [
     type: "template",
     defaultOpen: false, // Collapsed by default
     subItems: [
-      {
-        name: "Analytics",
-        path: "/analytics",
-        type: "template",
-        badge: "demo",
-        description: "Analytics dashboard template",
-      },
       {
         name: "Monitoring",
         path: "/monitoring",

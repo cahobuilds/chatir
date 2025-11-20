@@ -22,7 +22,7 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Analytics & Reporting
+            Analytics Overview
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             Comprehensive performance analytics and business intelligence
@@ -41,21 +41,22 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Overview Cards */}
+      {/* Summary Metrics Cards */}
       <AnalyticsOverview />
 
       {/* Real-Time Analytics */}
       <RealTimeMetrics />
 
-      {/* Main Analytics Grid */}
+      {/* Main Analytics Charts - Time Series */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <CallVolumeAnalytics />
         <PerformanceMetrics />
       </div>
 
-      {/* Advanced Call Analytics */}
+      {/* Advanced Call Analytics - Outcomes & Quality */}
       <AdvancedCallAnalytics />
 
+      {/* Quality & Agent Performance */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <QualityMetrics />
         <AgentPerformance />
