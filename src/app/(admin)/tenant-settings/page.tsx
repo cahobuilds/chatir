@@ -3,7 +3,6 @@ import React from "react";
 import TenantManagement from "@/components/TenantManagement";
 import TenantConfiguration from "@/components/TenantConfiguration";
 import SubtenantManagement from "@/components/SubtenantManagement";
-import TenantBilling from "@/components/TenantBilling";
 import TenantSecurity from "@/components/TenantSecurity";
 import TenantAnalytics from "@/components/TenantAnalytics";
 
@@ -28,7 +27,7 @@ export default function TenantSettingsPage() {
               Organization Management
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Manage organizations, workspaces, and billing
+              Manage organizations and workspaces
             </p>
           </div>
         </div>
@@ -50,10 +49,7 @@ export default function TenantSettingsPage() {
       </div>
 
       <div className="grid grid-cols-12 gap-4 md:gap-6">
-        <div className="col-span-12 lg:col-span-6">
-          <TenantBilling />
-        </div>
-        <div className="col-span-12 lg:col-span-6">
+        <div className="col-span-12">
           <TenantSecurity />
         </div>
       </div>

@@ -7,7 +7,7 @@ import {
   CallIcon,
   ChatIcon,
 } from "../icons";
-import { DocumentTextIcon, ClockIcon } from "@heroicons/react/24/outline";
+import { DocumentTextIcon, ClockIcon, CreditCardIcon } from "@heroicons/react/24/outline";
 
 export type PageType = "functional" | "template";
 export type NavCategory = "dashboard" | "admin" | "settings" | "templates";
@@ -89,6 +89,14 @@ export const navigationConfig: NavItem[] = [
     type: "functional",
     badge: "new",
     description: "Manage knowledge bases and content",
+  },
+  {
+    name: "Billing & Usage",
+    icon: <CreditCardIcon className="w-5 h-5" />,
+    category: "dashboard",
+    path: "/billing",
+    type: "functional",
+    description: "Manage billing, subscription, and usage",
   },
 
   // Admin - Functional features
