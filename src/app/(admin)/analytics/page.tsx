@@ -6,7 +6,6 @@ import CallVolumeAnalytics from "@/components/CallVolumeAnalytics";
 import AdvancedCallAnalytics from "@/components/AdvancedCallAnalytics";
 import PerformanceMetrics from "@/components/PerformanceMetrics";
 import QualityMetrics from "@/components/QualityMetrics";
-import AgentPerformance from "@/components/AgentPerformance";
 import CustomerExperienceMetrics from "@/components/CustomerExperienceMetrics";
 
 export const metadata: Metadata = {
@@ -56,11 +55,8 @@ export default function AnalyticsPage() {
       {/* Advanced Call Analytics - Outcomes & Quality */}
       <AdvancedCallAnalytics />
 
-      {/* Quality & Agent Performance */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <QualityMetrics />
-        <AgentPerformance />
-      </div>
+      {/* Quality Metrics Overview - Full Width */}
+      <QualityMetrics />
 
       {/* Customer Experience Metrics */}
       <CustomerExperienceMetrics />
