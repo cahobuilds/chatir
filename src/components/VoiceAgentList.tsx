@@ -82,6 +82,9 @@ export default function VoiceAgentList() {
       setError(null);
       setSuccess(null);
 
+      // Check if this is a re-sync (agents already exist)
+      const isResync = agents.length > 0;
+
       const response = await fetch('/api/retell/agents/sync', {
         method: 'POST',
         headers: {
@@ -90,7 +93,8 @@ export default function VoiceAgentList() {
         body: JSON.stringify({ 
           tenant_id: currentOrganization.id,
           type: 'voice', // Only sync voice agents
-          published_only: true // Only sync published agents
+          published_only: true, // Only sync published agents
+          clear_existing: isResync // Clear existing agents when re-syncing
         }),
       });
 
@@ -386,7 +390,11 @@ export default function VoiceAgentList() {
                 disabled={syncing || !currentOrganization?.id}
               >
                 <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                {syncing ? "Syncing..." : "Sync Agents"}
+                {syncing 
+                  ? "Syncing Agents..." 
+                  : agents.length > 0 
+                    ? "Re-sync" 
+                    : "Sync Agents"}
               </Button>
               <Button onClick={handleCreate} size="sm">
                 Create Agent
@@ -523,7 +531,11 @@ export default function VoiceAgentList() {
                           disabled={syncing || !currentOrganization?.id}
                         >
                           <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                          {syncing ? "Syncing..." : "Sync Agents"}
+                          {syncing 
+                            ? "Syncing Agents..." 
+                            : agents.length > 0 
+                              ? "Re-sync" 
+                              : "Sync Agents"}
                         </Button>
                         <span className="text-gray-400 dark:text-gray-500">or</span>
                         <Button onClick={handleCreate} size="sm">

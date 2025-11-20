@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { tenant_id, type, published_only } = body;
+    const { tenant_id, type, published_only, clear_existing } = body;
 
     if (!tenant_id) {
       return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+        { error: 'Agent service not configured for this organization\'s reseller. Please contact your reseller administrator.' },
         { status: 400 }
       );
     }
@@ -122,6 +122,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // If clear_existing is true, delete all existing agents of this type for this tenant
+    if (clear_existing) {
+      console.log(`[Sync] Clearing existing ${type || 'all'} agents for tenant ${tenant_id}`);
+      const deleteQuery = supabase
+        .from('agents')
+        .delete()
+        .eq('tenant_id', tenant_id);
+      
+      if (type) {
+        deleteQuery.eq('type', type);
+      }
+      
+      const { error: deleteError } = await deleteQuery;
+      if (deleteError) {
+        console.error(`[Sync] Error clearing existing agents:`, deleteError);
+        return NextResponse.json(
+          { error: `Failed to clear existing agents: ${deleteError.message}` },
+          { status: 500 }
+        );
+      }
+      console.log(`[Sync] Cleared existing agents for tenant ${tenant_id}`);
+    }
+
     // Get existing agents for this tenant (including type to check for type changes)
     const { data: existingAgents } = await supabase
       .from('agents')
@@ -192,7 +215,7 @@ export async function POST(request: NextRequest) {
         // Check if we've already processed this exact agent in this sync batch
         const alreadyProcessed = syncedAgents.some((a: any) => 
           a.agent?.retell_agent_id === retellAgent.agent_id && 
-          a.agent?.name === (retellAgent.agent_name || `Retell Agent ${retellAgent.agent_id}`)
+          a.agent?.name === (retellAgent.agent_name || `Agent ${retellAgent.agent_id}`)
         );
         
         if (alreadyProcessed) {
@@ -214,7 +237,7 @@ export async function POST(request: NextRequest) {
             const { data: updatedAgent, error: updateError } = await supabase
               .from('agents')
               .update({
-                name: retellAgent.agent_name || `Retell Agent ${retellAgent.agent_id}`,
+                name: retellAgent.agent_name || `Agent ${retellAgent.agent_id}`,
                 type: agentType, // Always update type in case it changed
                 configuration: {
                   ...retellAgent,
@@ -239,9 +262,9 @@ export async function POST(request: NextRequest) {
             .from('agents')
             .insert({
               tenant_id,
-              name: retellAgent.agent_name || `Retell Agent ${retellAgent.agent_id}`,
+              name: retellAgent.agent_name || `Agent ${retellAgent.agent_id}`,
               type: agentType,
-              description: `Synced from Retell AI on ${new Date().toISOString()}`,
+              description: `Synced on ${new Date().toISOString()}`,
               configuration: {
                 ...retellAgent,
                 retell_agent_id: retellAgent.agent_id,
@@ -294,9 +317,9 @@ export async function POST(request: NextRequest) {
       errors_list: errors,
     });
   } catch (error: any) {
-    console.error('Retell AI agent sync error:', error);
+    console.error('Agent sync error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to sync Retell AI agents' },
+      { error: error.message || 'Failed to sync agents' },
       { status: 500 }
     );
   }
