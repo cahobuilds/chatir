@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { 
   UserGroupIcon,
   StarIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
   MinusIcon,
-  EyeIcon
+  ArrowRightIcon,
 } from "@heroicons/react/24/outline";
 import { useOrganization } from "@/context/OrganizationContext";
 
@@ -62,12 +63,12 @@ interface AgentAnalyticsData {
   };
 }
 
-export default function AgentPerformance() {
+export default function AgentPerformanceList() {
   const { currentOrganization } = useOrganization();
+  const router = useRouter();
   const [data, setData] = useState<AgentAnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState("averageScore");
   const [days, setDays] = useState(30);
 
@@ -109,7 +110,7 @@ export default function AgentPerformance() {
   };
 
   const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 3);
   };
 
   const getTrendIcon = (trend: string) => {
@@ -129,13 +130,17 @@ export default function AgentPerformance() {
     return "text-red-600 dark:text-red-400";
   };
 
+  const handleAgentClick = (agentId: string) => {
+    router.push(`/analytics/agents/${agentId}`);
+  };
+
   if (loading && !data) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 animate-pulse">
         <div className="p-6">
           <div className="h-6 w-48 bg-gray-300 dark:bg-gray-700 rounded mb-6"></div>
           <div className="space-y-4">
-            {[...Array(3)].map((_, i) => (
+            {[...Array(5)].map((_, i) => (
               <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
             ))}
           </div>
@@ -186,7 +191,6 @@ export default function AgentPerformance() {
   });
 
   const topPerformer = sortedAgents[0];
-  const averageScore = data.summary?.averageScore || 0;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -225,7 +229,10 @@ export default function AgentPerformance() {
       <div className="p-6">
         {/* Top Performer */}
         {topPerformer && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+          <div 
+            className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => handleAgentClick(topPerformer.agentId)}
+          >
             <div className="flex items-center space-x-3">
               <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
                 <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
@@ -255,6 +262,7 @@ export default function AgentPerformance() {
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">Average Score</div>
               </div>
+              <ArrowRightIcon className="w-5 h-5 text-gray-400" />
             </div>
           </div>
         )}
@@ -264,11 +272,8 @@ export default function AgentPerformance() {
           {sortedAgents.map((agent) => (
             <div
               key={agent.agentId}
-              className={`p-4 border rounded-lg transition-all duration-200 ${
-                selectedAgent === agent.agentId
-                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20"
-                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-              }`}
+              className="p-4 border rounded-lg transition-all duration-200 cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border-gray-200 dark:border-gray-700"
+              onClick={() => handleAgentClick(agent.agentId)}
             >
               <div className="flex items-center space-x-4">
                 {/* Avatar */}
@@ -340,83 +345,9 @@ export default function AgentPerformance() {
                   <div className="flex items-center space-x-1">
                     {getTrendIcon(agent.trend)}
                   </div>
-                  <button
-                    onClick={() => setSelectedAgent(selectedAgent === agent.agentId ? null : agent.agentId)}
-                    className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  >
-                    <EyeIcon className="w-4 h-4" />
-                  </button>
+                  <ArrowRightIcon className="w-5 h-5 text-gray-400" />
                 </div>
               </div>
-
-              {selectedAgent === agent.agentId && (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <h5 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
-                    Performance Details
-                  </h5>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">Quality Score</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {agent.metrics.averageScore?.toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">Customer Satisfaction</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {agent.metrics.customerSatisfaction !== null
-                            ? `${agent.metrics.customerSatisfaction.toFixed(1)}/5.0`
-                            : "N/A"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">Answer Rate</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {agent.metrics.answerRate.toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">First Call Resolution</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {agent.metrics.firstCallResolution.toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">Average Handle Time</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {agent.metrics.avgHandleTimeFormatted || `${agent.metrics.avgHandleTime.toFixed(1)}m`}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">Completed Calls</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {agent.metrics.completedCalls}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  {agent.trainingNeeds && agent.trainingNeeds.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                        Training Needs:
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {agent.trainingNeeds.map((need, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 rounded"
-                          >
-                            {need}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -427,7 +358,7 @@ export default function AgentPerformance() {
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                  {averageScore.toFixed(1)}%
+                  {data.summary.averageScore.toFixed(1)}%
                 </div>
                 <div className="text-xs text-gray-600 dark:text-gray-400">Team Average Score</div>
               </div>
@@ -446,30 +377,8 @@ export default function AgentPerformance() {
             </div>
           </div>
         )}
-
-        {/* Agent Utilization */}
-        {data.utilization && data.utilization.agents.length > 0 && (
-          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <h5 className="text-sm font-medium text-gray-900 dark:text-white mb-4">
-              Agent Utilization
-            </h5>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4 border border-blue-200 dark:border-blue-800">
-                <p className="text-sm text-gray-600 dark:text-gray-400">Average Utilization</p>
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {data.utilization.averageUtilization.toFixed(1)}%
-                </p>
-              </div>
-              <div className="rounded-lg bg-purple-50 dark:bg-purple-900/20 p-4 border border-purple-200 dark:border-purple-800">
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Active Time</p>
-                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                  {Math.round(data.utilization.agents.reduce((sum, a) => sum + a.activeTime, 0) / 60)}h
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
 }
+

@@ -12,6 +12,7 @@ interface EnhancedBreadcrumbProps {
 const categoryLabels: Record<NavCategory, string> = {
   dashboard: "Dashboard",
   admin: "Admin",
+  analytics: "Analytics",
   settings: "Settings",
   templates: "Templates",
 };
@@ -19,6 +20,7 @@ const categoryLabels: Record<NavCategory, string> = {
 const categoryColors: Record<NavCategory, "primary" | "success" | "info" | "warning"> = {
   dashboard: "primary",
   admin: "success",
+  analytics: "info",
   settings: "info",
   templates: "warning",
 };

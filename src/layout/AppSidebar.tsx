@@ -148,6 +148,7 @@ const AppSidebar: React.FC = () => {
     const categories: Record<string, NavItem[]> = {
       dashboard: [],
       admin: [],
+      analytics: [],
       settings: [],
       templates: [],
     };
@@ -391,6 +392,7 @@ const AppSidebar: React.FC = () => {
   const categoryLabels: Record<string, string> = {
     dashboard: "Dashboard",
     admin: "Admin",
+    analytics: "Analytics",
     settings: "Settings",
     templates: "Templates",
   };
@@ -513,6 +515,26 @@ const AppSidebar: React.FC = () => {
                   )}
                 </h2>
                 {renderMenuItems(navigationByCategory.admin, "admin")}
+              </div>
+            )}
+
+            {/* Analytics Section */}
+            {navigationByCategory.analytics && navigationByCategory.analytics.length > 0 && (
+              <div>
+                <h2
+                  className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
+                    !isExpanded && !isHovered
+                      ? "xl:justify-center"
+                      : "justify-start"
+                  }`}
+                >
+                  {isExpanded || isHovered || isMobileOpen ? (
+                    categoryLabels.analytics
+                  ) : (
+                    <HorizontaLDots />
+                  )}
+                </h2>
+                {renderMenuItems(navigationByCategory.analytics, "analytics")}
               </div>
             )}
 
