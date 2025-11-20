@@ -90,14 +90,6 @@ export const navigationConfig: NavItem[] = [
     badge: "new",
     description: "Manage knowledge bases and content",
   },
-  {
-    name: "Billing & Usage",
-    icon: <CreditCardIcon className="w-5 h-5" />,
-    category: "dashboard",
-    path: "/billing",
-    type: "functional",
-    description: "Manage billing, subscription, and usage",
-  },
 
   // Admin - Functional features
   {
@@ -120,6 +112,13 @@ export const navigationConfig: NavItem[] = [
         type: "functional",
         badge: "new",
         description: "Manage roles and permissions",
+      },
+      {
+        name: "Billing & Usage",
+        path: "/billing",
+        type: "functional",
+        icon: <CreditCardIcon className="w-5 h-5" />,
+        description: "Manage billing, subscription, and usage",
       },
       // Future functional items can be added here
       // {
