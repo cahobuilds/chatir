@@ -8,9 +8,10 @@ import { logger } from '@/lib/logger';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -40,7 +41,7 @@ export async function POST(
     const { data: service, error: fetchError } = await adminSupabase
       .from('notion_mcp_services')
       .select('railway_service_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (fetchError || !service) {
@@ -64,7 +65,7 @@ export async function POST(
         status: 'deploying',
         deployment_status: deployment.status,
       })
-      .eq('id', params.id);
+      .eq('id', id);
 
     // Get service domain (may have changed)
     const serviceDomain = await getServiceDomain(service.railway_service_id);
@@ -78,11 +79,11 @@ export async function POST(
           service_url: serviceUrl,
           health_check_url: healthCheckUrl,
         })
-        .eq('id', params.id);
+        .eq('id', id);
     }
 
     logger.info('Deployment triggered', {
-      service_id: params.id,
+      service_id: id,
       deployment_id: deployment.id,
     });
 

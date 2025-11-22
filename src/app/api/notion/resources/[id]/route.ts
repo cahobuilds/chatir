@@ -8,9 +8,10 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
 
     // Authenticate user
@@ -28,7 +29,7 @@ export async function GET(
           name
         )
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error || !resource) {
@@ -76,9 +77,10 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -92,7 +94,7 @@ export async function PATCH(
     const { data: resource, error: fetchError } = await supabase
       .from('notion_resources')
       .select('tenant_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (fetchError || !resource) {
@@ -142,12 +144,12 @@ export async function PATCH(
     const { data: updatedResource, error: updateError } = await adminSupabase
       .from('notion_resources')
       .update(updates)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
     if (updateError) {
-      logger.error('Failed to update resource', updateError, { resource_id: params.id });
+      logger.error('Failed to update resource', updateError, { resource_id: id });
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
@@ -157,12 +159,12 @@ export async function PATCH(
       const { data: services } = await adminSupabase
         .from('notion_mcp_services')
         .select('id, railway_service_id')
-        .eq('notion_resource_id', params.id)
+        .eq('notion_resource_id', id)
         .eq('status', 'active');
 
       if (services && services.length > 0) {
         logger.info('Token updated, services may need redeployment', {
-          resource_id: params.id,
+          resource_id: id,
           service_count: services.length,
         });
         // Note: In a production system, you might want to automatically trigger
@@ -187,9 +189,10 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -203,7 +206,7 @@ export async function DELETE(
     const { data: resource, error: fetchError } = await supabase
       .from('notion_resources')
       .select('tenant_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (fetchError || !resource) {
@@ -231,7 +234,7 @@ export async function DELETE(
     const { data: services, error: serviceError } = await adminSupabase
       .from('notion_mcp_services')
       .select('id')
-      .eq('notion_resource_id', params.id)
+      .eq('notion_resource_id', id)
       .limit(1);
 
     if (serviceError) {
@@ -249,7 +252,7 @@ export async function DELETE(
     const { error: deleteError } = await adminSupabase
       .from('notion_resources')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (deleteError) {
       logger.error('Failed to delete resource', deleteError);

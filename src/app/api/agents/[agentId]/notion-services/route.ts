@@ -7,9 +7,10 @@ import { logger } from '@/lib/logger';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { agentId: string } }
+  { params }: { params: Promise<{ agentId: string }> }
 ) {
   try {
+    const { agentId } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -33,7 +34,7 @@ export async function POST(
     const { data: agent, error: agentError } = await supabase
       .from('agents')
       .select('id, tenant_id')
-      .eq('id', params.agentId)
+      .eq('id', agentId)
       .single();
 
     if (agentError || !agent) {
@@ -88,7 +89,7 @@ export async function POST(
     const { data: existing } = await supabase
       .from('agent_notion_services')
       .select('id')
-      .eq('agent_id', params.agentId)
+      .eq('agent_id', agentId)
       .eq('notion_mcp_service_id', notion_mcp_service_id)
       .single();
 
@@ -103,7 +104,7 @@ export async function POST(
     const { data: assignment, error: assignError } = await adminSupabase
       .from('agent_notion_services')
       .insert({
-        agent_id: params.agentId,
+        agent_id: agentId,
         notion_mcp_service_id,
         tenant_id: agent.tenant_id,
         priority: priority || 0,
@@ -115,7 +116,7 @@ export async function POST(
 
     if (assignError) {
       logger.error('Failed to create assignment', assignError, {
-        agent_id: params.agentId,
+        agent_id: agentId,
         service_id: notion_mcp_service_id,
       });
       return NextResponse.json({ error: assignError.message }, { status: 500 });
@@ -125,7 +126,7 @@ export async function POST(
     const { data: currentAgent } = await adminSupabase
       .from('agents')
       .select('configuration')
-      .eq('id', params.agentId)
+      .eq('id', agentId)
       .single();
 
     if (currentAgent && service.service_url) {
@@ -148,12 +149,12 @@ export async function POST(
               mcp_services: mcpServices,
             },
           })
-          .eq('id', params.agentId);
+          .eq('id', agentId);
       }
     }
 
     logger.info('Service assigned to agent', {
-      agent_id: params.agentId,
+      agent_id: agentId,
       service_id: notion_mcp_service_id,
     });
 
@@ -172,9 +173,10 @@ export async function POST(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { agentId: string } }
+  { params }: { params: Promise<{ agentId: string }> }
 ) {
   try {
+    const { agentId } = await params;
     const supabase = await createClient();
 
     // Authenticate user
@@ -187,7 +189,7 @@ export async function GET(
     const { data: agent, error: agentError } = await supabase
       .from('agents')
       .select('id, tenant_id')
-      .eq('id', params.agentId)
+      .eq('id', agentId)
       .single();
 
     if (agentError || !agent) {
@@ -232,7 +234,7 @@ export async function GET(
           health_check_status
         )
       `)
-      .eq('agent_id', params.agentId)
+      .eq('agent_id', agentId)
       .order('priority', { ascending: false })
       .order('created_at', { ascending: false });
 

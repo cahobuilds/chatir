@@ -7,9 +7,10 @@ import { logger } from '@/lib/logger';
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { agentId: string; serviceId: string } }
+  { params }: { params: Promise<{ agentId: string; serviceId: string }> }
 ) {
   try {
+    const { agentId, serviceId } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -23,8 +24,8 @@ export async function PATCH(
     const { data: assignment, error: assignError } = await supabase
       .from('agent_notion_services')
       .select('tenant_id')
-      .eq('agent_id', params.agentId)
-      .eq('notion_mcp_service_id', params.serviceId)
+      .eq('agent_id', agentId)
+      .eq('notion_mcp_service_id', serviceId)
       .single();
 
     if (assignError || !assignment) {
@@ -59,8 +60,8 @@ export async function PATCH(
     const { data: updatedAssignment, error: updateError } = await adminSupabase
       .from('agent_notion_services')
       .update(updates)
-      .eq('agent_id', params.agentId)
-      .eq('notion_mcp_service_id', params.serviceId)
+      .eq('agent_id', agentId)
+      .eq('notion_mcp_service_id', serviceId)
       .select()
       .single();
 
@@ -84,9 +85,10 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { agentId: string; serviceId: string } }
+  { params }: { params: Promise<{ agentId: string; serviceId: string }> }
 ) {
   try {
+    const { agentId, serviceId } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -100,8 +102,8 @@ export async function DELETE(
     const { data: assignment, error: assignError } = await supabase
       .from('agent_notion_services')
       .select('tenant_id')
-      .eq('agent_id', params.agentId)
-      .eq('notion_mcp_service_id', params.serviceId)
+      .eq('agent_id', agentId)
+      .eq('notion_mcp_service_id', serviceId)
       .single();
 
     if (assignError || !assignment) {
@@ -129,12 +131,12 @@ export async function DELETE(
     const { data: agent } = await adminSupabase
       .from('agents')
       .select('configuration')
-      .eq('id', params.agentId)
+      .eq('id', agentId)
       .single();
 
     if (agent && agent.configuration?.mcp_services) {
       const mcpServices = agent.configuration.mcp_services.filter(
-        (s: any) => s.id !== params.serviceId
+        (s: any) => s.id !== serviceId
       );
 
       await adminSupabase
@@ -145,15 +147,15 @@ export async function DELETE(
             mcp_services: mcpServices,
           },
         })
-        .eq('id', params.agentId);
+        .eq('id', agentId);
     }
 
     // Delete assignment
     const { error: deleteError } = await adminSupabase
       .from('agent_notion_services')
       .delete()
-      .eq('agent_id', params.agentId)
-      .eq('notion_mcp_service_id', params.serviceId);
+      .eq('agent_id', agentId)
+      .eq('notion_mcp_service_id', serviceId);
 
     if (deleteError) {
       logger.error('Failed to delete assignment', deleteError);
@@ -161,8 +163,8 @@ export async function DELETE(
     }
 
     logger.info('Service assignment removed', {
-      agent_id: params.agentId,
-      service_id: params.serviceId,
+      agent_id: agentId,
+      service_id: serviceId,
     });
 
     return NextResponse.json({ success: true });

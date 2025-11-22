@@ -14,9 +14,10 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -40,7 +41,7 @@ export async function GET(
           name
         )
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error || !service) {
@@ -87,9 +88,10 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -126,12 +128,12 @@ export async function PATCH(
     const { data: service, error } = await adminSupabase
       .from('notion_mcp_services')
       .update(updates)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
     if (error) {
-      logger.error('Failed to update service', error, { service_id: params.id });
+      logger.error('Failed to update service', error, { service_id: id });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
@@ -154,9 +156,10 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -186,7 +189,7 @@ export async function DELETE(
     const { data: service, error: fetchError } = await adminSupabase
       .from('notion_mcp_services')
       .select('railway_service_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (fetchError || !service) {
@@ -197,7 +200,7 @@ export async function DELETE(
     const { data: assignments, error: assignmentError } = await adminSupabase
       .from('agent_notion_services')
       .select('id')
-      .eq('notion_mcp_service_id', params.id)
+      .eq('notion_mcp_service_id', id)
       .eq('is_active', true)
       .limit(1);
 
@@ -231,7 +234,7 @@ export async function DELETE(
     const { error: deleteError } = await adminSupabase
       .from('notion_mcp_services')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (deleteError) {
       logger.error('Failed to delete service record', deleteError);

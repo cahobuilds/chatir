@@ -7,9 +7,10 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -23,7 +24,7 @@ export async function GET(
     const { data: service, error: fetchError } = await supabase
       .from('notion_mcp_services')
       .select('health_check_url, tenant_id')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (fetchError || !service) {
@@ -81,7 +82,7 @@ export async function GET(
       responseTime = Date.now() - startTime;
       healthStatus = 'unhealthy';
       logger.error('Health check failed', error, {
-        service_id: params.id,
+        service_id: id,
         health_check_url: service.health_check_url,
       });
     }
@@ -93,7 +94,7 @@ export async function GET(
         last_health_check: new Date().toISOString(),
         health_check_status: healthStatus,
       })
-      .eq('id', params.id);
+      .eq('id', id);
 
     return NextResponse.json({
       status: healthStatus,
