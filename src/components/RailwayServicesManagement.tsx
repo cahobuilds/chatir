@@ -96,18 +96,45 @@ export default function RailwayServicesManagement() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/railway/services');
+      
+      // Add timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch('/api/railway/services', {
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
       if (response.ok) {
         const data = await response.json();
         setServices(data.services || []);
+        setError(null);
       } else {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch services' }));
-        setError(errorData.error || `Failed to fetch services: ${response.status} ${response.statusText}`);
-        console.error('Failed to fetch services:', errorData);
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        if (response.status === 401) {
+          setError('Unauthorized: Please ensure you are logged in as a system admin.');
+        } else if (response.status === 403) {
+          setError('Forbidden: System admin access is required to view Railway services.');
+        } else {
+          setError(errorData.error || `Failed to fetch services: ${response.status} ${response.statusText}`);
+        }
+        console.error('Failed to fetch services:', response.status, errorData);
       }
     } catch (error: any) {
-      const errorMessage = error.message || 'Failed to fetch services. Please check your connection.';
-      setError(errorMessage);
+      if (error.name === 'AbortError') {
+        setError('Request timed out. Please check your connection and try again.');
+      } else {
+        const errorMessage = error.message || 'Failed to fetch services. Please check your connection.';
+        setError(errorMessage);
+      }
       console.error('Error fetching services:', error);
     } finally {
       setLoading(false);
