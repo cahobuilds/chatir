@@ -92,6 +92,13 @@ export default function RailwayServicesManagement() {
     fetchTenants();
   }, []);
 
+  // Refetch Notion resources when tenant changes
+  useEffect(() => {
+    if (createFormData.tenant_id) {
+      fetchNotionResources(createFormData.tenant_id);
+    }
+  }, [createFormData.tenant_id]);
+
   const fetchServices = async () => {
     try {
       setLoading(true);
@@ -147,9 +154,12 @@ export default function RailwayServicesManagement() {
     }
   };
 
-  const fetchNotionResources = async () => {
+  const fetchNotionResources = async (tenantId?: string) => {
     try {
-      const response = await fetch('/api/notion/resources');
+      const url = tenantId 
+        ? `/api/notion/resources?tenant_id=${tenantId}`
+        : '/api/notion/resources';
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         console.log('[Railway Services] Notion resources fetched:', data.resources?.length || 0);
@@ -469,11 +479,16 @@ export default function RailwayServicesManagement() {
                 id="tenant_id"
                 value={createFormData.tenant_id}
                 onChange={(e) => {
+                  const newTenantId = e.target.value;
                   setCreateFormData({
                     ...createFormData,
-                    tenant_id: e.target.value,
+                    tenant_id: newTenantId,
                     notion_resource_id: '', // Reset when tenant changes
                   });
+                  // Fetch resources for the selected tenant
+                  if (newTenantId) {
+                    fetchNotionResources(newTenantId);
+                  }
                 }}
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2"
                 required
