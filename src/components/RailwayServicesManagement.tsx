@@ -16,7 +16,6 @@ import Form from "./form/Form";
 import Label from "./form/Label";
 import Input from "./form/input/InputField";
 import Alert from "./ui/alert/Alert";
-import { useOrganization } from "@/hooks/useOrganization";
 import {
   CloudIcon,
   PlusIcon,
@@ -66,7 +65,6 @@ interface Tenant {
 }
 
 export default function RailwayServicesManagement() {
-  const { currentOrganization } = useOrganization();
   const [services, setServices] = useState<RailwayService[]>([]);
   const [notionResources, setNotionResources] = useState<NotionResource[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -239,26 +237,26 @@ export default function RailwayServicesManagement() {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { label: string; color: string }> = {
-      creating: { label: 'Creating', color: 'yellow' },
-      deploying: { label: 'Deploying', color: 'blue' },
-      active: { label: 'Active', color: 'green' },
-      inactive: { label: 'Inactive', color: 'gray' },
-      error: { label: 'Error', color: 'red' },
+    const statusConfig: Record<string, { label: string; color: 'warning' | 'info' | 'success' | 'light' | 'error' }> = {
+      creating: { label: 'Creating', color: 'warning' },
+      deploying: { label: 'Deploying', color: 'info' },
+      active: { label: 'Active', color: 'success' },
+      inactive: { label: 'Inactive', color: 'light' },
+      error: { label: 'Error', color: 'error' },
     };
 
-    const config = statusConfig[status] || { label: status, color: 'gray' };
+    const config = statusConfig[status] || { label: status, color: 'light' as const };
     return <Badge color={config.color}>{config.label}</Badge>;
   };
 
   const getHealthBadge = (health: string | null) => {
-    if (!health) return <Badge color="gray">Unknown</Badge>;
-    const healthConfig: Record<string, { label: string; color: string }> = {
-      healthy: { label: 'Healthy', color: 'green' },
-      unhealthy: { label: 'Unhealthy', color: 'red' },
-      unknown: { label: 'Unknown', color: 'gray' },
+    if (!health) return <Badge color="light">Unknown</Badge>;
+    const healthConfig: Record<string, { label: string; color: 'success' | 'error' | 'light' }> = {
+      healthy: { label: 'Healthy', color: 'success' },
+      unhealthy: { label: 'Unhealthy', color: 'error' },
+      unknown: { label: 'Unknown', color: 'light' },
     };
-    const config = healthConfig[health] || { label: health, color: 'gray' };
+    const config = healthConfig[health] || { label: health, color: 'light' as const };
     return <Badge color={config.color}>{config.label}</Badge>;
   };
 
@@ -383,16 +381,16 @@ export default function RailwayServicesManagement() {
         }}
         title="Create Railway Service"
       >
-        <Form>
+        <Form onSubmit={(e) => { e.preventDefault(); handleCreateService(); }}>
           {createError && (
-            <Alert color="red" className="mb-4">
-              {createError}
-            </Alert>
+            <div className="mb-4">
+              <Alert variant="error" title="Error" message={createError} />
+            </div>
           )}
           {createSuccess && (
-            <Alert color="green" className="mb-4">
-              {createSuccess}
-            </Alert>
+            <div className="mb-4">
+              <Alert variant="success" title="Success" message={createSuccess} />
+            </div>
           )}
 
           <div className="space-y-4">
