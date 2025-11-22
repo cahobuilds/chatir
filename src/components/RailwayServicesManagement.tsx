@@ -333,13 +333,23 @@ export default function RailwayServicesManagement() {
         )}
 
         {/* Services Table */}
-        {loading ? (
-          <div className="text-center py-8 text-gray-500">Loading services...</div>
-        ) : error ? (
-          <div className="text-center py-8 text-gray-500">
-            Unable to load services. Please check the error above and try again.
+        {loading && !error ? (
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white mb-2"></div>
+            <p>Loading services...</p>
+          </div>
+        ) : error && services.length === 0 ? (
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <p className="mb-4">Unable to load services.</p>
+            <p className="text-sm">Please check the error message above and try again.</p>
           </div>
         ) : services.length === 0 ? (
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <CloudIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+            <p className="mb-2">No services found.</p>
+            <p className="text-sm">Create your first Railway service to get started.</p>
+          </div>
+        ) : (
           <div className="text-center py-8 text-gray-500">
             No services found. Create your first Railway service to get started.
           </div>
