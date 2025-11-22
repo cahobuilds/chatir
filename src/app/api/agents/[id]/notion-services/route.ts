@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 
 /**
- * POST /api/agents/:agentId/notion-services - Assign service to agent (Tenant Admin)
+ * POST /api/agents/:id/notion-services - Assign service to agent (Tenant Admin)
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ agentId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { agentId } = await params;
+    const { id: agentId } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -169,14 +169,14 @@ export async function POST(
 }
 
 /**
- * GET /api/agents/:agentId/notion-services - Get agent's assigned services
+ * GET /api/agents/:id/notion-services - Get agent's assigned services
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ agentId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { agentId } = await params;
+    const { id: agentId } = await params;
     const supabase = await createClient();
 
     // Authenticate user

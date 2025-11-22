@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 
 /**
- * PATCH /api/agents/:agentId/notion-services/:serviceId - Update assignment (Tenant Admin)
+ * PATCH /api/agents/:id/notion-services/:serviceId - Update assignment (Tenant Admin)
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ agentId: string; serviceId: string }> }
+  { params }: { params: Promise<{ id: string; serviceId: string }> }
 ) {
   try {
-    const { agentId, serviceId } = await params;
+    const { id: agentId, serviceId } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
@@ -81,14 +81,14 @@ export async function PATCH(
 }
 
 /**
- * DELETE /api/agents/:agentId/notion-services/:serviceId - Remove assignment (Tenant Admin)
+ * DELETE /api/agents/:id/notion-services/:serviceId - Remove assignment (Tenant Admin)
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ agentId: string; serviceId: string }> }
+  { params }: { params: Promise<{ id: string; serviceId: string }> }
 ) {
   try {
-    const { agentId, serviceId } = await params;
+    const { id: agentId, serviceId } = await params;
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
 
