@@ -7,7 +7,7 @@ import {
   CallIcon,
   ChatIcon,
 } from "../icons";
-import { DocumentTextIcon, ClockIcon, ChartBarIcon, UserGroupIcon } from "@heroicons/react/24/outline";
+import { DocumentTextIcon, ClockIcon, ChartBarIcon, UserGroupIcon, CloudIcon } from "@heroicons/react/24/outline";
 
 export type PageType = "functional" | "template";
 export type NavCategory = "dashboard" | "admin" | "settings" | "analytics" | "templates";
@@ -112,6 +112,15 @@ export const navigationConfig: NavItem[] = [
         type: "functional",
         badge: "new",
         description: "Manage roles and permissions",
+      },
+      {
+        name: "Railway Services",
+        path: "/admin/railway-services",
+        type: "functional",
+        badge: "new",
+        description: "Manage Railway services for Notion MCP",
+        adminOnly: true,
+        icon: <CloudIcon className="w-5 h-5" />,
       },
       // Future functional items can be added here
       // {

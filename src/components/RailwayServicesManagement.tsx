@@ -1,0 +1,542 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import ComponentCard from "./common/ComponentCard";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import Badge from "./ui/badge/Badge";
+import Button from "./ui/button/Button";
+import { Modal } from "./ui/modal";
+import Form from "./form/Form";
+import Label from "./form/Label";
+import Input from "./form/input/InputField";
+import Alert from "./ui/alert/Alert";
+import { useOrganization } from "@/hooks/useOrganization";
+import {
+  CloudIcon,
+  PlusIcon,
+  TrashIcon,
+  ArrowPathIcon,
+  HeartIcon,
+  XCircleIcon,
+} from "@heroicons/react/24/outline";
+
+interface RailwayService {
+  id: string;
+  tenant_id: string;
+  notion_resource_id: string;
+  railway_service_id: string;
+  railway_service_name: string;
+  service_url: string | null;
+  health_check_url: string | null;
+  name: string;
+  description: string | null;
+  status: 'creating' | 'deploying' | 'active' | 'inactive' | 'error';
+  deployment_status: string | null;
+  last_health_check: string | null;
+  health_check_status: 'healthy' | 'unhealthy' | 'unknown' | null;
+  created_at: string;
+  updated_at: string;
+  notion_resources?: {
+    id: string;
+    name: string;
+    status: string;
+  };
+  tenants?: {
+    id: string;
+    name: string;
+  };
+}
+
+interface NotionResource {
+  id: string;
+  name: string;
+  tenant_id: string;
+  status: string;
+}
+
+interface Tenant {
+  id: string;
+  name: string;
+}
+
+export default function RailwayServicesManagement() {
+  const { currentOrganization } = useOrganization();
+  const [services, setServices] = useState<RailwayService[]>([]);
+  const [notionResources, setNotionResources] = useState<NotionResource[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+  const [selectedService, setSelectedService] = useState<RailwayService | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
+
+  const [createFormData, setCreateFormData] = useState({
+    tenant_id: '',
+    notion_resource_id: '',
+    service_name: '',
+    description: '',
+  });
+
+  useEffect(() => {
+    fetchServices();
+    fetchNotionResources();
+    fetchTenants();
+  }, []);
+
+  const fetchServices = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/railway/services');
+      if (response.ok) {
+        const data = await response.json();
+        setServices(data.services || []);
+      } else {
+        console.error('Failed to fetch services');
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchNotionResources = async () => {
+    try {
+      const response = await fetch('/api/notion/resources');
+      if (response.ok) {
+        const data = await response.json();
+        setNotionResources(data.resources || []);
+      }
+    } catch (error) {
+      console.error('Error fetching Notion resources:', error);
+    }
+  };
+
+  const fetchTenants = async () => {
+    try {
+      const response = await fetch('/api/tenants');
+      if (response.ok) {
+        const data = await response.json();
+        const tenantsList = data.tenants || [];
+        const formattedTenants = tenantsList.map((t: any) => ({
+          id: t.tenant_id || t.tenants?.id,
+          name: t.tenants?.name || t.name,
+        }));
+        setTenants(formattedTenants);
+      }
+    } catch (error) {
+      console.error('Error fetching tenants:', error);
+    }
+  };
+
+  const handleCreateService = async () => {
+    if (!createFormData.tenant_id || !createFormData.notion_resource_id || !createFormData.service_name) {
+      setCreateError('Please fill in all required fields');
+      return;
+    }
+
+    setIsCreating(true);
+    setCreateError(null);
+    setCreateSuccess(null);
+
+    try {
+      const response = await fetch('/api/railway/services', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(createFormData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setCreateSuccess('Service created successfully! Deployment is in progress...');
+        setIsCreateModalOpen(false);
+        setCreateFormData({
+          tenant_id: '',
+          notion_resource_id: '',
+          service_name: '',
+          description: '',
+        });
+        // Refresh services list after a short delay
+        setTimeout(() => {
+          fetchServices();
+        }, 2000);
+      } else {
+        setCreateError(data.error || 'Failed to create service');
+      }
+    } catch (error: any) {
+      setCreateError(error.message || 'Failed to create service');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDeleteService = async () => {
+    if (!selectedService) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/railway/services/${selectedService.id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setIsDeleteModalOpen(false);
+        setSelectedService(null);
+        fetchServices();
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to delete service');
+      }
+    } catch (error: any) {
+      alert(error.message || 'Failed to delete service');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeployService = async (serviceId: string) => {
+    setIsDeploying(true);
+    try {
+      const response = await fetch(`/api/railway/services/${serviceId}/deploy`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        fetchServices();
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to trigger deployment');
+      }
+    } catch (error: any) {
+      alert(error.message || 'Failed to trigger deployment');
+    } finally {
+      setIsDeploying(false);
+    }
+  };
+
+  const handleHealthCheck = async (serviceId: string) => {
+    try {
+      const response = await fetch(`/api/railway/services/${serviceId}/health`);
+      if (response.ok) {
+        fetchServices(); // Refresh to get updated health status
+      }
+    } catch (error) {
+      console.error('Health check failed:', error);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig: Record<string, { label: string; color: string }> = {
+      creating: { label: 'Creating', color: 'yellow' },
+      deploying: { label: 'Deploying', color: 'blue' },
+      active: { label: 'Active', color: 'green' },
+      inactive: { label: 'Inactive', color: 'gray' },
+      error: { label: 'Error', color: 'red' },
+    };
+
+    const config = statusConfig[status] || { label: status, color: 'gray' };
+    return <Badge color={config.color}>{config.label}</Badge>;
+  };
+
+  const getHealthBadge = (health: string | null) => {
+    if (!health) return <Badge color="gray">Unknown</Badge>;
+    const healthConfig: Record<string, { label: string; color: string }> = {
+      healthy: { label: 'Healthy', color: 'green' },
+      unhealthy: { label: 'Unhealthy', color: 'red' },
+      unknown: { label: 'Unknown', color: 'gray' },
+    };
+    const config = healthConfig[health] || { label: health, color: 'gray' };
+    return <Badge color={config.color}>{config.label}</Badge>;
+  };
+
+  const filteredNotionResources = createFormData.tenant_id
+    ? notionResources.filter((r) => r.tenant_id === createFormData.tenant_id)
+    : [];
+
+  return (
+    <ComponentCard title="Railway Services" className="col-span-12">
+      <div className="space-y-4">
+        {/* Header Actions */}
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Manage Railway services for Notion MCP integration
+          </p>
+          <Button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <PlusIcon className="w-4 h-4" />
+            Create Service
+          </Button>
+        </div>
+
+        {/* Services Table */}
+        {loading ? (
+          <div className="text-center py-8 text-gray-500">Loading services...</div>
+        ) : services.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            No services found. Create your first Railway service to get started.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableCell>Service Name</TableCell>
+                  <TableCell>Tenant</TableCell>
+                  <TableCell>Notion Resource</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Health</TableCell>
+                  <TableCell>Service URL</TableCell>
+                  <TableCell>Created</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {services.map((service) => (
+                  <TableRow key={service.id}>
+                    <TableCell className="font-medium">{service.name}</TableCell>
+                    <TableCell>{service.tenants?.name || 'N/A'}</TableCell>
+                    <TableCell>{service.notion_resources?.name || 'N/A'}</TableCell>
+                    <TableCell>{getStatusBadge(service.status)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {getHealthBadge(service.health_check_status)}
+                        <button
+                          onClick={() => handleHealthCheck(service.id)}
+                          className="text-blue-600 hover:text-blue-800"
+                          title="Check health"
+                        >
+                          <HeartIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {service.service_url ? (
+                        <a
+                          href={service.service_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline text-sm"
+                        >
+                          {service.service_url.replace('https://', '')}
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 text-sm">Not available</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {new Date(service.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {service.status === 'creating' && (
+                          <button
+                            onClick={() => handleDeployService(service.id)}
+                            disabled={isDeploying}
+                            className="text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                            title="Trigger deployment"
+                          >
+                            <ArrowPathIcon className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setSelectedService(service);
+                            setIsDeleteModalOpen(true);
+                          }}
+                          className="text-red-600 hover:text-red-800"
+                          title="Delete service"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+
+      {/* Create Service Modal */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setCreateError(null);
+          setCreateSuccess(null);
+        }}
+        title="Create Railway Service"
+      >
+        <Form>
+          {createError && (
+            <Alert color="red" className="mb-4">
+              {createError}
+            </Alert>
+          )}
+          {createSuccess && (
+            <Alert color="green" className="mb-4">
+              {createSuccess}
+            </Alert>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="tenant_id">Tenant *</Label>
+              <select
+                id="tenant_id"
+                value={createFormData.tenant_id}
+                onChange={(e) => {
+                  setCreateFormData({
+                    ...createFormData,
+                    tenant_id: e.target.value,
+                    notion_resource_id: '', // Reset when tenant changes
+                  });
+                }}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2"
+                required
+              >
+                <option value="">Select a tenant</option>
+                {tenants.map((tenant) => (
+                  <option key={tenant.id} value={tenant.id}>
+                    {tenant.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="notion_resource_id">Notion Resource *</Label>
+              <select
+                id="notion_resource_id"
+                value={createFormData.notion_resource_id}
+                onChange={(e) =>
+                  setCreateFormData({
+                    ...createFormData,
+                    notion_resource_id: e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2"
+                required
+                disabled={!createFormData.tenant_id}
+              >
+                <option value="">
+                  {createFormData.tenant_id
+                    ? 'Select a Notion resource'
+                    : 'Select a tenant first'}
+                </option>
+                {filteredNotionResources.map((resource) => (
+                  <option key={resource.id} value={resource.id}>
+                    {resource.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="service_name">Service Name *</Label>
+              <Input
+                id="service_name"
+                type="text"
+                value={createFormData.service_name}
+                onChange={(e) =>
+                  setCreateFormData({
+                    ...createFormData,
+                    service_name: e.target.value,
+                  })
+                }
+                placeholder="e.g., main-workspace"
+                required
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                This will be prefixed with tenant ID in Railway
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Input
+                id="description"
+                type="text"
+                value={createFormData.description}
+                onChange={(e) =>
+                  setCreateFormData({
+                    ...createFormData,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Optional description"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                onClick={() => setIsCreateModalOpen(false)}
+                variant="outline"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateService}
+                disabled={isCreating}
+              >
+                {isCreating ? 'Creating...' : 'Create Service'}
+              </Button>
+            </div>
+          </div>
+        </Form>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedService(null);
+        }}
+        title="Delete Railway Service"
+      >
+        <div className="space-y-4">
+          <p>
+            Are you sure you want to delete the service "{selectedService?.name}"?
+            This will also delete the Railway service and cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              onClick={() => {
+                setIsDeleteModalOpen(false);
+                setSelectedService(null);
+              }}
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteService}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </ComponentCard>
+  );
+}
+
