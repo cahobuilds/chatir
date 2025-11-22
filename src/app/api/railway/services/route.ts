@@ -9,7 +9,6 @@ import {
   listRailwayServices,
 } from '@/lib/railway';
 import { decrypt } from '@/lib/encryption';
-import { logger } from '@/lib/logger';
 
 /**
  * POST /api/railway/services - Create a new Railway service (System Admin Only)
@@ -79,7 +78,7 @@ export async function POST(request: NextRequest) {
     try {
       notionToken = decrypt(notionResource.notion_token_encrypted);
     } catch (error) {
-      logger.error('Failed to decrypt Notion token', error, { notion_resource_id });
+      console.error('[Railway Services API] Failed to decrypt Notion token:', error);
       return NextResponse.json(
         { error: 'Failed to decrypt Notion token' },
         { status: 500 }
@@ -89,7 +88,7 @@ export async function POST(request: NextRequest) {
     // Generate unique service name
     const railwayServiceName = `notion-${tenant_id.substring(0, 8)}-${service_name.toLowerCase().replace(/\s+/g, '-')}`;
 
-    logger.info('Creating Railway service', {
+    console.log('[Railway Services API] Creating Railway service:', {
       tenant_id,
       notion_resource_id,
       service_name: railwayServiceName,
@@ -102,15 +101,12 @@ export async function POST(request: NextRequest) {
     let railwayService;
     try {
       railwayService = await createRailwayService(projectId, railwayServiceName, source);
-      logger.info('Railway service created', {
+      console.log('[Railway Services API] Railway service created:', {
         service_id: railwayService.id,
         service_name: railwayService.name,
       });
     } catch (error: any) {
-      logger.error('Failed to create Railway service', error, {
-        tenant_id,
-        service_name: railwayServiceName,
-      });
+      console.error('[Railway Services API] Failed to create Railway service:', error);
       return NextResponse.json(
         { error: `Failed to create Railway service: ${error.message}` },
         { status: 500 }
@@ -122,11 +118,9 @@ export async function POST(request: NextRequest) {
       await updateServiceVariables(railwayService.id, [
         { name: 'NOTION_TOKEN', value: notionToken },
       ]);
-      logger.info('Service environment variables set', { service_id: railwayService.id });
+      console.log('[Railway Services API] Service environment variables set:', { service_id: railwayService.id });
     } catch (error: any) {
-      logger.error('Failed to set service environment variables', error, {
-        service_id: railwayService.id,
-      });
+      console.error('[Railway Services API] Failed to set service environment variables:', error);
       // Continue anyway - variables can be set later
     }
 
@@ -147,17 +141,17 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (dbError) {
-      logger.error('Failed to create database record', dbError, {
+      console.error('[Railway Services API] Failed to create database record:', dbError, {
         railway_service_id: railwayService.id,
       });
       // Try to clean up Railway service
       try {
         // Note: Railway API might not have delete immediately, but we'll mark it for cleanup
-        logger.warn('Database insert failed, Railway service may need manual cleanup', {
+        console.warn('[Railway Services API] Database insert failed, Railway service may need manual cleanup', {
           railway_service_id: railwayService.id,
         });
       } catch (cleanupError) {
-        logger.error('Failed to cleanup Railway service', cleanupError);
+        console.error('[Railway Services API] Failed to cleanup Railway service:', cleanupError);
       }
       return NextResponse.json(
         { error: 'Failed to create database record' },
@@ -168,7 +162,7 @@ export async function POST(request: NextRequest) {
     // Trigger deployment (async - don't wait)
     createDeployment(railwayService.id)
       .then((deployment) => {
-        logger.info('Deployment triggered', {
+        console.log('[Railway Services API] Deployment triggered:', {
           service_id: railwayService.id,
           deployment_id: deployment.id,
         });
@@ -178,13 +172,13 @@ export async function POST(request: NextRequest) {
           .update({ status: 'deploying', deployment_status: deployment.status })
           .eq('id', mcpService.id)
           .then(() => {
-            logger.info('Service status updated to deploying', {
+            console.log('[Railway Services API] Service status updated to deploying:', {
               service_id: mcpService.id,
             });
           });
       })
       .catch((error) => {
-        logger.error('Failed to trigger deployment', error, {
+        console.error('[Railway Services API] Failed to trigger deployment:', error, {
           service_id: railwayService.id,
         });
         // Update status to error
@@ -223,7 +217,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
-    logger.error('Unexpected error creating Railway service', error);
+    console.error('[Railway Services API] Unexpected error creating Railway service:', error);
     return NextResponse.json(
       { error: error.message || 'Internal server error' },
       { status: 500 }
@@ -259,18 +253,10 @@ export async function GET(request: NextRequest) {
 
     const isSystemAdmin = !!userTenant;
 
-    let query = adminSupabase.from('notion_mcp_services').select(`
-      *,
-      notion_resources (
-        id,
-        name,
-        status
-      ),
-      tenants (
-        id,
-        name
-      )
-    `);
+    // Build base query - fetch services first, then relations separately to avoid hanging
+    let query = adminSupabase
+      .from('notion_mcp_services')
+      .select('*');
 
     if (isSystemAdmin) {
       // System admin can see all services, optionally filtered by tenant
@@ -300,13 +286,52 @@ export async function GET(request: NextRequest) {
     const { data: services, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
-      logger.error('Failed to fetch services', error);
+      console.error('[Railway Services API] Failed to fetch services:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ services: services || [] });
+    if (!services || services.length === 0) {
+      return NextResponse.json({ services: [] });
+    }
+
+    // Fetch related data separately to avoid query hanging
+    const serviceIds = services.map((s: any) => s.id);
+    const resourceIds = [...new Set(services.map((s: any) => s.notion_resource_id))];
+    const tenantIds = [...new Set(services.map((s: any) => s.tenant_id))];
+
+    // Fetch resources and tenants in parallel
+    const [resourcesResult, tenantsResult] = await Promise.all([
+      resourceIds.length > 0
+        ? adminSupabase
+            .from('notion_resources')
+            .select('id, name, status')
+            .in('id', resourceIds)
+        : Promise.resolve({ data: [], error: null }),
+      tenantIds.length > 0
+        ? adminSupabase
+            .from('tenants')
+            .select('id, name')
+            .in('id', tenantIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    const resourcesMap = new Map(
+      (resourcesResult.data || []).map((r: any) => [r.id, r])
+    );
+    const tenantsMap = new Map(
+      (tenantsResult.data || []).map((t: any) => [t.id, t])
+    );
+
+    // Enrich services with related data
+    const enrichedServices = services.map((service: any) => ({
+      ...service,
+      notion_resources: resourcesMap.get(service.notion_resource_id) || null,
+      tenants: tenantsMap.get(service.tenant_id) || null,
+    }));
+
+    return NextResponse.json({ services: enrichedServices });
   } catch (error: any) {
-    logger.error('Unexpected error fetching services', error);
+    console.error('[Railway Services API] Unexpected error:', error);
     return NextResponse.json(
       { error: error.message || 'Internal server error' },
       { status: 500 }
