@@ -69,6 +69,7 @@ export default function RailwayServicesManagement() {
   const [notionResources, setNotionResources] = useState<NotionResource[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -94,14 +95,19 @@ export default function RailwayServicesManagement() {
   const fetchServices = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await fetch('/api/railway/services');
       if (response.ok) {
         const data = await response.json();
         setServices(data.services || []);
       } else {
-        console.error('Failed to fetch services');
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch services' }));
+        setError(errorData.error || `Failed to fetch services: ${response.status} ${response.statusText}`);
+        console.error('Failed to fetch services:', errorData);
       }
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to fetch services. Please check your connection.';
+      setError(errorMessage);
       console.error('Error fetching services:', error);
     } finally {
       setLoading(false);
@@ -114,6 +120,8 @@ export default function RailwayServicesManagement() {
       if (response.ok) {
         const data = await response.json();
         setNotionResources(data.resources || []);
+      } else {
+        console.error('Failed to fetch Notion resources:', response.status);
       }
     } catch (error) {
       console.error('Error fetching Notion resources:', error);
@@ -131,6 +139,8 @@ export default function RailwayServicesManagement() {
           name: t.tenants?.name || t.name,
         }));
         setTenants(formattedTenants);
+      } else {
+        console.error('Failed to fetch tenants:', response.status);
       }
     } catch (error) {
       console.error('Error fetching tenants:', error);
@@ -281,9 +291,27 @@ export default function RailwayServicesManagement() {
           </Button>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4">
+            <Alert variant="error" title="Error Loading Services" message={error} />
+            <Button
+              onClick={fetchServices}
+              variant="outline"
+              className="mt-2"
+            >
+              Retry
+            </Button>
+          </div>
+        )}
+
         {/* Services Table */}
         {loading ? (
           <div className="text-center py-8 text-gray-500">Loading services...</div>
+        ) : error ? (
+          <div className="text-center py-8 text-gray-500">
+            Unable to load services. Please check the error above and try again.
+          </div>
         ) : services.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             No services found. Create your first Railway service to get started.
