@@ -152,12 +152,14 @@ export default function RailwayServicesManagement() {
       const response = await fetch('/api/notion/resources');
       if (response.ok) {
         const data = await response.json();
+        console.log('[Railway Services] Notion resources fetched:', data.resources?.length || 0);
         setNotionResources(data.resources || []);
       } else {
-        console.error('Failed to fetch Notion resources:', response.status);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[Railway Services] Failed to fetch Notion resources:', response.status, errorData);
       }
     } catch (error) {
-      console.error('Error fetching Notion resources:', error);
+      console.error('[Railway Services] Error fetching Notion resources:', error);
     }
   };
 
@@ -502,15 +504,37 @@ export default function RailwayServicesManagement() {
               >
                 <option value="">
                   {createFormData.tenant_id
-                    ? 'Select a Notion resource'
+                    ? filteredNotionResources.length === 0
+                      ? 'No Notion resources found for this tenant'
+                      : 'Select a Notion resource'
                     : 'Select a tenant first'}
                 </option>
                 {filteredNotionResources.map((resource) => (
                   <option key={resource.id} value={resource.id}>
-                    {resource.name}
+                    {resource.name} {resource.status !== 'active' ? `(${resource.status})` : ''}
                   </option>
                 ))}
               </select>
+              {createFormData.tenant_id && filteredNotionResources.length === 0 && (
+                <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-2">
+                    <strong>No Notion resources found for this tenant.</strong>
+                  </p>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
+                    You need to create a Notion resource first before creating a Railway service.
+                  </p>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                    To create a Notion resource, you'll need:
+                  </p>
+                  <ul className="text-xs text-yellow-700 dark:text-yellow-300 mt-1 ml-4 list-disc">
+                    <li>A Notion API token (starts with <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">secret_</code>)</li>
+                    <li>The Notion workspace ID (optional)</li>
+                  </ul>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-2">
+                    You can create a Notion resource via the API endpoint: <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">POST /api/notion/resources</code>
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>
