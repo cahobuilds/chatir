@@ -109,6 +109,7 @@ export default function RailwayServicesManagement() {
       
       if (response.ok) {
         const data = await response.json();
+        console.log('Services fetched successfully:', data);
         setServices(data.services || []);
         setError(null);
       } else {
@@ -119,14 +120,19 @@ export default function RailwayServicesManagement() {
           errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
         }
         
+        console.error('API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+        });
+        
         if (response.status === 401) {
-          setError('Unauthorized: Please ensure you are logged in as a system admin.');
+          setError('Unauthorized: Please ensure you are logged in as a system admin. Check the browser console for details.');
         } else if (response.status === 403) {
-          setError('Forbidden: System admin access is required to view Railway services.');
+          setError('Forbidden: System admin access is required to view Railway services. Your current role may not have permission.');
         } else {
           setError(errorData.error || `Failed to fetch services: ${response.status} ${response.statusText}`);
         }
-        console.error('Failed to fetch services:', response.status, errorData);
       }
     } catch (error: any) {
       if (error.name === 'AbortError') {
