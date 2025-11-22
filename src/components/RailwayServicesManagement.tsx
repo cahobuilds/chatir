@@ -350,10 +350,6 @@ export default function RailwayServicesManagement() {
             <p className="text-sm">Create your first Railway service to get started.</p>
           </div>
         ) : (
-          <div className="text-center py-8 text-gray-500">
-            No services found. Create your first Railway service to get started.
-          </div>
-        ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
