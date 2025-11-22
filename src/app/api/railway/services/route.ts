@@ -275,61 +275,28 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ services: [] });
       }
 
-      const tenantIds = userTenants.map((ut) => ut.tenant_id);
-      query = query.in('tenant_id', tenantIds);
+      const userTenantIds = userTenants.map((ut) => ut.tenant_id);
+      query = query.in('tenant_id', userTenantIds);
 
-      if (tenantId && !tenantIds.includes(tenantId)) {
+      if (tenantId && !userTenantIds.includes(tenantId)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
 
-    const { data: services, error } = await query.order('created_at', { ascending: false });
+    // Use a simpler query first - just get services without relations
+    const { data: services, error } = await query
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100); // Add limit to prevent large queries
 
     if (error) {
       console.error('[Railway Services API] Failed to fetch services:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    if (!services || services.length === 0) {
-      return NextResponse.json({ services: [] });
-    }
-
-    // Fetch related data separately to avoid query hanging
-    const serviceIds = services.map((s: any) => s.id);
-    const resourceIds = [...new Set(services.map((s: any) => s.notion_resource_id))];
-    const tenantIds = [...new Set(services.map((s: any) => s.tenant_id))];
-
-    // Fetch resources and tenants in parallel
-    const [resourcesResult, tenantsResult] = await Promise.all([
-      resourceIds.length > 0
-        ? adminSupabase
-            .from('notion_resources')
-            .select('id, name, status')
-            .in('id', resourceIds)
-        : Promise.resolve({ data: [], error: null }),
-      tenantIds.length > 0
-        ? adminSupabase
-            .from('tenants')
-            .select('id, name')
-            .in('id', tenantIds)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-
-    const resourcesMap = new Map(
-      (resourcesResult.data || []).map((r: any) => [r.id, r])
-    );
-    const tenantsMap = new Map(
-      (tenantsResult.data || []).map((t: any) => [t.id, t])
-    );
-
-    // Enrich services with related data
-    const enrichedServices = services.map((service: any) => ({
-      ...service,
-      notion_resources: resourcesMap.get(service.notion_resource_id) || null,
-      tenants: tenantsMap.get(service.tenant_id) || null,
-    }));
-
-    return NextResponse.json({ services: enrichedServices });
+    // Return services without relations for now to avoid timeout
+    // Relations can be fetched client-side if needed
+    return NextResponse.json({ services: services || [] });
   } catch (error: any) {
     console.error('[Railway Services API] Unexpected error:', error);
     return NextResponse.json(
