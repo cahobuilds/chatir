@@ -78,11 +78,23 @@ export default function RailwayServicesManagement() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
+  const [isCreateNotionResourceModalOpen, setIsCreateNotionResourceModalOpen] = useState(false);
+  const [isCreatingNotionResource, setIsCreatingNotionResource] = useState(false);
+  const [notionResourceError, setNotionResourceError] = useState<string | null>(null);
+  const [notionResourceSuccess, setNotionResourceSuccess] = useState<string | null>(null);
 
   const [createFormData, setCreateFormData] = useState({
     tenant_id: '',
     notion_resource_id: '',
     service_name: '',
+    description: '',
+  });
+
+  const [notionResourceFormData, setNotionResourceFormData] = useState({
+    tenant_id: '',
+    name: '',
+    notion_token: '',
+    notion_workspace_id: '',
     description: '',
   });
 
@@ -288,6 +300,57 @@ export default function RailwayServicesManagement() {
       }
     } catch (error) {
       console.error('Health check failed:', error);
+    }
+  };
+
+  const handleCreateNotionResource = async () => {
+    if (!notionResourceFormData.tenant_id || !notionResourceFormData.name || !notionResourceFormData.notion_token) {
+      setNotionResourceError('Please fill in all required fields (Tenant, Name, and Notion Token)');
+      return;
+    }
+
+    setIsCreatingNotionResource(true);
+    setNotionResourceError(null);
+    setNotionResourceSuccess(null);
+
+    try {
+      const response = await fetch('/api/notion/resources', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(notionResourceFormData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setNotionResourceSuccess('Notion resource created successfully!');
+        // Refresh resources list
+        fetchNotionResources(notionResourceFormData.tenant_id);
+        // Update the create service form if same tenant
+        if (createFormData.tenant_id === notionResourceFormData.tenant_id) {
+          // Resources will be refreshed automatically
+        }
+        // Close modal after a short delay
+        setTimeout(() => {
+          setIsCreateNotionResourceModalOpen(false);
+          setNotionResourceFormData({
+            tenant_id: notionResourceFormData.tenant_id, // Keep tenant selected
+            name: '',
+            notion_token: '',
+            notion_workspace_id: '',
+            description: '',
+          });
+          setNotionResourceSuccess(null);
+        }, 2000);
+      } else {
+        setNotionResourceError(data.error || 'Failed to create Notion resource');
+      }
+    } catch (error: any) {
+      setNotionResourceError(error.message || 'Failed to create Notion resource');
+    } finally {
+      setIsCreatingNotionResource(false);
     }
   };
 
@@ -535,18 +598,32 @@ export default function RailwayServicesManagement() {
                   <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-2">
                     <strong>No Notion resources found for this tenant.</strong>
                   </p>
-                  <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
                     You need to create a Notion resource first before creating a Railway service.
                   </p>
-                  <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                    To create a Notion resource, you'll need:
-                  </p>
-                  <ul className="text-xs text-yellow-700 dark:text-yellow-300 mt-1 ml-4 list-disc">
-                    <li>A Notion API token (starts with <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">secret_</code>)</li>
-                    <li>The Notion workspace ID (optional)</li>
-                  </ul>
-                  <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-2">
-                    You can create a Notion resource via the API endpoint: <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">POST /api/notion/resources</code>
+                  <Button
+                    onClick={() => {
+                      setNotionResourceFormData({
+                        ...notionResourceFormData,
+                        tenant_id: createFormData.tenant_id,
+                      });
+                      setIsCreateNotionResourceModalOpen(true);
+                    }}
+                    size="sm"
+                    className="w-full"
+                  >
+                    Create Notion Resource
+                  </Button>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-3">
+                    You'll need a Notion API token (starts with <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">secret_</code>) from{' '}
+                    <a 
+                      href="https://www.notion.so/my-integrations" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="underline hover:text-yellow-900 dark:hover:text-yellow-100"
+                    >
+                      notion.so/my-integrations
+                    </a>
                   </p>
                 </div>
               )}
@@ -639,6 +716,151 @@ export default function RailwayServicesManagement() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Create Notion Resource Modal */}
+      <Modal
+        isOpen={isCreateNotionResourceModalOpen}
+        onClose={() => {
+          setIsCreateNotionResourceModalOpen(false);
+          setNotionResourceError(null);
+          setNotionResourceSuccess(null);
+        }}
+        title="Create Notion Resource"
+      >
+        <Form onSubmit={(e) => { e.preventDefault(); handleCreateNotionResource(); }}>
+          {notionResourceError && (
+            <div className="mb-4">
+              <Alert variant="error" title="Error" message={notionResourceError} />
+            </div>
+          )}
+          {notionResourceSuccess && (
+            <div className="mb-4">
+              <Alert variant="success" title="Success" message={notionResourceSuccess} />
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="notion_resource_tenant_id">Tenant *</Label>
+              <select
+                id="notion_resource_tenant_id"
+                value={notionResourceFormData.tenant_id}
+                onChange={(e) =>
+                  setNotionResourceFormData({
+                    ...notionResourceFormData,
+                    tenant_id: e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2"
+                required
+              >
+                <option value="">Select a tenant</option>
+                {tenants.map((tenant) => (
+                  <option key={tenant.id} value={tenant.id}>
+                    {tenant.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="notion_resource_name">Resource Name *</Label>
+              <Input
+                id="notion_resource_name"
+                type="text"
+                value={notionResourceFormData.name}
+                onChange={(e) =>
+                  setNotionResourceFormData({
+                    ...notionResourceFormData,
+                    name: e.target.value,
+                  })
+                }
+                placeholder="e.g., Main Workspace"
+                required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="notion_token">Notion API Token *</Label>
+              <Input
+                id="notion_token"
+                type="password"
+                value={notionResourceFormData.notion_token}
+                onChange={(e) =>
+                  setNotionResourceFormData({
+                    ...notionResourceFormData,
+                    notion_token: e.target.value,
+                  })
+                }
+                placeholder="secret_..."
+                required
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Get your token from{' '}
+                <a 
+                  href="https://www.notion.so/my-integrations" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  notion.so/my-integrations
+                </a>
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="notion_workspace_id">Notion Workspace ID (Optional)</Label>
+              <Input
+                id="notion_workspace_id"
+                type="text"
+                value={notionResourceFormData.notion_workspace_id}
+                onChange={(e) =>
+                  setNotionResourceFormData({
+                    ...notionResourceFormData,
+                    notion_workspace_id: e.target.value,
+                  })
+                }
+                placeholder="Optional workspace ID"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="notion_resource_description">Description</Label>
+              <Input
+                id="notion_resource_description"
+                type="text"
+                value={notionResourceFormData.description}
+                onChange={(e) =>
+                  setNotionResourceFormData({
+                    ...notionResourceFormData,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Optional description"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                onClick={() => {
+                  setIsCreateNotionResourceModalOpen(false);
+                  setNotionResourceError(null);
+                  setNotionResourceSuccess(null);
+                }}
+                variant="outline"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateNotionResource}
+                disabled={isCreatingNotionResource}
+              >
+                {isCreatingNotionResource ? 'Creating...' : 'Create Resource'}
+              </Button>
+            </div>
+          </div>
+        </Form>
       </Modal>
     </ComponentCard>
   );
