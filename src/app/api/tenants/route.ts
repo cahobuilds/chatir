@@ -4,12 +4,36 @@ import { NextRequest, NextResponse } from 'next/server';
 // GET /api/tenants - Get current user's tenants (or all tenants for system_admin/super_admin)
 export async function GET(request: NextRequest) {
   try {
+    // Check environment variables before creating clients
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('[Tenants API] Missing Supabase environment variables');
+      return NextResponse.json(
+        { 
+          error: 'Server configuration error: Supabase not configured',
+          details: 'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY'
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('[Tenants API] Missing Supabase service role key');
+      return NextResponse.json(
+        { 
+          error: 'Server configuration error: Supabase admin not configured',
+          details: 'Missing SUPABASE_SERVICE_ROLE_KEY'
+        },
+        { status: 500 }
+      );
+    }
+
     const supabase = await createClient();
     const adminSupabase = createAdminClient();
     
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
+      console.error('[Tenants API] Auth error:', authError?.message);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -76,7 +100,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ tenants: userTenants || [] });
     }
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('[Tenants API] Unexpected error:', error);
+    return NextResponse.json(
+      { 
+        error: error.message || 'Internal server error',
+        details: error.stack 
+      }, 
+      { status: 500 }
+    );
   }
 }
 
