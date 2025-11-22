@@ -383,13 +383,14 @@ export default function RailwayServicesManagement() {
     : [];
 
   return (
-    <ComponentCard title="Railway Services" className="col-span-12">
-      <div className="space-y-4">
+    <ComponentCard 
+      title="Railway Services" 
+      desc="Create and manage Railway services for Notion MCP integration"
+      className="col-span-12"
+    >
+      <div className="space-y-6">
         {/* Header Actions */}
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Manage Railway services for Notion MCP integration
-          </p>
           <Button
             onClick={() => setIsCreateModalOpen(true)}
             className="flex items-center gap-2"
@@ -401,12 +402,13 @@ export default function RailwayServicesManagement() {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-4">
+          <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
             <Alert variant="error" title="Error Loading Services" message={error} />
             <Button
               onClick={fetchServices}
               variant="outline"
-              className="mt-2"
+              className="mt-3"
+              size="sm"
             >
               Retry
             </Button>
@@ -415,24 +417,25 @@ export default function RailwayServicesManagement() {
 
         {/* Services Table */}
         {loading && !error ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white mb-2"></div>
             <p>Loading services...</p>
           </div>
         ) : error && services.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             <p className="mb-4">Unable to load services.</p>
             <p className="text-sm">Please check the error message above and try again.</p>
           </div>
         ) : services.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             <CloudIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-            <p className="mb-2">No services found.</p>
+            <p className="mb-2 font-medium">No services found.</p>
             <p className="text-sm">Create your first Railway service to get started.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-x-auto -mx-4 sm:-mx-6">
+            <div className="inline-block min-w-full align-middle px-4 sm:px-6">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableCell>Service Name</TableCell>
@@ -508,7 +511,8 @@ export default function RailwayServicesManagement() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           </div>
         )}
       </div>
