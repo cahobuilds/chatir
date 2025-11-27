@@ -212,6 +212,8 @@ export default function AgentInteractionModal({
   const retellCallIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const isInitializingRef = useRef(false);
+  const transcriptMessageMapRef = useRef(new Map<string, { id: string; text: string }>());
+  const messageSequenceRef = useRef(0);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -436,6 +438,8 @@ export default function AgentInteractionModal({
     setSuccess(null);
     setTranscription("");
     setMessages([]);
+    transcriptMessageMapRef.current.clear();
+    messageSequenceRef.current = 0;
 
     try {
       // Try Retell first if agent has retell_agent_id
@@ -535,110 +539,157 @@ export default function AgentInteractionModal({
           retellClient.on("update", (data: any) => {
             setIsInitializing(false);
             isInitializingRef.current = false;
-            
-            // Process transcript_object array - this contains all messages in order
-            // When we get transcript_object, it's the source of truth - rebuild the entire message list
-            if (data.transcript_object && Array.isArray(data.transcript_object) && data.transcript_object.length > 0) {
-              // Process all messages from transcript_object array
-              const processedMessages: Message[] = [];
-              
-              data.transcript_object.forEach((item: any, index: number) => {
-                const role = item.role || item.type || 'user';
-                const content = extractCleanText(item.content || item.text || item.message || '');
-                
-                if (!content || !content.trim()) return;
-                
-                // Determine message type
-                let messageType: 'user' | 'agent' | 'system' = 'user';
-                if (role === 'agent' || role === 'assistant' || role === 'system') {
-                  messageType = role === 'system' ? 'system' : 'agent';
-                } else {
-                  messageType = 'user';
+
+            const parseTranscriptArray = (source: any): any[] => {
+              if (!source) return [];
+              if (Array.isArray(source)) return source;
+              if (typeof source === "string") {
+                try {
+                  const parsed = JSON.parse(source);
+                  return Array.isArray(parsed) ? parsed : [];
+                } catch (err) {
+                  console.warn("Failed to parse transcript_object:", err);
                 }
-                
-                // Create unique ID based on role, index, and content
-                const contentHash = content.substring(0, 30).replace(/\s/g, '').toLowerCase();
-                const messageId = `${messageType}-${index}-${contentHash}-${Date.now()}`;
-                
-                processedMessages.push({
-                  id: messageId,
-                  type: messageType,
-                  text: content.trim(),
-                  timestamp: new Date(item.start ? item.start * 1000 : Date.now()),
-                  finalized: true,
-                });
+              }
+              return [];
+            };
+
+            const transcriptArray = parseTranscriptArray(data.transcript_object);
+
+            if (transcriptArray.length > 0) {
+              const updates: Record<string, string> = {};
+              const newMessages: Message[] = [];
+
+              transcriptArray.forEach((item: any, index: number) => {
+                const role = (item.role || item.type || "user").toLowerCase();
+                const content = extractCleanText(item.content || item.text || item.message || "");
+                if (!content || !content.trim()) return;
+
+                const messageType: Message["type"] =
+                  role === "agent" || role === "assistant"
+                    ? "agent"
+                    : role === "system"
+                    ? "agent"
+                    : "user";
+
+                const key =
+                  item.utterance_id ||
+                  item.message_id ||
+                  item.sequence_id ||
+                  `${messageType}-${Math.round((item.start ?? index) * 1000)}-${index}`;
+
+                const existingEntry = transcriptMessageMapRef.current.get(key);
+                const trimmedContent = content.trim();
+
+                if (existingEntry) {
+                  if (existingEntry.text !== trimmedContent) {
+                    existingEntry.text = trimmedContent;
+                    updates[existingEntry.id] = trimmedContent;
+                  }
+                } else {
+                  const newId = `msg-${Date.now()}-${messageSequenceRef.current++}`;
+                  transcriptMessageMapRef.current.set(key, {
+                    id: newId,
+                    text: trimmedContent,
+                  });
+                  newMessages.push({
+                    id: newId,
+                    type: messageType,
+                    text: trimmedContent,
+                    timestamp: new Date(item.start ? item.start * 1000 : Date.now()),
+                    finalized: item.finalized ?? true,
+                  });
+                }
               });
-              
-              // Replace all messages with processed ones
-              setMessages(processedMessages);
-              
-              // Clear transcription state when we have structured messages
+
+              if (Object.keys(updates).length || newMessages.length) {
+                setMessages((prev) => {
+                  let updated = prev.filter((msg) => msg.id !== "init");
+                  if (Object.keys(updates).length) {
+                    updated = updated.map((msg) =>
+                      updates[msg.id] ? { ...msg, text: updates[msg.id], finalized: true } : msg
+                    );
+                  }
+                  if (newMessages.length) {
+                    updated = [...updated, ...newMessages];
+                    updated.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+                  }
+                  return updated;
+                });
+              } else {
+                setMessages((prev) => prev.filter((msg) => msg.id !== "init"));
+              }
+
               setTranscription("");
               return;
             }
-            
-            // Fallback: Handle simple transcript/response format
+
+            // Fallback: Handle simple transcript/response payloads
             let transcript: string | null = null;
             let response: string | null = null;
-            
+
             if (data.transcript) {
               const cleanText = extractCleanText(data.transcript);
               transcript = cleanText.trim() || null;
             }
-            
+
             if (data.response) {
               const cleanText = extractCleanText(data.response);
               response = cleanText.trim() || null;
             }
-            
+
             if (transcript || response) {
-              setMessages((prev) => prev.filter(msg => msg.id !== 'init'));
+              setMessages((prev) => prev.filter((msg) => msg.id !== "init"));
             }
-            
-            // Handle user transcript - ensure separate bubble
+
             if (transcript) {
-              setTranscription(transcript);
+              const trimmed = transcript.trim();
+              setTranscription(trimmed);
               setMessages((prev) => {
-                const withoutUnfinalized = prev.filter(msg => !(msg.type === 'user' && !msg.finalized));
-                
-                const existingMessage = withoutUnfinalized.find(
-                  msg => msg.type === 'user' && msg.text === transcript
+                const updated = prev.map((msg) =>
+                  msg.type === "user" && !msg.finalized
+                    ? { ...msg, text: trimmed, finalized: true }
+                    : msg
                 );
-                
-                if (!existingMessage) {
-                  return [...withoutUnfinalized, {
-                    id: `user-${Date.now()}`,
-                    type: 'user' as const,
-                    text: transcript,
-                    timestamp: new Date(),
-                    finalized: true,
-                  }];
+                const hasMessage = updated.some(
+                  (msg) => msg.type === "user" && msg.text === trimmed
+                );
+                if (hasMessage) {
+                  return updated;
                 }
-                
-                return withoutUnfinalized;
+                const newMessage: Message = {
+                  id: `user-${Date.now()}-${messageSequenceRef.current++}`,
+                  type: "user",
+                  text: trimmed,
+                  timestamp: new Date(),
+                  finalized: true,
+                };
+                return [...updated, newMessage];
               });
             }
-            
-            // Handle agent response - ensure separate bubble
+
             if (response) {
+              const trimmed = response.trim();
               setMessages((prev) => {
-                const withoutTyping = prev.filter(msg => !msg.isTyping && msg.id !== 'init');
-                
-                const existingAgentMessage = withoutTyping.find(
-                  msg => msg.type === 'agent' && msg.text === response
+                const updated = prev.map((msg) =>
+                  msg.type === "agent" && !msg.finalized
+                    ? { ...msg, text: trimmed, finalized: true }
+                    : msg
                 );
-                
-                if (!existingAgentMessage) {
-                  return [...withoutTyping, {
-                    id: `agent-${Date.now()}`,
-                    type: 'agent' as const,
-                    text: response,
-                    timestamp: new Date(),
-                    finalized: true,
-                  }];
+                const hasMessage = updated.some(
+                  (msg) => msg.type === "agent" && msg.text === trimmed
+                );
+                if (hasMessage) {
+                  return updated;
                 }
-                
-                return withoutTyping;
+                const newMessage: Message = {
+                  id: `agent-${Date.now()}-${messageSequenceRef.current++}`,
+                  type: "agent",
+                  text: trimmed,
+                  timestamp: new Date(),
+                  finalized: true,
+                };
+                return [...updated, newMessage];
               });
             }
           });
@@ -651,6 +702,18 @@ export default function AgentInteractionModal({
           retellClient.on("agent_stop_talking", () => {
             console.log("🔇 Agent stopped talking");
             setIsSpeaking(false);
+          });
+
+          // Handle interim transcript updates - show live transcription without creating bubbles
+          retellClient.on("transcript", (data: any) => {
+            // This handles interim (live) transcription
+            // Show in transcription state, not as a message bubble
+            if (data.transcript) {
+              const cleanText = extractCleanText(data.transcript);
+              if (cleanText && cleanText.trim()) {
+                setTranscription(cleanText.trim());
+              }
+            }
           });
 
           // Start the call - NO MUTING, let SDK handle everything (matches test page exactly)
@@ -697,6 +760,10 @@ export default function AgentInteractionModal({
   const handleStopTest = () => {
     setIsRecording(false);
     setIsListening(false);
+    setSuccess(null);
+    setTranscription("");
+    transcriptMessageMapRef.current.clear();
+    messageSequenceRef.current = 0;
 
     if (retellClientRef.current) {
       try {
@@ -927,8 +994,8 @@ export default function AgentInteractionModal({
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                  Agent Prompt
-                </h3>
+                Agent Prompt
+              </h3>
                 {isAdmin && !isEditingPrompt && (
                   <Button
                     onClick={handleStartEditPrompt}
@@ -971,7 +1038,7 @@ export default function AgentInteractionModal({
                   </div>
                 ) : (
                   <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                    {getAgentPrompt()}
+                  {getAgentPrompt()}
                   </div>
                 )}
               </div>
