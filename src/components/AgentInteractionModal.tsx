@@ -533,46 +533,65 @@ export default function AgentInteractionModal({
           });
 
           retellClient.on("update", (data: any) => {
-            // Extract clean text from transcript/response - handle arrays, objects, JSON strings
+            setIsInitializing(false);
+            isInitializingRef.current = false;
+            
+            // Process transcript_object array - this contains all messages in order
+            // When we get transcript_object, it's the source of truth - rebuild the entire message list
+            if (data.transcript_object && Array.isArray(data.transcript_object) && data.transcript_object.length > 0) {
+              // Process all messages from transcript_object array
+              const processedMessages: Message[] = [];
+              
+              data.transcript_object.forEach((item: any, index: number) => {
+                const role = item.role || item.type || 'user';
+                const content = extractCleanText(item.content || item.text || item.message || '');
+                
+                if (!content || !content.trim()) return;
+                
+                // Determine message type
+                let messageType: 'user' | 'agent' | 'system' = 'user';
+                if (role === 'agent' || role === 'assistant' || role === 'system') {
+                  messageType = role === 'system' ? 'system' : 'agent';
+                } else {
+                  messageType = 'user';
+                }
+                
+                // Create unique ID based on role, index, and content
+                const contentHash = content.substring(0, 30).replace(/\s/g, '').toLowerCase();
+                const messageId = `${messageType}-${index}-${contentHash}-${Date.now()}`;
+                
+                processedMessages.push({
+                  id: messageId,
+                  type: messageType,
+                  text: content.trim(),
+                  timestamp: new Date(item.start ? item.start * 1000 : Date.now()),
+                  finalized: true,
+                });
+              });
+              
+              // Replace all messages with processed ones
+              setMessages(processedMessages);
+              
+              // Clear transcription state when we have structured messages
+              setTranscription("");
+              return;
+            }
+            
+            // Fallback: Handle simple transcript/response format
             let transcript: string | null = null;
             let response: string | null = null;
             
-            // Handle transcript - extract clean text, no code/JSON
             if (data.transcript) {
               const cleanText = extractCleanText(data.transcript);
               transcript = cleanText.trim() || null;
             }
             
-            // Handle response - extract clean text, no code/JSON
             if (data.response) {
               const cleanText = extractCleanText(data.response);
               response = cleanText.trim() || null;
             }
             
-            // Also check for transcript_object or message arrays
-            if (data.transcript_object && Array.isArray(data.transcript_object)) {
-              // Extract user messages from transcript array
-              const userMessages = data.transcript_object
-                .filter((item: any) => item.role === 'user' || item.type === 'user')
-                .map((item: any) => extractCleanText(item.content || item.text || item.message));
-              
-              if (userMessages.length > 0 && !transcript) {
-                transcript = userMessages[userMessages.length - 1]; // Get latest user message
-              }
-              
-              // Extract agent messages from transcript array
-              const agentMessages = data.transcript_object
-                .filter((item: any) => item.role === 'agent' || item.role === 'assistant' || item.type === 'agent')
-                .map((item: any) => extractCleanText(item.content || item.text || item.message));
-              
-              if (agentMessages.length > 0 && !response) {
-                response = agentMessages[agentMessages.length - 1]; // Get latest agent message
-              }
-            }
-            
             if (transcript || response) {
-              setIsInitializing(false);
-              isInitializingRef.current = false;
               setMessages((prev) => prev.filter(msg => msg.id !== 'init'));
             }
             
@@ -580,10 +599,8 @@ export default function AgentInteractionModal({
             if (transcript) {
               setTranscription(transcript);
               setMessages((prev) => {
-                // Remove any unfinalized user messages
                 const withoutUnfinalized = prev.filter(msg => !(msg.type === 'user' && !msg.finalized));
                 
-                // Check if we already have this exact message
                 const existingMessage = withoutUnfinalized.find(
                   msg => msg.type === 'user' && msg.text === transcript
                 );
@@ -594,7 +611,7 @@ export default function AgentInteractionModal({
                     type: 'user' as const,
                     text: transcript,
                     timestamp: new Date(),
-                    finalized: true, // Mark as finalized immediately
+                    finalized: true,
                   }];
                 }
                 
@@ -605,10 +622,8 @@ export default function AgentInteractionModal({
             // Handle agent response - ensure separate bubble
             if (response) {
               setMessages((prev) => {
-                // Remove any typing indicators or unfinalized agent messages
                 const withoutTyping = prev.filter(msg => !msg.isTyping && msg.id !== 'init');
                 
-                // Check if we already have this exact agent message
                 const existingAgentMessage = withoutTyping.find(
                   msg => msg.type === 'agent' && msg.text === response
                 );

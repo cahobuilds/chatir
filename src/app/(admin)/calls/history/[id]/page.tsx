@@ -74,28 +74,15 @@ export default function CallDetailPage() {
       setError(null);
 
       try {
-        const response = await fetch(`/api/interactions?tenant_id=${currentOrganization.id}&limit=1&offset=0`);
+        // Fetch interaction directly by ID
+        const response = await fetch(`/api/interactions/${params.id}`);
         
         if (!response.ok) {
           throw new Error('Failed to fetch interaction');
         }
 
         const data = await response.json();
-        const interactions: Interaction[] = data.interactions || [];
-        const foundInteraction = interactions.find(i => i.id === params.id);
-
-        if (!foundInteraction) {
-          // Try fetching directly by ID if not found in list
-          const directResponse = await fetch(`/api/interactions/${params.id}`);
-          if (directResponse.ok) {
-            const directData = await directResponse.json();
-            setInteraction(directData.interaction);
-          } else {
-            throw new Error('Interaction not found');
-          }
-        } else {
-          setInteraction(foundInteraction);
-        }
+        setInteraction(data.interaction);
       } catch (err: any) {
         console.error("Error fetching interaction:", err);
         setError(err.message || "Failed to load call details");

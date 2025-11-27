@@ -109,11 +109,17 @@ export async function GET(
               };
             }
             
-            // Call cost
-            if (callData.call_cost) {
+            // Call cost - ensure it's a number
+            if (callData.call_cost !== undefined && callData.call_cost !== null) {
+              const costValue = typeof callData.call_cost === 'number' 
+                ? callData.call_cost 
+                : parseFloat(callData.call_cost) || 0;
+              
               analytics.cost = {
-                total: callData.call_cost || null,
-                perMinute: callData.duration ? (callData.call_cost / (callData.duration / 60)) : null,
+                total: costValue,
+                perMinute: callData.duration && callData.duration > 0 
+                  ? (costValue / (callData.duration / 60)) 
+                  : null,
                 currency: callData.currency || 'USD',
               };
             }

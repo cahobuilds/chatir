@@ -188,7 +188,7 @@ export default function CallAnalytics({ interactionId }: CallAnalyticsProps) {
           </div>
         )}
 
-        {analytics.cost.total !== null && (
+        {analytics.cost && analytics.cost.total !== null && typeof analytics.cost.total === 'number' && (
           <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
             <div className="flex items-center justify-between mb-2">
               <CurrencyDollarIcon className="w-5 h-5 text-gray-400" />
@@ -197,7 +197,7 @@ export default function CallAnalytics({ interactionId }: CallAnalyticsProps) {
               ${analytics.cost.total.toFixed(4)}
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400">Cost</p>
-            {analytics.cost.perMinute && (
+            {analytics.cost.perMinute && typeof analytics.cost.perMinute === 'number' && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 ${analytics.cost.perMinute.toFixed(4)}/min
               </p>
