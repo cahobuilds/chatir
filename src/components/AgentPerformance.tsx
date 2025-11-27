@@ -26,7 +26,7 @@ interface AgentPerformance {
     firstCallResolution: number;
     answerRate: number;
     customerSatisfaction: number | null;
-    averageScore: number;
+  averageScore: number;
   };
   trainingNeeds: string[];
   trend: "up" | "down" | "stable";
@@ -208,16 +208,16 @@ export default function AgentPerformance() {
               <option value={30}>Last 30 days</option>
               <option value={90}>Last 90 days</option>
             </select>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="averageScore">Sort by Score</option>
-              <option value="callsHandled">Sort by Calls</option>
-              <option value="customerSatisfaction">Sort by Satisfaction</option>
-              <option value="firstCallResolution">Sort by FCR</option>
-            </select>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+          >
+            <option value="averageScore">Sort by Score</option>
+            <option value="callsHandled">Sort by Calls</option>
+            <option value="customerSatisfaction">Sort by Satisfaction</option>
+            <option value="firstCallResolution">Sort by FCR</option>
+          </select>
           </div>
         </div>
       </div>
@@ -225,38 +225,38 @@ export default function AgentPerformance() {
       <div className="p-6">
         {/* Top Performer */}
         {topPerformer && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
-                <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+        <div className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
+              <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
                   {getInitials(topPerformer.agentName)}
-                </span>
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center space-x-2">
-                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+              </span>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center space-x-2">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
                     {topPerformer.agentName}
-                  </h4>
-                  <StarIcon className="w-5 h-5 text-yellow-500" />
-                  <span className="text-sm text-yellow-600 dark:text-yellow-400 font-medium">
-                    Top Performer
-                  </span>
+                </h4>
+                <StarIcon className="w-5 h-5 text-yellow-500" />
+                <span className="text-sm text-yellow-600 dark:text-yellow-400 font-medium">
+                  Top Performer
+                </span>
                   <span className="text-xs px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded">
                     {topPerformer.agentType}
                   </span>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {topPerformer.metrics.totalCalls} calls handled
-                </p>
               </div>
-              <div className="text-right">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {topPerformer.metrics.totalCalls} calls handled
+              </p>
+            </div>
+            <div className="text-right">
                 <div className={`text-2xl font-bold ${getScoreColor(topPerformer.metrics.averageScore || 0)}`}>
                   {topPerformer.metrics.averageScore?.toFixed(1)}%
-                </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Average Score</div>
               </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Average Score</div>
             </div>
           </div>
+        </div>
         )}
 
         {/* Agents List */}
@@ -423,28 +423,28 @@ export default function AgentPerformance() {
 
         {/* Summary Stats */}
         {data.summary && (
-          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                  {averageScore.toFixed(1)}%
-                </div>
+        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                {averageScore.toFixed(1)}%
+              </div>
                 <div className="text-xs text-gray-600 dark:text-gray-400">Team Average Score</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                   {data.summary.totalAgents}
-                </div>
+              </div>
                 <div className="text-xs text-gray-600 dark:text-gray-400">Total Agents</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                   {data.summary.totalCalls.toLocaleString()}
-                </div>
-                <div className="text-xs text-gray-600 dark:text-gray-400">Total Calls</div>
               </div>
+              <div className="text-xs text-gray-600 dark:text-gray-400">Total Calls</div>
             </div>
           </div>
+        </div>
         )}
 
         {/* Agent Utilization */}

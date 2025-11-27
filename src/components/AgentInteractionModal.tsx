@@ -4,8 +4,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { Modal } from "./ui/modal";
 import Button from "./ui/button/Button";
 import Alert from "./ui/alert/Alert";
-import { MicrophoneIcon, StopIcon, ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
+import { MicrophoneIcon, StopIcon, ChatBubbleLeftRightIcon, PencilIcon } from "@heroicons/react/24/outline";
 import { RetellWebClient } from "retell-client-js-sdk";
+import { useOrganization } from "@/context/OrganizationContext";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Agent {
   id: string;
@@ -82,6 +84,101 @@ declare global {
   }
 }
 
+// Helper function to extract clean text from transcript/response data
+function extractCleanText(data: any): string {
+  if (!data) return '';
+  
+  // If it's already a string, return it (but check if it's JSON)
+  if (typeof data === 'string') {
+    // Check if it looks like JSON (starts with [ or {)
+    if (data.trim().startsWith('[') || data.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(data);
+        return extractCleanText(parsed);
+      } catch {
+        // Not valid JSON, return as is
+        return data;
+      }
+    }
+    return data;
+  }
+  
+  // If it's an array, extract messages
+  if (Array.isArray(data)) {
+    const messages: string[] = [];
+    for (const item of data) {
+      if (typeof item === 'string') {
+        messages.push(item);
+      } else if (item && typeof item === 'object') {
+        // Extract content/role/text fields
+        const text = item.content || item.text || item.message || item.transcript;
+        const role = item.role || item.type;
+        if (text && typeof text === 'string') {
+          messages.push(text);
+        } else if (role && text) {
+          messages.push(`${text}`);
+        }
+      }
+    }
+    return messages.join('\n');
+  }
+  
+  // If it's an object, try to extract text fields
+  if (typeof data === 'object') {
+    return data.content || data.text || data.message || data.transcript || JSON.stringify(data, null, 2);
+  }
+  
+  return String(data);
+}
+
+// Helper function to obfuscate Retell mentions
+function obfuscateRetell(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  return text
+    .replace(/retell/gi, 'voice-platform')
+    .replace(/Retell/gi, 'Voice Platform')
+    .replace(/RETELL/gi, 'VOICE PLATFORM');
+}
+
+// Helper function to sanitize configuration JSON
+function sanitizeConfiguration(config: any): any {
+  if (!config || typeof config !== 'object') return config;
+  
+  const sanitized = JSON.parse(JSON.stringify(config));
+  
+  // Recursively sanitize object
+  function sanitizeObject(obj: any): any {
+    if (Array.isArray(obj)) {
+      return obj.map(sanitizeObject);
+    }
+    if (obj && typeof obj === 'object') {
+      const result: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        // Obfuscate Retell-related keys
+        let newKey = key;
+        if (key.toLowerCase().includes('retell')) {
+          newKey = key.replace(/retell/gi, 'voice-platform').replace(/Retell/gi, 'VoicePlatform');
+        }
+        
+        if (value && typeof value === 'object') {
+          result[newKey] = sanitizeObject(value);
+        } else if (typeof value === 'string') {
+          result[newKey] = obfuscateRetell(value);
+        } else {
+          result[newKey] = value;
+        }
+      }
+      return result;
+    }
+    if (typeof obj === 'string') {
+      return obfuscateRetell(obj);
+    }
+    return obj;
+  }
+  
+  return sanitizeObject(sanitized);
+}
+
 export default function AgentInteractionModal({
   agent,
   isOpen,
@@ -103,6 +200,11 @@ export default function AgentInteractionModal({
     latency: "0ms",
     tokens: "0",
   });
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false);
+  const [editedPrompt, setEditedPrompt] = useState("");
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const recognitionRef = useRef<SpeechRecognitionInterface | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -115,6 +217,19 @@ export default function AgentInteractionModal({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Get organization context and permissions
+  const { currentOrganization } = useOrganization();
+  const { roleInfo } = usePermissions(currentOrganization?.id || null);
+
+  // Check if user is admin
+  useEffect(() => {
+    if (roleInfo) {
+      const adminRoles = ['organization_admin', 'tenant_admin', 'super_admin'];
+      setIsAdmin(adminRoles.includes(roleInfo.role));
+      setUserRole(roleInfo.role);
+    }
+  }, [roleInfo]);
 
   // Fetch agent configuration and prompt from Retell when modal opens
   useEffect(() => {
@@ -418,15 +533,41 @@ export default function AgentInteractionModal({
           });
 
           retellClient.on("update", (data: any) => {
-            // Simple handling like test page - extract strings safely
+            // Extract clean text from transcript/response - handle arrays, objects, JSON strings
             let transcript: string | null = null;
             let response: string | null = null;
             
+            // Handle transcript - extract clean text, no code/JSON
             if (data.transcript) {
-              transcript = typeof data.transcript === 'string' ? data.transcript : JSON.stringify(data.transcript);
+              const cleanText = extractCleanText(data.transcript);
+              transcript = cleanText.trim() || null;
             }
+            
+            // Handle response - extract clean text, no code/JSON
             if (data.response) {
-              response = typeof data.response === 'string' ? data.response : JSON.stringify(data.response);
+              const cleanText = extractCleanText(data.response);
+              response = cleanText.trim() || null;
+            }
+            
+            // Also check for transcript_object or message arrays
+            if (data.transcript_object && Array.isArray(data.transcript_object)) {
+              // Extract user messages from transcript array
+              const userMessages = data.transcript_object
+                .filter((item: any) => item.role === 'user' || item.type === 'user')
+                .map((item: any) => extractCleanText(item.content || item.text || item.message));
+              
+              if (userMessages.length > 0 && !transcript) {
+                transcript = userMessages[userMessages.length - 1]; // Get latest user message
+              }
+              
+              // Extract agent messages from transcript array
+              const agentMessages = data.transcript_object
+                .filter((item: any) => item.role === 'agent' || item.role === 'assistant' || item.type === 'agent')
+                .map((item: any) => extractCleanText(item.content || item.text || item.message));
+              
+              if (agentMessages.length > 0 && !response) {
+                response = agentMessages[agentMessages.length - 1]; // Get latest agent message
+              }
             }
             
             if (transcript || response) {
@@ -435,48 +576,54 @@ export default function AgentInteractionModal({
               setMessages((prev) => prev.filter(msg => msg.id !== 'init'));
             }
             
+            // Handle user transcript - ensure separate bubble
             if (transcript) {
               setTranscription(transcript);
               setMessages((prev) => {
-                const lastMessage = prev[prev.length - 1];
-                if (lastMessage && lastMessage.type === 'user' && !lastMessage.finalized) {
-                  return prev.map((msg, idx) => 
-                    idx === prev.length - 1 
-                      ? { ...msg, text: transcript!, finalized: false }
-                      : msg
-                  );
-                } else {
-                  return [...prev, {
+                // Remove any unfinalized user messages
+                const withoutUnfinalized = prev.filter(msg => !(msg.type === 'user' && !msg.finalized));
+                
+                // Check if we already have this exact message
+                const existingMessage = withoutUnfinalized.find(
+                  msg => msg.type === 'user' && msg.text === transcript
+                );
+                
+                if (!existingMessage) {
+                  return [...withoutUnfinalized, {
                     id: `user-${Date.now()}`,
                     type: 'user' as const,
-                    text: transcript!,
+                    text: transcript,
                     timestamp: new Date(),
-                    finalized: false,
+                    finalized: true, // Mark as finalized immediately
                   }];
                 }
+                
+                return withoutUnfinalized;
               });
             }
             
+            // Handle agent response - ensure separate bubble
             if (response) {
               setMessages((prev) => {
+                // Remove any typing indicators or unfinalized agent messages
                 const withoutTyping = prev.filter(msg => !msg.isTyping && msg.id !== 'init');
-                const lastMessage = withoutTyping[withoutTyping.length - 1];
                 
-                if (lastMessage && lastMessage.type === 'agent' && !lastMessage.finalized) {
-                  return withoutTyping.map((msg, idx) => 
-                    idx === withoutTyping.length - 1 
-                      ? { ...msg, text: response!, finalized: true }
-                      : msg
-                  );
-                } else {
+                // Check if we already have this exact agent message
+                const existingAgentMessage = withoutTyping.find(
+                  msg => msg.type === 'agent' && msg.text === response
+                );
+                
+                if (!existingAgentMessage) {
                   return [...withoutTyping, {
                     id: `agent-${Date.now()}`,
                     type: 'agent' as const,
-                    text: response!,
+                    text: response,
                     timestamp: new Date(),
                     finalized: true,
                   }];
                 }
+                
+                return withoutTyping;
               });
             }
           });
@@ -594,27 +741,126 @@ export default function AgentInteractionModal({
     }
   };
 
-  // Extract prompt from Retell or local configuration
+  // Extract prompt from configuration - obfuscate Retell mentions
   const getAgentPrompt = () => {
-    // Priority 1: Retell LLM prompt (from Retell API)
+    let prompt: string | null = null;
+    
+    // Priority 1: Voice Platform LLM prompt (from API)
     if (agentConfig?.retell_prompt) {
-      return agentConfig.retell_prompt;
+      prompt = agentConfig.retell_prompt;
     }
     
     // Priority 2: Local configuration prompt
-    if (agentConfig?.configuration) {
+    if (!prompt && agentConfig?.configuration) {
       const config = typeof agentConfig.configuration === 'string' 
         ? JSON.parse(agentConfig.configuration) 
         : agentConfig.configuration;
       
-      return config.prompt || 
+      prompt = config.prompt || 
              config.system_instructions || 
              config.systemPrompt || 
              config.llmConfig?.system_instructions ||
              null;
     }
     
-    return "No prompt configured. Fetching from Retell...";
+    // Obfuscate Retell mentions in prompt
+    if (prompt) {
+      return obfuscateRetell(prompt);
+    }
+    
+    return "No prompt configured. Fetching from voice platform...";
+  };
+
+  // Initialize edited prompt when prompt changes
+  useEffect(() => {
+    if (agentConfig && !isEditingPrompt) {
+      // Get original prompt without obfuscation for editing
+      let originalPrompt = "";
+      
+      if (agentConfig.retell_prompt) {
+        originalPrompt = agentConfig.retell_prompt;
+      } else if (agentConfig.configuration) {
+        const config = typeof agentConfig.configuration === 'string' 
+          ? JSON.parse(agentConfig.configuration) 
+          : agentConfig.configuration;
+        originalPrompt = config.prompt || 
+                        config.system_instructions || 
+                        config.systemPrompt || 
+                        config.llmConfig?.system_instructions ||
+                        "";
+      }
+      
+      setEditedPrompt(originalPrompt);
+    }
+  }, [agentConfig, isEditingPrompt]);
+
+  // Handler to start editing prompt
+  const handleStartEditPrompt = () => {
+    // Get original prompt without obfuscation
+    let originalPrompt = "";
+    
+    if (agentConfig?.retell_prompt) {
+      originalPrompt = agentConfig.retell_prompt;
+    } else if (agentConfig?.configuration) {
+      const config = typeof agentConfig.configuration === 'string' 
+        ? JSON.parse(agentConfig.configuration) 
+        : agentConfig.configuration;
+      originalPrompt = config.prompt || 
+                      config.system_instructions || 
+                      config.systemPrompt || 
+                      config.llmConfig?.system_instructions ||
+                      "";
+    }
+    
+    setEditedPrompt(originalPrompt);
+    setIsEditingPrompt(true);
+  };
+
+  // Handler to cancel editing
+  const handleCancelEditPrompt = () => {
+    setIsEditingPrompt(false);
+    setError(null);
+  };
+
+  // Handler to save prompt
+  const handleSavePrompt = async () => {
+    if (!agent) return;
+
+    setIsSavingPrompt(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch(`/api/agents/${agent.id}/prompt`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: editedPrompt,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(data.message || 'Prompt updated successfully and synced to voice platform');
+        setIsEditingPrompt(false);
+        
+        // Refresh agent config to get updated prompt
+        await fetchAgentConfig();
+        if (agent.retell_agent_id) {
+          await fetchRetellAgentPrompt();
+        }
+      } else {
+        setError(data.error || 'Failed to update prompt');
+      }
+    } catch (error: any) {
+      console.error('Failed to save prompt:', error);
+      setError(error.message || 'Failed to update prompt');
+    } finally {
+      setIsSavingPrompt(false);
+    }
   };
 
   if (!agent) return null;
@@ -664,13 +910,55 @@ export default function AgentInteractionModal({
 
             {/* Agent Prompt */}
             <div className="mb-6">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                Agent Prompt
-              </h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                  Agent Prompt
+                </h3>
+                {isAdmin && !isEditingPrompt && (
+                  <Button
+                    onClick={handleStartEditPrompt}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1"
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                    Edit
+                  </Button>
+                )}
+              </div>
               <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">
-                  {getAgentPrompt()}
-                </pre>
+                {isEditingPrompt ? (
+                  <div className="space-y-3">
+                    <textarea
+                      value={editedPrompt}
+                      onChange={(e) => setEditedPrompt(e.target.value)}
+                      className="w-full min-h-[300px] p-3 text-xs text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md font-mono whitespace-pre-wrap resize-y"
+                      placeholder="Enter agent prompt..."
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        onClick={handleCancelEditPrompt}
+                        variant="outline"
+                        size="sm"
+                        disabled={isSavingPrompt}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleSavePrompt}
+                        variant="primary"
+                        size="sm"
+                        disabled={isSavingPrompt || !editedPrompt.trim()}
+                      >
+                        {isSavingPrompt ? 'Saving...' : 'Save & Sync'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                    {getAgentPrompt()}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -682,7 +970,7 @@ export default function AgentInteractionModal({
                 </h3>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto">
-                    {JSON.stringify(agentConfig.configuration, null, 2)}
+                    {JSON.stringify(sanitizeConfiguration(agentConfig.configuration), null, 2)}
                   </pre>
                 </div>
               </div>
@@ -845,7 +1133,7 @@ export default function AgentInteractionModal({
                               <p className={`text-sm whitespace-pre-wrap ${
                                 message.finalized === false ? 'opacity-70 italic' : ''
                               }`}>
-                                {typeof message.text === 'string' ? message.text : String(message.text || '')}
+                                {extractCleanText(message.text)}
                               </p>
                               {message.finalized === false && (
                                 <div className="flex items-center gap-1 mt-1">

@@ -128,13 +128,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // Verify user is admin
+    // Verify user is admin (organization_admin, tenant_admin, or super_admin)
     const { data: userTenant } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
       .eq('tenant_id', agent.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
+      .in('role', ['organization_admin', 'tenant_admin', 'super_admin'])
       .single();
 
     if (!userTenant) {

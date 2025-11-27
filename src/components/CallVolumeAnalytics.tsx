@@ -157,7 +157,7 @@ export default function CallVolumeAnalytics() {
             <p className="text-gray-600 dark:text-gray-300">
               No data available
             </p>
-          </div>
+        </div>
         )}
       </div>
 

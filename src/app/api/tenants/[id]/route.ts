@@ -60,7 +60,7 @@ export async function GET(
     const adminRoles = ['system_admin', 'organization_admin', 'tenant_admin', 'super_admin'];
     const isAdminRole = isSystemAdmin || (userTenantRole && adminRoles.includes(userTenantRole));
     const clientToUse = isAdminRole ? createAdminClient() : supabase;
-    
+
     console.log('Tenant fetch attempt:', {
       tenantId: id,
       userId: user.id,
@@ -76,11 +76,11 @@ export async function GET(
     
     try {
       const result = await clientToUse
-        .from('tenants')
-        .select('*')
-        .eq('id', id)
+      .from('tenants')
+      .select('*')
+      .eq('id', id)
         .maybeSingle();
-      
+
       tenant = result.data;
       tenantError = result.error;
     } catch (err: any) {

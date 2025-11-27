@@ -163,19 +163,19 @@ export async function POST(request: NextRequest) {
 
     // Create knowledge base in Retell - REQUIRED for agents to use the KB
     let retellKBId: string;
-    try {
-      const { createRetellClient } = await import('@/lib/retell');
-      const retellClient = createRetellClient(retellApiKey);
-      
-      const retellKB = await retellClient.knowledgeBase.create({
-        knowledge_base_name: name,
-        enable_auto_refresh: false,
-      });
+      try {
+        const { createRetellClient } = await import('@/lib/retell');
+        const retellClient = createRetellClient(retellApiKey);
+        
+        const retellKB = await retellClient.knowledgeBase.create({
+          knowledge_base_name: name,
+          enable_auto_refresh: false,
+        });
 
-      retellKBId = retellKB.knowledge_base_id;
-      console.log(`[KB API] Created Retell knowledge base: ${retellKBId}`);
-    } catch (retellError: any) {
-      console.error('[KB API] Error creating Retell knowledge base:', retellError);
+        retellKBId = retellKB.knowledge_base_id;
+        console.log(`[KB API] Created Retell knowledge base: ${retellKBId}`);
+      } catch (retellError: any) {
+        console.error('[KB API] Error creating Retell knowledge base:', retellError);
       const errorMessage = retellError?.message || retellError?.toString() || 'Unknown error';
       return NextResponse.json(
         { 

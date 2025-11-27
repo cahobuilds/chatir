@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/context/OrganizationContext";
 import { createClient } from "@/lib/supabase/client";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import CallAnalytics from "@/components/CallAnalytics";
 
 interface Interaction {
   id: string;
@@ -393,12 +394,7 @@ export default function CallDetailPage() {
 
           {activeTab === "analytics" && (
             <div className="space-y-4">
-              <div className="text-center py-12">
-                <div className="text-4xl mb-4">📊</div>
-                <p className="text-gray-500 dark:text-gray-400">
-                  Analytics data will be available here soon
-                </p>
-              </div>
+              <CallAnalytics interactionId={interaction.id} />
             </div>
           )}
 

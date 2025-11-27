@@ -56,7 +56,7 @@ export default function AnalyticsPage() {
       <AdvancedCallAnalytics />
 
       {/* Quality Metrics Overview - Full Width */}
-      <QualityMetrics />
+        <QualityMetrics />
 
       {/* Customer Experience Metrics */}
       <CustomerExperienceMetrics />

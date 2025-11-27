@@ -95,58 +95,58 @@ export default function AnalyticsOverview() {
     const overview = data.overview;
 
     return [
-      {
-        title: "Total Calls",
+  {
+    title: "Total Calls",
         value: overview.totalCalls.toLocaleString(),
         change: "", // TODO: Calculate vs previous period
         trend: "neutral",
-        icon: "📞",
-        color: "bg-blue-500",
+    icon: "📞",
+    color: "bg-blue-500",
         description: "total interactions"
-      },
-      {
-        title: "Answer Rate",
+  },
+  {
+    title: "Answer Rate",
         value: `${overview.answerRate.toFixed(1)}%`,
         change: "", // TODO: Calculate vs previous period
         trend: "neutral",
-        icon: "✅",
-        color: "bg-green-500",
+    icon: "✅",
+    color: "bg-green-500",
         description: "completed calls"
-      },
-      {
-        title: "Avg Handle Time",
+  },
+  {
+    title: "Avg Handle Time",
         value: overview.avgHandleTimeFormatted || `${overview.avgHandleTime.toFixed(1)}m`,
         change: "", // TODO: Calculate vs previous period
         trend: "neutral",
-        icon: "⏱️",
-        color: "bg-purple-500",
+    icon: "⏱️",
+    color: "bg-purple-500",
         description: "average duration"
-      },
-      {
+  },
+  {
         title: "Voice Calls",
         value: overview.voiceCalls.toLocaleString(),
         change: "",
         trend: "neutral",
         icon: "🎙️",
-        color: "bg-yellow-500",
+    color: "bg-yellow-500",
         description: "voice interactions"
-      },
-      {
+  },
+  {
         title: "Chat Conversations",
         value: overview.chatConversations.toLocaleString(),
         change: "",
         trend: "neutral",
         icon: "💬",
-        color: "bg-indigo-500",
+    color: "bg-indigo-500",
         description: "chat interactions"
-      },
-      {
+  },
+  {
         title: "Completed",
         value: overview.completedCalls.toLocaleString(),
         change: "",
         trend: "neutral",
         icon: "✅",
-        color: "bg-emerald-500",
+    color: "bg-emerald-500",
         description: "successful calls"
       },
     ];
@@ -219,39 +219,39 @@ export default function AnalyticsOverview() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         {metrics.map((metric, index) => (
-          <div
-            key={index}
-            className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800"
-          >
-            <div className="flex items-center justify-between">
-              <div className={`rounded-lg p-3 ${metric.color}`}>
-                <span className="text-white text-xl">{metric.icon}</span>
-              </div>
+        <div
+          key={index}
+          className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800"
+        >
+          <div className="flex items-center justify-between">
+            <div className={`rounded-lg p-3 ${metric.color}`}>
+              <span className="text-white text-xl">{metric.icon}</span>
+            </div>
               {metric.change && (
-                <div className={`text-sm font-medium ${
-                  metric.trend === 'up' ? 'text-green-600' : 
-                  metric.trend === 'down' ? 'text-red-600' : 
-                  'text-gray-600'
-                }`}>
-                  {metric.change}
-                </div>
+            <div className={`text-sm font-medium ${
+              metric.trend === 'up' ? 'text-green-600' : 
+              metric.trend === 'down' ? 'text-red-600' : 
+              'text-gray-600'
+            }`}>
+              {metric.change}
+            </div>
               )}
-            </div>
-            <div className="mt-4">
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {metric.value}
-              </p>
-              <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
-                {metric.title}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {metric.description}
-              </p>
-            </div>
           </div>
-        ))}
+          <div className="mt-4">
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              {metric.value}
+            </p>
+              <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
+              {metric.title}
+            </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {metric.description}
+            </p>
+          </div>
+        </div>
+      ))}
       </div>
     </div>
   );

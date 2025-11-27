@@ -104,7 +104,7 @@ export default function RealTimeMetrics() {
         </div>
       </div>
     );
-  }
+}
 
   if (error && !data) {
     return (
@@ -126,51 +126,51 @@ export default function RealTimeMetrics() {
   }
 
   const metrics = [
-    {
-      title: "Active Calls",
+  {
+    title: "Active Calls",
       value: data.liveCallVolume.activeCalls.toLocaleString(),
-      icon: "📞",
+    icon: "📞",
       color: "bg-blue-500",
-    },
-    {
-      title: "Calls in Queue",
+  },
+  {
+    title: "Calls in Queue",
       value: data.liveCallVolume.queueLength.toLocaleString(),
-      icon: "⏳",
+    icon: "⏳",
       color: "bg-yellow-500",
-    },
-    {
-      title: "Avg Wait Time",
+  },
+  {
+    title: "Avg Wait Time",
       value: data.liveCallVolume.avgWaitTimeFormatted || formatDuration(data.liveCallVolume.avgWaitTime),
-      icon: "⏱️",
+    icon: "⏱️",
       color: "bg-green-500",
-    },
-    {
+  },
+  {
       title: "Online Agents",
       value: `${data.agentStatus.busy}/${data.agentStatus.total}`,
       icon: "👥",
       color: "bg-purple-500",
-    },
-    {
+  },
+  {
       title: "Hour Answer Rate",
       value: `${data.liveMetrics.currentHourAnswerRate.toFixed(1)}%`,
-      icon: "✅",
+    icon: "✅",
       color: "bg-emerald-500",
-    },
-    {
+  },
+  {
       title: "Error Rate",
       value: `${data.systemHealth.errorRate.toFixed(2)}%`,
       icon: "⚠️",
       color: "bg-orange-500",
     },
-  ];
+];
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Real-Time Operations
-          </h2>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          Real-Time Operations
+        </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Last updated: {new Date(data.timestamp).toLocaleTimeString()}
           </p>
