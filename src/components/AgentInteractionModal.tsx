@@ -632,7 +632,7 @@ export default function AgentInteractionModal({
               }
 
               setMessages(orderedMessages);
-              setTranscription(latestUserDraft?.text || "");
+              setTranscription(latestUserDraft ? latestUserDraft.text : "");
               return;
             }
 
