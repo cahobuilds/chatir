@@ -17,26 +17,27 @@ export async function GET(
     }
 
     // Check if user is system_admin (can access any tenant)
-    const { data: systemAdminCheck } = await supabase
+    // Don't use .single() as user might have multiple tenant relationships
+    const { data: systemAdminCheck, error: systemAdminError } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
       .in('role', ['system_admin'])
-      .single();
+      .limit(1);
 
-    const isSystemAdmin = !!systemAdminCheck;
+    const isSystemAdmin = systemAdminCheck && systemAdminCheck.length > 0;
 
     // If not system_admin, verify user has access to this tenant
     if (!isSystemAdmin) {
-      const { data: userTenant } = await supabase
+      const { data: userTenants, error: userTenantError } = await supabase
         .from('user_tenants')
         .select('tenant_id, role')
         .eq('user_id', user.id)
         .eq('tenant_id', id)
-        .single();
+        .limit(1);
 
-      if (!userTenant) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      if (userTenantError || !userTenants || userTenants.length === 0) {
+        return NextResponse.json({ error: 'Forbidden: You do not have access to this organization' }, { status: 403 });
       }
     }
 
@@ -48,10 +49,15 @@ export async function GET(
       .from('tenants')
       .select('*')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (tenantError) {
-      return NextResponse.json({ error: tenantError.message }, { status: 500 });
+      console.error('Tenant fetch error:', tenantError);
+      return NextResponse.json({ error: tenantError.message || 'Failed to fetch organization' }, { status: 500 });
+    }
+
+    if (!tenant) {
+      return NextResponse.json({ error: 'Organization not found or access denied' }, { status: 404 });
     }
 
     return NextResponse.json({ tenant });
@@ -75,14 +81,15 @@ export async function PATCH(
     }
 
     // Check if user is system_admin (can update any tenant)
-    const { data: systemAdminCheck } = await supabase
+    // Don't use .single() as user might have multiple tenant relationships
+    const { data: systemAdminCheck, error: systemAdminError } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
       .in('role', ['system_admin'])
-      .single();
+      .limit(1);
 
-    const isSystemAdmin = !!systemAdminCheck;
+    const isSystemAdmin = systemAdminCheck && systemAdminCheck.length > 0;
 
     // If not system_admin, verify user is organization_admin, tenant_admin, or super_admin for this specific tenant
     if (!isSystemAdmin) {
@@ -160,15 +167,15 @@ export async function PATCH(
       .update(updateData)
       .eq('id', id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (tenantError) {
       console.error('Tenant update error:', tenantError);
-      return NextResponse.json({ error: tenantError.message }, { status: 500 });
+      return NextResponse.json({ error: tenantError.message || 'Failed to update organization' }, { status: 500 });
     }
 
     if (!tenant) {
-      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Organization not found or access denied' }, { status: 404 });
     }
 
     return NextResponse.json({ tenant });
