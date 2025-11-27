@@ -632,7 +632,17 @@ export default function AgentInteractionModal({
               }
 
               setMessages(orderedMessages);
-              setTranscription(latestUserDraft ? latestUserDraft.text : "");
+
+              let currentUserDraftText = "";
+              for (let i = orderedMessages.length - 1; i >= 0; i--) {
+                const msg = orderedMessages[i];
+                if (msg.type === "user" && msg.finalized === false) {
+                  currentUserDraftText = msg.text;
+                  break;
+                }
+              }
+
+              setTranscription(currentUserDraftText);
               return;
             }
 
