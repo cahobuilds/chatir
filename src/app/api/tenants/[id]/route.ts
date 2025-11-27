@@ -33,6 +33,7 @@ export async function GET(
     
     if (isSystemAdmin) {
       hasVerifiedAccess = true;
+      userTenantRole = 'system_admin';
     } else {
       const { data: userTenants, error: userTenantError } = await supabase
         .from('user_tenants')
@@ -42,6 +43,11 @@ export async function GET(
         .limit(1);
 
       if (userTenantError || !userTenants || userTenants.length === 0) {
+        console.error('Access denied - no user_tenants relationship:', {
+          userId: user.id,
+          tenantId: id,
+          error: userTenantError
+        });
         return NextResponse.json({ error: 'Forbidden: You do not have access to this organization' }, { status: 403 });
       }
       
@@ -49,25 +55,47 @@ export async function GET(
       hasVerifiedAccess = true;
     }
 
-    // Use appropriate client based on access level
-    // System admins use admin client to bypass RLS
-    // For admin roles (organization_admin, tenant_admin, super_admin), we've verified access
-    // so we can use admin client to ensure the query succeeds
-    // This is secure because we've already verified the user has a valid relationship
-    const isAdminRole = isSystemAdmin || (userTenantRole && ['organization_admin', 'tenant_admin', 'super_admin'].includes(userTenantRole));
+    // Use admin client if user is system admin or has admin role for this tenant
+    // This bypasses RLS and ensures the query succeeds after we've verified access
+    const adminRoles = ['system_admin', 'organization_admin', 'tenant_admin', 'super_admin'];
+    const isAdminRole = isSystemAdmin || (userTenantRole && adminRoles.includes(userTenantRole));
     const clientToUse = isAdminRole ? createAdminClient() : supabase;
     
+    console.log('Tenant fetch attempt:', {
+      tenantId: id,
+      userId: user.id,
+      userRole: userTenantRole,
+      isAdminRole,
+      usingAdminClient: isAdminRole,
+      hasVerifiedAccess
+    });
+    
     // Get tenant - using admin client for admins ensures access, RLS for others
-    const { data: tenant, error: tenantError } = await clientToUse
-      .from('tenants')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
+    let tenant;
+    let tenantError;
+    
+    try {
+      const result = await clientToUse
+        .from('tenants')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      
+      tenant = result.data;
+      tenantError = result.error;
+    } catch (err: any) {
+      console.error('Exception during tenant fetch:', err);
+      tenantError = err;
+      tenant = null;
+    }
 
     // Enhanced error logging for debugging
     if (tenantError) {
       console.error('Tenant fetch error details:', {
         error: tenantError,
+        errorMessage: tenantError?.message,
+        errorCode: tenantError?.code,
+        errorDetails: tenantError?.details,
         tenantId: id,
         userId: user.id,
         isSystemAdmin,
@@ -76,14 +104,44 @@ export async function GET(
         isAdminRole,
         usingAdminClient: isAdminRole
       });
+      
+      // If admin client failed, try fallback with regular client (shouldn't happen, but helps debug)
+      if (isAdminRole && tenantError) {
+        console.log('Admin client failed, attempting fallback with regular client...');
+        try {
+          const fallbackResult = await supabase
+            .from('tenants')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle();
+          
+          if (fallbackResult.data && !fallbackResult.error) {
+            console.log('Fallback query succeeded - RLS may be allowing access');
+            tenant = fallbackResult.data;
+            tenantError = null;
+          }
+        } catch (fallbackErr) {
+          console.error('Fallback query also failed:', fallbackErr);
+        }
+      }
     }
 
-    if (tenantError) {
+    if (tenantError && !tenant) {
       console.error('Tenant fetch error:', tenantError);
-      return NextResponse.json({ error: tenantError.message || 'Failed to fetch organization' }, { status: 500 });
+      return NextResponse.json({ 
+        error: tenantError.message || 'Failed to fetch organization',
+        details: isAdminRole ? 'Admin client query failed' : 'RLS query failed'
+      }, { status: 500 });
     }
 
     if (!tenant) {
+      console.error('Tenant not found:', {
+        tenantId: id,
+        userId: user.id,
+        userRole: userTenantRole,
+        isAdminRole,
+        usingAdminClient: isAdminRole
+      });
       return NextResponse.json({ error: 'Organization not found or access denied' }, { status: 404 });
     }
 
@@ -130,10 +188,17 @@ export async function PATCH(
         .limit(1);
 
       if (userTenantError || !userTenants || userTenants.length === 0) {
+        console.error('PATCH access denied:', {
+          userId: user.id,
+          tenantId: id,
+          error: userTenantError
+        });
         return NextResponse.json({ error: 'Forbidden: Admin access required. You need system_admin, organization_admin, or super_admin role to update organization settings.' }, { status: 403 });
       }
       
       userTenantRole = userTenants[0]?.role || null;
+    } else {
+      userTenantRole = 'system_admin';
     }
 
     const body = await request.json();
@@ -189,8 +254,19 @@ export async function PATCH(
       }
     }
 
-    // Use admin client for system admin operations to bypass RLS
-    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+    // Use admin client for system admin and other admin roles to bypass RLS
+    // This ensures the update succeeds after we've verified access
+    const adminRoles = ['system_admin', 'organization_admin', 'tenant_admin', 'super_admin'];
+    const isAdminRole = isSystemAdmin || (userTenantRole && adminRoles.includes(userTenantRole));
+    const clientToUse = isAdminRole ? createAdminClient() : supabase;
+    
+    console.log('Tenant update attempt:', {
+      tenantId: id,
+      userId: user.id,
+      userRole: userTenantRole,
+      isAdminRole,
+      usingAdminClient: isAdminRole
+    });
 
     const { data: tenant, error: tenantError } = await clientToUse
       .from('tenants')
