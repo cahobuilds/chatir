@@ -212,8 +212,6 @@ export default function AgentInteractionModal({
   const retellCallIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const isInitializingRef = useRef(false);
-  const transcriptMessageMapRef = useRef(new Map<string, { id: string; text: string }>());
-  const messageSequenceRef = useRef(0);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -438,8 +436,6 @@ export default function AgentInteractionModal({
     setSuccess(null);
     setTranscription("");
     setMessages([]);
-    transcriptMessageMapRef.current.clear();
-    messageSequenceRef.current = 0;
 
     try {
       // Try Retell first if agent has retell_agent_id
@@ -551,14 +547,18 @@ export default function AgentInteractionModal({
                   console.warn("Failed to parse transcript_object:", err);
                 }
               }
+              if (typeof source === "object" && source !== null) {
+                return [source];
+              }
               return [];
             };
 
             const transcriptArray = parseTranscriptArray(data.transcript_object);
 
             if (transcriptArray.length > 0) {
-              const updates: Record<string, string> = {};
-              const newMessages: Message[] = [];
+              const finalMessages = new Map<string, Message>();
+              let latestUserDraft: Message | null = null;
+              let latestAgentDraft: Message | null = null;
 
               transcriptArray.forEach((item: any, index: number) => {
                 const role = (item.role || item.type || "user").toLowerCase();
@@ -572,59 +572,57 @@ export default function AgentInteractionModal({
                     ? "agent"
                     : "user";
 
-                const key =
+                const baseId =
                   item.utterance_id ||
+                  item.segment_id ||
                   item.message_id ||
                   item.sequence_id ||
-                  `${messageType}-${Math.round((item.start ?? index) * 1000)}-${index}`;
+                  (typeof item.start === "number"
+                    ? `${messageType}-start-${Math.round(item.start * 1000)}`
+                    : `${messageType}-idx-${index}`);
 
-                const existingEntry = transcriptMessageMapRef.current.get(key);
-                const trimmedContent = content.trim();
+                const isFinal =
+                  item.final === true ||
+                  item.finalized === true ||
+                  item.status === "final" ||
+                  item.completion === "done";
 
-                if (existingEntry) {
-                  if (existingEntry.text !== trimmedContent) {
-                    existingEntry.text = trimmedContent;
-                    updates[existingEntry.id] = trimmedContent;
-                  }
-                } else {
-                  const newId = `msg-${Date.now()}-${messageSequenceRef.current++}`;
-                  transcriptMessageMapRef.current.set(key, {
-                    id: newId,
-                    text: trimmedContent,
-                  });
-                  newMessages.push({
-                    id: newId,
-                    type: messageType,
-                    text: trimmedContent,
-                    timestamp: new Date(item.start ? item.start * 1000 : Date.now()),
-                    finalized: item.finalized ?? true,
-                  });
+                const message: Message = {
+                  id: String(baseId),
+                  type: messageType,
+                  text: content.trim(),
+                  timestamp: new Date(
+                    typeof item.start === "number" ? item.start * 1000 : Date.now()
+                  ),
+                  finalized: !!isFinal,
+                };
+
+                if (message.finalized) {
+                  finalMessages.set(message.id, message);
+                } else if (messageType === "user") {
+                  latestUserDraft = message;
+                } else if (messageType === "agent") {
+                  latestAgentDraft = message;
                 }
               });
 
-              if (Object.keys(updates).length || newMessages.length) {
-                setMessages((prev) => {
-                  let updated = prev.filter((msg) => msg.id !== "init");
-                  if (Object.keys(updates).length) {
-                    updated = updated.map((msg) =>
-                      updates[msg.id] ? { ...msg, text: updates[msg.id], finalized: true } : msg
-                    );
-                  }
-                  if (newMessages.length) {
-                    updated = [...updated, ...newMessages];
-                    updated.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-                  }
-                  return updated;
-                });
-              } else {
-                setMessages((prev) => prev.filter((msg) => msg.id !== "init"));
+              const orderedMessages = Array.from(finalMessages.values()).sort(
+                (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+              );
+
+              if (latestUserDraft) {
+                orderedMessages.push({ ...latestUserDraft, finalized: false });
+              }
+              if (latestAgentDraft) {
+                orderedMessages.push({ ...latestAgentDraft, finalized: false });
               }
 
-              setTranscription("");
+              setMessages(orderedMessages);
+              setTranscription(latestUserDraft?.text || "");
               return;
             }
 
-            // Fallback: Handle simple transcript/response payloads
+            // Fallback: simple transcript/response payloads
             let transcript: string | null = null;
             let response: string | null = null;
 
@@ -651,20 +649,19 @@ export default function AgentInteractionModal({
                     ? { ...msg, text: trimmed, finalized: true }
                     : msg
                 );
-                const hasMessage = updated.some(
-                  (msg) => msg.type === "user" && msg.text === trimmed
-                );
-                if (hasMessage) {
+                if (updated.some((msg) => msg.type === "user" && msg.text === trimmed)) {
                   return updated;
                 }
-                const newMessage: Message = {
-                  id: `user-${Date.now()}-${messageSequenceRef.current++}`,
-                  type: "user",
-                  text: trimmed,
-                  timestamp: new Date(),
-                  finalized: true,
-                };
-                return [...updated, newMessage];
+                return [
+                  ...updated,
+                  {
+                    id: `user-${Date.now()}`,
+                    type: "user",
+                    text: trimmed,
+                    timestamp: new Date(),
+                    finalized: true,
+                  },
+                ];
               });
             }
 
@@ -676,20 +673,19 @@ export default function AgentInteractionModal({
                     ? { ...msg, text: trimmed, finalized: true }
                     : msg
                 );
-                const hasMessage = updated.some(
-                  (msg) => msg.type === "agent" && msg.text === trimmed
-                );
-                if (hasMessage) {
+                if (updated.some((msg) => msg.type === "agent" && msg.text === trimmed)) {
                   return updated;
                 }
-                const newMessage: Message = {
-                  id: `agent-${Date.now()}-${messageSequenceRef.current++}`,
-                  type: "agent",
-                  text: trimmed,
-                  timestamp: new Date(),
-                  finalized: true,
-                };
-                return [...updated, newMessage];
+                return [
+                  ...updated,
+                  {
+                    id: `agent-${Date.now()}`,
+                    type: "agent",
+                    text: trimmed,
+                    timestamp: new Date(),
+                    finalized: true,
+                  },
+                ];
               });
             }
           });
@@ -762,8 +758,6 @@ export default function AgentInteractionModal({
     setIsListening(false);
     setSuccess(null);
     setTranscription("");
-    transcriptMessageMapRef.current.clear();
-    messageSequenceRef.current = 0;
 
     if (retellClientRef.current) {
       try {
