@@ -65,12 +65,42 @@ export default function DashboardOverview() {
         fetch("/api/agents"),
       ]);
 
-      const tenantsData = tenantsResponse.ok
-        ? await tenantsResponse.json()
-        : { tenants: [] };
-      const agentsData = agentsResponse.ok
-        ? await agentsResponse.json()
-        : { agents: [] };
+      // Log response status for debugging
+      console.log('[Dashboard] Tenants API response:', {
+        ok: tenantsResponse.ok,
+        status: tenantsResponse.status,
+        statusText: tenantsResponse.statusText,
+      });
+      console.log('[Dashboard] Agents API response:', {
+        ok: agentsResponse.ok,
+        status: agentsResponse.status,
+        statusText: agentsResponse.statusText,
+      });
+
+      let tenantsData = { tenants: [] };
+      let agentsData = { agents: [] };
+
+      if (tenantsResponse.ok) {
+        tenantsData = await tenantsResponse.json();
+        console.log('[Dashboard] Tenants data:', tenantsData);
+      } else {
+        const errorData = await tenantsResponse.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[Dashboard] Failed to fetch tenants:', {
+          status: tenantsResponse.status,
+          error: errorData,
+        });
+      }
+
+      if (agentsResponse.ok) {
+        agentsData = await agentsResponse.json();
+        console.log('[Dashboard] Agents data:', agentsData);
+      } else {
+        const errorData = await agentsResponse.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[Dashboard] Failed to fetch agents:', {
+          status: agentsResponse.status,
+          error: errorData,
+        });
+      }
 
       // Handle tenant data structure: API returns { tenants: [{ tenant_id, role, tenants: {...} }] }
       const tenantList = tenantsData.tenants || tenantsData || [];
@@ -134,8 +164,22 @@ export default function DashboardOverview() {
         recentAgents,
         recentOrganizations,
       });
-    } catch (error) {
-      console.error("Failed to fetch dashboard data:", error);
+    } catch (error: any) {
+      console.error("[Dashboard] Failed to fetch dashboard data:", error);
+      console.error("[Dashboard] Error details:", {
+        message: error.message,
+        stack: error.stack,
+      });
+      // Set empty stats on error so UI doesn't break
+      setStats({
+        totalOrganizations: 0,
+        totalAgents: 0,
+        activeAgents: 0,
+        voiceAgents: 0,
+        chatAgents: 0,
+        recentAgents: [],
+        recentOrganizations: [],
+      });
     } finally {
       setLoading(false);
     }
