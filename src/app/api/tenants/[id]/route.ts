@@ -84,18 +84,18 @@ export async function PATCH(
 
     const isSystemAdmin = !!systemAdminCheck;
 
-    // If not system_admin, verify user is tenant_admin or super_admin for this specific tenant
+    // If not system_admin, verify user is organization_admin, tenant_admin, or super_admin for this specific tenant
     if (!isSystemAdmin) {
       const { data: userTenant } = await supabase
         .from('user_tenants')
         .select('role')
         .eq('user_id', user.id)
         .eq('tenant_id', id)
-        .in('role', ['tenant_admin', 'super_admin'])
+        .in('role', ['organization_admin', 'tenant_admin', 'super_admin'])
         .single();
 
       if (!userTenant) {
-        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+        return NextResponse.json({ error: 'Forbidden: Admin access required. You need system_admin, organization_admin, or super_admin role to update organization settings.' }, { status: 403 });
       }
     }
 
@@ -127,7 +127,14 @@ export async function PATCH(
     }
 
     const updateData: any = {};
-    if (name !== undefined) updateData.name = name;
+    if (name !== undefined) {
+      // Validate name is not empty or just whitespace
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        return NextResponse.json({ error: 'Organization name cannot be empty' }, { status: 400 });
+      }
+      updateData.name = trimmedName;
+    }
     if (subdomain !== undefined) updateData.subdomain = subdomain;
     if (tier !== undefined) updateData.tier = tier;
     if (settings !== undefined) updateData.settings = settings;
