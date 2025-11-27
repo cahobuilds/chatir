@@ -611,10 +611,22 @@ export default function AgentInteractionModal({
               );
 
               if (latestUserDraft) {
-                orderedMessages.push({ ...latestUserDraft, finalized: false });
+                orderedMessages.push({
+                  id: latestUserDraft.id,
+                  type: latestUserDraft.type,
+                  text: latestUserDraft.text,
+                  timestamp: latestUserDraft.timestamp,
+                  finalized: false,
+                });
               }
               if (latestAgentDraft) {
-                orderedMessages.push({ ...latestAgentDraft, finalized: false });
+                orderedMessages.push({
+                  id: latestAgentDraft.id,
+                  type: latestAgentDraft.type,
+                  text: latestAgentDraft.text,
+                  timestamp: latestAgentDraft.timestamp,
+                  finalized: false,
+                });
               }
 
               setMessages(orderedMessages);
