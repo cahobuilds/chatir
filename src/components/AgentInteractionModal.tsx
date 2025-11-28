@@ -578,195 +578,104 @@ export default function AgentInteractionModal({
             }
           });
 
-          // CORRECTED APPROACH:
-          // The SDK's data.transcript and data.response are CUMULATIVE (full conversation)
-          // We need to track what we've already seen and extract only the NEW content
-          // Use agent_start/stop_talking events to create turn boundaries
+          // ROBUST APPROACH:
+          // The SDK provides update events with transcript data
+          // We need to check ALL possible data structures and log everything
+          // to understand exactly what we're getting
           
-          let lastSeenTranscriptLength = 0;  // Track how much of transcript we've processed
-          let lastSeenResponseLength = 0;    // Track how much of response we've processed
-          let currentUserTurnText = "";      // Current user turn (not yet finalized)
-          let currentAgentTurnText = "";     // Current agent turn (not yet finalized)
           let messageCounter = 0;
-          let isAgentCurrentlySpeaking = false;
+          let conversationMessages: Message[] = [];
 
           retellClient.on("update", (data: any) => {
             setIsInitializing(false);
             isInitializingRef.current = false;
             
-            // DEBUG: Log the raw data structure to understand what we're getting
-            console.log("📊 UPDATE EVENT - Full data keys:", Object.keys(data));
-            console.log("  transcript_object?:", data.transcript_object ? "YES" : "NO");
+            // COMPREHENSIVE DEBUG: Log EVERYTHING
+            console.log("📊 UPDATE EVENT - RAW DATA:", JSON.stringify(data, null, 2));
+            console.log("  Keys:", Object.keys(data));
+            console.log("  isAgentTalking (SDK prop):", retellClient.isAgentTalking);
+            
+            // Check for transcript_object (array of turns with roles)
             if (data.transcript_object) {
-              console.log("  transcript_object:", JSON.stringify(data.transcript_object, null, 2));
+              console.log("  ✅ Has transcript_object:", typeof data.transcript_object);
             }
-            console.log("  isAgentTalking (SDK):", retellClient.isAgentTalking);
             
-            // Check if we have structured transcript_object (preferred)
+            // Check for transcript_with_tool_calls
+            if (data.transcript_with_tool_calls) {
+              console.log("  ✅ Has transcript_with_tool_calls");
+            }
+            
+            // PRIORITY 1: Use transcript_object if available (structured turn data)
             if (data.transcript_object && Array.isArray(data.transcript_object)) {
-              // transcript_object contains structured turn-by-turn data with roles
-              const transcriptArray = data.transcript_object;
-              console.log("  Using transcript_object with", transcriptArray.length, "items");
+              console.log("  Using transcript_object array with", data.transcript_object.length, "items");
               
-              // Build messages from the structured transcript
-              setMessages(() => {
-                const newMessages: Message[] = [];
+              conversationMessages = data.transcript_object.map((item: any, index: number) => {
+                const role = (item.role || item.speaker || "").toLowerCase();
+                const content = item.content || item.text || item.message || "";
+                const isAgent = role === "agent" || role === "assistant" || role === "bot";
                 
-                transcriptArray.forEach((item: any, index: number) => {
-                  const role = (item.role || "").toLowerCase();
-                  const content = item.content || item.text || "";
-                  
-                  if (!content.trim()) return;
-                  
-                  const messageType: Message["type"] = 
-                    role === "agent" ? "agent" : "user";
-                  
-                  newMessages.push({
-                    id: `transcript-${index}`,
-                    type: messageType,
-                    text: content.trim(),
-                    timestamp: new Date(),
-                    finalized: true, // transcript_object items are finalized
-                  });
-                });
-                
-                return newMessages;
+                return {
+                  id: `turn-${index}`,
+                  type: isAgent ? "agent" as const : "user" as const,
+                  text: extractCleanText(content).trim(),
+                  timestamp: new Date(),
+                  finalized: true,
+                };
+              }).filter((m: Message) => m.text.length > 0);
+              
+              setMessages(conversationMessages);
+              return;
+            }
+            
+            // PRIORITY 2: Build conversation from separate transcript/response fields
+            // transcript = user speech, response = agent speech
+            const userText = data.transcript ? extractCleanText(data.transcript).trim() : "";
+            const agentText = data.response ? extractCleanText(data.response).trim() : "";
+            
+            console.log("  transcript (user):", userText ? userText.substring(0, 80) + "..." : "(empty)");
+            console.log("  response (agent):", agentText ? agentText.substring(0, 80) + "..." : "(empty)");
+            
+            // Create messages array with proper ordering
+            // User speaks first, then agent responds
+            const newMessages: Message[] = [];
+            
+            if (userText) {
+              newMessages.push({
+                id: "user-transcript",
+                type: "user",
+                text: userText,
+                timestamp: new Date(),
+                finalized: retellClient.isAgentTalking, // Finalized when agent starts talking
               });
-              
-              return; // Don't process the simple transcript/response fields
             }
             
-            // Fallback: Use simple transcript (user) and response (agent) fields
-            // These are cumulative - we need to track deltas
-            const fullTranscript = data.transcript ? extractCleanText(data.transcript).trim() : "";
-            const fullResponse = data.response ? extractCleanText(data.response).trim() : "";
-            
-            console.log("  Using simple transcript/response");
-            console.log("  fullTranscript length:", fullTranscript.length, "lastSeen:", lastSeenTranscriptLength);
-            console.log("  fullResponse length:", fullResponse.length, "lastSeen:", lastSeenResponseLength);
-            
-            // Extract only the NEW content since last update
-            const newUserText = fullTranscript.length > lastSeenTranscriptLength 
-              ? fullTranscript.substring(lastSeenTranscriptLength).trim()
-              : "";
-            const newAgentText = fullResponse.length > lastSeenResponseLength
-              ? fullResponse.substring(lastSeenResponseLength).trim()
-              : "";
-            
-            console.log("  newUserText:", newUserText.substring(0, 50));
-            console.log("  newAgentText:", newAgentText.substring(0, 50));
-            
-            // Always update the lengths to track what we've seen
-            if (fullTranscript.length > lastSeenTranscriptLength) {
-              lastSeenTranscriptLength = fullTranscript.length;
-            }
-            if (fullResponse.length > lastSeenResponseLength) {
-              lastSeenResponseLength = fullResponse.length;
+            if (agentText) {
+              newMessages.push({
+                id: "agent-response", 
+                type: "agent",
+                text: agentText,
+                timestamp: new Date(),
+                finalized: !retellClient.isAgentTalking, // Finalized when agent stops
+              });
             }
             
-            // If agent is speaking, accumulate agent text for current turn
-            if (isAgentCurrentlySpeaking && newAgentText) {
-              currentAgentTurnText = currentAgentTurnText 
-                ? currentAgentTurnText + " " + newAgentText 
-                : newAgentText;
-            }
+            setMessages(newMessages);
             
-            // If user is speaking (agent not speaking), accumulate user text
-            if (!isAgentCurrentlySpeaking && newUserText) {
-              currentUserTurnText = currentUserTurnText
-                ? currentUserTurnText + " " + newUserText
-                : newUserText;
-            }
-            
-            // Update the live display with current pending messages
-            setMessages((prev) => {
-              const finalized = prev.filter(m => m.finalized);
-              const result = [...finalized];
-              
-              // Show pending user message (on right)
-              if (currentUserTurnText && !isAgentCurrentlySpeaking) {
-                result.push({
-                  id: "pending-user",
-                  type: "user",
-                  text: currentUserTurnText,
-                  timestamp: new Date(),
-                  finalized: false,
-                });
-              }
-              
-              // Show pending agent message (on left)
-              if (currentAgentTurnText && isAgentCurrentlySpeaking) {
-                result.push({
-                  id: "pending-agent",
-                  type: "agent",
-                  text: currentAgentTurnText,
-                  timestamp: new Date(),
-                  finalized: false,
-                });
-              }
-              
-              return result;
-            });
-            
-            // Update live transcription display for user
-            if (!isAgentCurrentlySpeaking) {
-              setTranscription(currentUserTurnText);
+            // Update live transcription (show user's current speech)
+            if (!retellClient.isAgentTalking && userText) {
+              setTranscription(userText);
             }
           });
 
           retellClient.on("agent_start_talking", () => {
             console.log("🎤 Agent started talking");
             setIsSpeaking(true);
-            isAgentCurrentlySpeaking = true;
-            
-            // When agent starts talking, finalize the user's current turn
-            if (currentUserTurnText) {
-              const textToFinalize = currentUserTurnText;
-              currentUserTurnText = ""; // Reset for next user turn
-              setTranscription("");
-              
-              setMessages((prev) => {
-                const withoutPending = prev.filter(m => m.id !== "pending-user");
-                messageCounter++;
-                return [
-                  ...withoutPending,
-                  {
-                    id: `msg-${messageCounter}`,
-                    type: "user" as const,
-                    text: textToFinalize,
-                    timestamp: new Date(),
-                    finalized: true,
-                  },
-                ];
-              });
-            }
+            setTranscription(""); // Clear user transcription
           });
 
           retellClient.on("agent_stop_talking", () => {
             console.log("🔇 Agent stopped talking");
             setIsSpeaking(false);
-            isAgentCurrentlySpeaking = false;
-            
-            // When agent stops talking, finalize the agent's current turn
-            if (currentAgentTurnText) {
-              const textToFinalize = currentAgentTurnText;
-              currentAgentTurnText = ""; // Reset for next agent turn
-              
-              setMessages((prev) => {
-                const withoutPending = prev.filter(m => m.id !== "pending-agent");
-                messageCounter++;
-                return [
-                  ...withoutPending,
-                  {
-                    id: `msg-${messageCounter}`,
-                    type: "agent" as const,
-                    text: textToFinalize,
-                    timestamp: new Date(),
-                    finalized: true,
-                  },
-                ];
-              });
-            }
           });
 
           // Start the call - NO MUTING, let SDK handle everything (matches test page exactly)
