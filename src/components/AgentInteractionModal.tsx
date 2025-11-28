@@ -1100,9 +1100,14 @@ export default function AgentInteractionModal({
                       </div>
                     </div>
                   ) : (
-                    messages.map((message) => {
+                    messages.map((message, index) => {
                       const isUser = message.type === "user";
                       const displayName = isUser ? "User" : agent?.name || "Agent";
+                      
+                      // Only show the name label if it's different from the previous message
+                      // This groups consecutive messages from the same speaker
+                      const prevMessage = index > 0 ? messages[index - 1] : null;
+                      const showLabel = !prevMessage || prevMessage.type !== message.type;
 
                       return (
                         <div
@@ -1111,9 +1116,11 @@ export default function AgentInteractionModal({
                             isUser ? "items-end text-right" : "items-start text-left"
                           }`}
                         >
-                          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                            {displayName}
-                          </span>
+                          {showLabel && (
+                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                              {displayName}
+                            </span>
+                          )}
                           <div
                             className={`flex items-start gap-3 ${
                               isUser ? "flex-row-reverse" : ""
