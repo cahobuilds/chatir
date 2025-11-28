@@ -578,51 +578,72 @@ export default function AgentInteractionModal({
             }
           });
 
-          // SIMPLIFIED APPROACH: 
-          // - Track conversation as a simple array of finalized messages
-          // - Keep ONE pending user message and ONE pending agent message
-          // - Use agent_start/stop_talking to finalize turns
+          // CORRECTED APPROACH:
+          // The SDK's data.transcript and data.response are CUMULATIVE (full conversation)
+          // We need to track what we've already seen and extract only the NEW content
+          // Use agent_start/stop_talking events to create turn boundaries
           
-          // These track the current in-progress utterances (not yet finalized)
-          let pendingUserText = "";
-          let pendingAgentText = "";
+          let lastSeenTranscriptLength = 0;  // Track how much of transcript we've processed
+          let lastSeenResponseLength = 0;    // Track how much of response we've processed
+          let currentUserTurnText = "";      // Current user turn (not yet finalized)
+          let currentAgentTurnText = "";     // Current agent turn (not yet finalized)
           let messageCounter = 0;
+          let isAgentCurrentlySpeaking = false;
 
           retellClient.on("update", (data: any) => {
             setIsInitializing(false);
             isInitializingRef.current = false;
             
-            // Extract current transcript (user) and response (agent)
-            const userText = data.transcript ? extractCleanText(data.transcript).trim() : "";
-            const agentText = data.response ? extractCleanText(data.response).trim() : "";
+            // Get the full cumulative texts
+            const fullTranscript = data.transcript ? extractCleanText(data.transcript).trim() : "";
+            const fullResponse = data.response ? extractCleanText(data.response).trim() : "";
             
-            // Update pending texts
-            if (userText) pendingUserText = userText;
-            if (agentText) pendingAgentText = agentText;
+            // Extract only the NEW content since last update
+            const newUserText = fullTranscript.length > lastSeenTranscriptLength 
+              ? fullTranscript.substring(lastSeenTranscriptLength).trim()
+              : "";
+            const newAgentText = fullResponse.length > lastSeenResponseLength
+              ? fullResponse.substring(lastSeenResponseLength).trim()
+              : "";
             
-            // Update the messages state
+            // If agent is speaking, accumulate agent text for current turn
+            if (isAgentCurrentlySpeaking && newAgentText) {
+              currentAgentTurnText = currentAgentTurnText 
+                ? currentAgentTurnText + " " + newAgentText 
+                : newAgentText;
+              lastSeenResponseLength = fullResponse.length;
+            }
+            
+            // If user is speaking (agent not speaking), accumulate user text
+            if (!isAgentCurrentlySpeaking && newUserText) {
+              currentUserTurnText = currentUserTurnText
+                ? currentUserTurnText + " " + newUserText
+                : newUserText;
+              lastSeenTranscriptLength = fullTranscript.length;
+            }
+            
+            // Update the live display with current pending messages
             setMessages((prev) => {
-              // Keep all finalized messages
               const finalized = prev.filter(m => m.finalized);
               const result = [...finalized];
               
-              // Add pending user message if exists (update in place)
-              if (pendingUserText) {
+              // Show pending user message (green-ish bubble on right)
+              if (currentUserTurnText && !isAgentCurrentlySpeaking) {
                 result.push({
                   id: "pending-user",
                   type: "user",
-                  text: pendingUserText,
+                  text: currentUserTurnText,
                   timestamp: new Date(),
                   finalized: false,
                 });
               }
               
-              // Add pending agent message if exists (update in place)
-              if (pendingAgentText) {
+              // Show pending agent message (purple bubble on left)
+              if (currentAgentTurnText && isAgentCurrentlySpeaking) {
                 result.push({
                   id: "pending-agent",
                   type: "agent",
-                  text: pendingAgentText,
+                  text: currentAgentTurnText,
                   timestamp: new Date(),
                   finalized: false,
                 });
@@ -631,22 +652,24 @@ export default function AgentInteractionModal({
               return result;
             });
             
-            // Update live transcription display
-            setTranscription(pendingUserText);
+            // Update live transcription display for user
+            if (!isAgentCurrentlySpeaking) {
+              setTranscription(currentUserTurnText);
+            }
           });
 
           retellClient.on("agent_start_talking", () => {
             console.log("🎤 Agent started talking");
             setIsSpeaking(true);
+            isAgentCurrentlySpeaking = true;
             
-            // When agent starts talking, finalize the user's pending message
-            if (pendingUserText) {
-              const textToFinalize = pendingUserText;
-              pendingUserText = ""; // Clear pending
+            // When agent starts talking, finalize the user's current turn
+            if (currentUserTurnText) {
+              const textToFinalize = currentUserTurnText;
+              currentUserTurnText = ""; // Reset for next user turn
               setTranscription("");
               
               setMessages((prev) => {
-                // Remove the pending-user placeholder and add as finalized
                 const withoutPending = prev.filter(m => m.id !== "pending-user");
                 messageCounter++;
                 return [
@@ -666,14 +689,14 @@ export default function AgentInteractionModal({
           retellClient.on("agent_stop_talking", () => {
             console.log("🔇 Agent stopped talking");
             setIsSpeaking(false);
+            isAgentCurrentlySpeaking = false;
             
-            // When agent stops talking, finalize the agent's pending message
-            if (pendingAgentText) {
-              const textToFinalize = pendingAgentText;
-              pendingAgentText = ""; // Clear pending
+            // When agent stops talking, finalize the agent's current turn
+            if (currentAgentTurnText) {
+              const textToFinalize = currentAgentTurnText;
+              currentAgentTurnText = ""; // Reset for next agent turn
               
               setMessages((prev) => {
-                // Remove the pending-agent placeholder and add as finalized
                 const withoutPending = prev.filter(m => m.id !== "pending-agent");
                 messageCounter++;
                 return [
