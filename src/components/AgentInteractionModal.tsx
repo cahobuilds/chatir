@@ -583,11 +583,11 @@ export default function AgentInteractionModal({
           // Each item represents a turn in the conversation
           // The array is cumulative - it grows with each update
           // We simply map this array directly to our messages
-          
+
           retellClient.on("update", (data: any) => {
             setIsInitializing(false);
             isInitializingRef.current = false;
-            
+
             // The transcript is an ARRAY of {role: "user"|"agent", content: string}
             if (data.transcript && Array.isArray(data.transcript)) {
               const transcriptArray = data.transcript as Array<{role: string; content: string}>;
@@ -1110,8 +1110,8 @@ export default function AgentInteractionModal({
                       const showLabel = !prevMessage || prevMessage.type !== message.type;
 
                       return (
-                        <div
-                          key={message.id}
+                      <div
+                        key={message.id}
                           className={`flex flex-col gap-1 ${
                             isUser ? "items-end text-right" : "items-start text-left"
                           }`}
@@ -1122,87 +1122,72 @@ export default function AgentInteractionModal({
                             </span>
                           )}
                           <div
-                            className={`flex items-start gap-3 ${
+                        className={`flex items-start gap-3 ${
                               isUser ? "flex-row-reverse" : ""
-                            }`}
-                          >
+                        }`}
+                      >
                             {!isUser && (
-                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                                <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="currentColor" viewBox="0 0 20 20">
-                                  <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
-                                  <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
-                                </svg>
-                              </div>
-                            )}
-
-                            <div
-                              className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                            <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+                              <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
+                            </svg>
+                          </div>
+                        )}
+                        
+                        <div
+                          className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${
                                 isUser
-                                  ? "bg-indigo-600 text-white rounded-br-sm"
-                                  : message.isTyping
-                                  ? "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-bl-sm"
-                                  : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-bl-sm"
-                              }`}
-                            >
-                              {message.isTyping ? (
-                                <div className="flex items-center gap-1">
-                                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                                </div>
-                              ) : (
-                                <>
-                                  <p className={`text-sm whitespace-pre-wrap ${
-                                    message.finalized === false ? 'opacity-70' : ''
-                                  }`}>
-                                    {extractCleanText(message.text)}
-                                  </p>
-                                  {message.finalized === false && (
-                                    <div className="flex items-center gap-1 mt-1">
-                                      <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>
-                                      <span className="text-xs opacity-60">Transcribing...</span>
-                                    </div>
-                                  )}
-                                </>
-                              )}
+                              ? "bg-indigo-600 text-white rounded-br-sm"
+                              : message.isTyping
+                              ? "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-bl-sm"
+                              : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-bl-sm"
+                          }`}
+                        >
+                          {message.isTyping ? (
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                             </div>
+                          ) : (
+                            <>
+                              <p className={`text-sm whitespace-pre-wrap ${
+                                    message.finalized === false ? 'opacity-70' : ''
+                              }`}>
+                                {extractCleanText(message.text)}
+                              </p>
+                              {message.finalized === false && (
+                                <div className="flex items-center gap-1 mt-1">
+                                  <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isUser ? 'bg-indigo-300' : 'bg-green-500'}`}></div>
+                                  <span className="text-xs opacity-60">
+                                    {isUser ? 'Listening...' : 'Speaking...'}
+                                  </span>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
 
                             {isUser && (
-                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
-                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                                </svg>
-                              </div>
-                            )}
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
+                            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                            </svg>
                           </div>
+                        )}
+                      </div>
                         </div>
                       );
                     })
                   )}
                   
-                  {/* Live transcription */}
-                  {isListening && transcription && !messages.some(m => m.type === 'user' && !m.finalized && m.text === transcription) && (
-                    <div className="flex justify-end items-start gap-3">
-                      <div className="max-w-[75%] rounded-2xl rounded-br-sm px-4 py-2.5 bg-indigo-100 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 shadow-sm">
-                        <p className="text-sm text-gray-700 dark:text-gray-300">
-                          {transcription}
-                        </p>
-                        <div className="flex items-center gap-1 mt-1">
-                          <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-pulse"></div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Listening...</p>
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
-                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                        </svg>
+                  {/* Live transcription - ONLY show when user is speaking (not when agent is speaking) */}
+                  {/* This prevents the agent's voice from being picked up and displayed as user input */}
+                  <div ref={messagesEndRef} />
                       </div>
                     </div>
                   )}
-                  <div ref={messagesEndRef} />
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
