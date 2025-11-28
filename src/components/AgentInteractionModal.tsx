@@ -594,9 +594,56 @@ export default function AgentInteractionModal({
             setIsInitializing(false);
             isInitializingRef.current = false;
             
-            // Get the full cumulative texts
+            // DEBUG: Log the raw data structure to understand what we're getting
+            console.log("📊 UPDATE EVENT - Full data keys:", Object.keys(data));
+            console.log("  transcript_object?:", data.transcript_object ? "YES" : "NO");
+            if (data.transcript_object) {
+              console.log("  transcript_object:", JSON.stringify(data.transcript_object, null, 2));
+            }
+            console.log("  isAgentTalking (SDK):", retellClient.isAgentTalking);
+            
+            // Check if we have structured transcript_object (preferred)
+            if (data.transcript_object && Array.isArray(data.transcript_object)) {
+              // transcript_object contains structured turn-by-turn data with roles
+              const transcriptArray = data.transcript_object;
+              console.log("  Using transcript_object with", transcriptArray.length, "items");
+              
+              // Build messages from the structured transcript
+              setMessages(() => {
+                const newMessages: Message[] = [];
+                
+                transcriptArray.forEach((item: any, index: number) => {
+                  const role = (item.role || "").toLowerCase();
+                  const content = item.content || item.text || "";
+                  
+                  if (!content.trim()) return;
+                  
+                  const messageType: Message["type"] = 
+                    role === "agent" ? "agent" : "user";
+                  
+                  newMessages.push({
+                    id: `transcript-${index}`,
+                    type: messageType,
+                    text: content.trim(),
+                    timestamp: new Date(),
+                    finalized: true, // transcript_object items are finalized
+                  });
+                });
+                
+                return newMessages;
+              });
+              
+              return; // Don't process the simple transcript/response fields
+            }
+            
+            // Fallback: Use simple transcript (user) and response (agent) fields
+            // These are cumulative - we need to track deltas
             const fullTranscript = data.transcript ? extractCleanText(data.transcript).trim() : "";
             const fullResponse = data.response ? extractCleanText(data.response).trim() : "";
+            
+            console.log("  Using simple transcript/response");
+            console.log("  fullTranscript length:", fullTranscript.length, "lastSeen:", lastSeenTranscriptLength);
+            console.log("  fullResponse length:", fullResponse.length, "lastSeen:", lastSeenResponseLength);
             
             // Extract only the NEW content since last update
             const newUserText = fullTranscript.length > lastSeenTranscriptLength 
@@ -606,12 +653,22 @@ export default function AgentInteractionModal({
               ? fullResponse.substring(lastSeenResponseLength).trim()
               : "";
             
+            console.log("  newUserText:", newUserText.substring(0, 50));
+            console.log("  newAgentText:", newAgentText.substring(0, 50));
+            
+            // Always update the lengths to track what we've seen
+            if (fullTranscript.length > lastSeenTranscriptLength) {
+              lastSeenTranscriptLength = fullTranscript.length;
+            }
+            if (fullResponse.length > lastSeenResponseLength) {
+              lastSeenResponseLength = fullResponse.length;
+            }
+            
             // If agent is speaking, accumulate agent text for current turn
             if (isAgentCurrentlySpeaking && newAgentText) {
               currentAgentTurnText = currentAgentTurnText 
                 ? currentAgentTurnText + " " + newAgentText 
                 : newAgentText;
-              lastSeenResponseLength = fullResponse.length;
             }
             
             // If user is speaking (agent not speaking), accumulate user text
@@ -619,7 +676,6 @@ export default function AgentInteractionModal({
               currentUserTurnText = currentUserTurnText
                 ? currentUserTurnText + " " + newUserText
                 : newUserText;
-              lastSeenTranscriptLength = fullTranscript.length;
             }
             
             // Update the live display with current pending messages
@@ -627,7 +683,7 @@ export default function AgentInteractionModal({
               const finalized = prev.filter(m => m.finalized);
               const result = [...finalized];
               
-              // Show pending user message (green-ish bubble on right)
+              // Show pending user message (on right)
               if (currentUserTurnText && !isAgentCurrentlySpeaking) {
                 result.push({
                   id: "pending-user",
@@ -638,7 +694,7 @@ export default function AgentInteractionModal({
                 });
               }
               
-              // Show pending agent message (purple bubble on left)
+              // Show pending agent message (on left)
               if (currentAgentTurnText && isAgentCurrentlySpeaking) {
                 result.push({
                   id: "pending-agent",
