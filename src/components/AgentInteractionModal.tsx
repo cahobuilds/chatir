@@ -472,6 +472,12 @@ export default function AgentInteractionModal({
       return;
     }
 
+    // Prevent double-clicks / multiple calls
+    if (isRecording || retellClientRef.current) {
+      console.log("Call already in progress, ignoring duplicate start request");
+      return;
+    }
+
     setError(null);
     setSuccess(null);
     setTranscription("");
@@ -572,115 +578,116 @@ export default function AgentInteractionModal({
             }
           });
 
-          // NEW APPROACH: Simple event-driven conversation tracking
-          // We maintain two "current" utterances (user and agent) that get updated in place
-          // When a turn ends, we finalize it and start fresh
+          // SIMPLIFIED APPROACH: 
+          // - Track conversation as a simple array of finalized messages
+          // - Keep ONE pending user message and ONE pending agent message
+          // - Use agent_start/stop_talking to finalize turns
           
-          let currentUserText = "";
-          let currentAgentText = "";
-          let userTurnId = 0;
-          let agentTurnId = 0;
+          // These track the current in-progress utterances (not yet finalized)
+          let pendingUserText = "";
+          let pendingAgentText = "";
+          let messageCounter = 0;
 
           retellClient.on("update", (data: any) => {
             setIsInitializing(false);
             isInitializingRef.current = false;
             
-            // Extract the latest transcript and response from the update
-            // These represent the CURRENT state, not incremental additions
+            // Extract current transcript (user) and response (agent)
             const userText = data.transcript ? extractCleanText(data.transcript).trim() : "";
             const agentText = data.response ? extractCleanText(data.response).trim() : "";
             
-            // Only process if we have actual content
-            if (!userText && !agentText) return;
+            // Update pending texts
+            if (userText) pendingUserText = userText;
+            if (agentText) pendingAgentText = agentText;
             
-            // Remove init message if present
-            setMessages((prev) => prev.filter((msg) => msg.id !== "init"));
-            
-            // Build the conversation from scratch each update
-            // This is simpler and avoids state accumulation bugs
+            // Update the messages state
             setMessages((prev) => {
-              const newMessages: Message[] = [];
+              // Keep all finalized messages
+              const finalized = prev.filter(m => m.finalized);
+              const result = [...finalized];
               
-              // Check if user text changed - means new/updated user turn
-              if (userText && userText !== currentUserText) {
-                currentUserText = userText;
-                // If this is genuinely new content (not just an update), increment turn
-                if (!prev.some(m => m.type === "user" && m.text === userText)) {
-                  // Check if we need a new turn or update existing
-                  const existingUserMsg = prev.find(m => m.id === `user-turn-${userTurnId}` && !m.finalized);
-                  if (!existingUserMsg) {
-                    userTurnId++;
-                  }
-                }
+              // Add pending user message if exists (update in place)
+              if (pendingUserText) {
+                result.push({
+                  id: "pending-user",
+                  type: "user",
+                  text: pendingUserText,
+                  timestamp: new Date(),
+                  finalized: false,
+                });
               }
               
-              // Check if agent text changed
-              if (agentText && agentText !== currentAgentText) {
-                currentAgentText = agentText;
-                if (!prev.some(m => m.type === "agent" && m.text === agentText)) {
-                  const existingAgentMsg = prev.find(m => m.id === `agent-turn-${agentTurnId}` && !m.finalized);
-                  if (!existingAgentMsg) {
-                    agentTurnId++;
-                  }
-                }
+              // Add pending agent message if exists (update in place)
+              if (pendingAgentText) {
+                result.push({
+                  id: "pending-agent",
+                  type: "agent",
+                  text: pendingAgentText,
+                  timestamp: new Date(),
+                  finalized: false,
+                });
               }
               
-              // Add finalized messages from previous state
-              prev.filter(m => m.finalized).forEach(m => newMessages.push(m));
-              
-              // Add current user utterance if exists
-              if (userText) {
-                const existingIdx = newMessages.findIndex(m => m.type === "user" && m.text === userText);
-                if (existingIdx === -1) {
-                  newMessages.push({
-                    id: `user-turn-${userTurnId}`,
-                    type: "user",
-                    text: userText,
-                    timestamp: new Date(),
-                    finalized: false,
-                  });
-                }
-              }
-              
-              // Add current agent utterance if exists
-              if (agentText) {
-                const existingIdx = newMessages.findIndex(m => m.type === "agent" && m.text === agentText);
-                if (existingIdx === -1) {
-                  newMessages.push({
-                    id: `agent-turn-${agentTurnId}`,
-                    type: "agent",
-                    text: agentText,
-                    timestamp: new Date(),
-                    finalized: false,
-                  });
-                }
-              }
-              
-              return newMessages;
+              return result;
             });
             
-            // Update transcription display
-            setTranscription(userText);
+            // Update live transcription display
+            setTranscription(pendingUserText);
           });
 
           retellClient.on("agent_start_talking", () => {
             console.log("🎤 Agent started talking");
             setIsSpeaking(true);
-            // Finalize any pending user message when agent starts talking
-            setMessages((prev) => prev.map(m => 
-              m.type === "user" && !m.finalized ? { ...m, finalized: true } : m
-            ));
-            currentUserText = ""; // Reset for next user turn
+            
+            // When agent starts talking, finalize the user's pending message
+            if (pendingUserText) {
+              const textToFinalize = pendingUserText;
+              pendingUserText = ""; // Clear pending
+              setTranscription("");
+              
+              setMessages((prev) => {
+                // Remove the pending-user placeholder and add as finalized
+                const withoutPending = prev.filter(m => m.id !== "pending-user");
+                messageCounter++;
+                return [
+                  ...withoutPending,
+                  {
+                    id: `msg-${messageCounter}`,
+                    type: "user" as const,
+                    text: textToFinalize,
+                    timestamp: new Date(),
+                    finalized: true,
+                  },
+                ];
+              });
+            }
           });
 
           retellClient.on("agent_stop_talking", () => {
             console.log("🔇 Agent stopped talking");
             setIsSpeaking(false);
-            // Finalize the agent message when agent stops talking
-            setMessages((prev) => prev.map(m => 
-              m.type === "agent" && !m.finalized ? { ...m, finalized: true } : m
-            ));
-            currentAgentText = ""; // Reset for next agent turn
+            
+            // When agent stops talking, finalize the agent's pending message
+            if (pendingAgentText) {
+              const textToFinalize = pendingAgentText;
+              pendingAgentText = ""; // Clear pending
+              
+              setMessages((prev) => {
+                // Remove the pending-agent placeholder and add as finalized
+                const withoutPending = prev.filter(m => m.id !== "pending-agent");
+                messageCounter++;
+                return [
+                  ...withoutPending,
+                  {
+                    id: `msg-${messageCounter}`,
+                    type: "agent" as const,
+                    text: textToFinalize,
+                    timestamp: new Date(),
+                    finalized: true,
+                  },
+                ];
+              });
+            }
           });
 
           // Start the call - NO MUTING, let SDK handle everything (matches test page exactly)
@@ -1094,9 +1101,9 @@ export default function AgentInteractionModal({
                 </Button>
               </div>
             ) : (
-              <>
-                {/* Status Bar */}
-                <div className="mb-4 flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+              <div className="flex flex-col h-full">
+                {/* Status Bar - Sticky at top */}
+                <div className="sticky top-0 z-10 flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mb-4 flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${
                       isRecording 
@@ -1123,8 +1130,8 @@ export default function AgentInteractionModal({
                   </Button>
                 </div>
 
-                {/* Messages */}
-                <div className="space-y-3">
+                {/* Messages - Scrollable area */}
+                <div className="flex-1 overflow-y-auto space-y-3">
                   {messages.length === 0 ? (
                     <div className="flex items-center justify-center h-64">
                       <div className="text-center">
@@ -1238,7 +1245,7 @@ export default function AgentInteractionModal({
                   )}
                   <div ref={messagesEndRef} />
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>
