@@ -576,6 +576,7 @@ export default function AgentInteractionModal({
             setIsInitializing(false);
             isInitializingRef.current = false;
 
+            // Parse transcript_object into an array
             const parseTranscriptArray = (source: any): any[] => {
               if (!source) return [];
               if (Array.isArray(source)) return source;
@@ -596,30 +597,19 @@ export default function AgentInteractionModal({
             const transcriptArray = parseTranscriptArray(data.transcript_object);
 
             if (transcriptArray.length > 0) {
-              const finalMessages = new Map<string, Message>();
-              let latestUserDraft: Message | null = null;
-              let latestAgentDraft: Message | null = null;
+              // Group consecutive items by role into turns
+              // Each "turn" is one bubble in the UI
+              const turns: { role: "user" | "agent"; texts: string[]; isFinal: boolean }[] = [];
+              let currentTurn: { role: "user" | "agent"; texts: string[]; isFinal: boolean } | null = null;
 
-              transcriptArray.forEach((item: any, index: number) => {
-                const role = (item.role || item.type || "user").toLowerCase();
-                const content = extractCleanText(item.content || item.text || item.message || "");
-                if (!content || !content.trim()) return;
-
-                const messageType: Message["type"] =
-                  role === "agent" || role === "assistant"
-                    ? "agent"
-                    : role === "system"
+              transcriptArray.forEach((item: any) => {
+                const rawRole = (item.role || item.type || "user").toLowerCase();
+                const role: "user" | "agent" =
+                  rawRole === "agent" || rawRole === "assistant" || rawRole === "system"
                     ? "agent"
                     : "user";
-
-                const baseId =
-                  item.utterance_id ||
-                  item.segment_id ||
-                  item.message_id ||
-                  item.sequence_id ||
-                  (typeof item.start === "number"
-                    ? `${messageType}-start-${Math.round(item.start * 1000)}`
-                    : `${messageType}-idx-${index}`);
+                const content = extractCleanText(item.content || item.text || item.message || "");
+                if (!content || !content.trim()) return;
 
                 const isFinal =
                   item.final === true ||
@@ -627,62 +617,34 @@ export default function AgentInteractionModal({
                   item.status === "final" ||
                   item.completion === "done";
 
-                const message: Message = {
-                  id: String(baseId),
-                  type: messageType,
-                  text: content.trim(),
-                  timestamp: new Date(
-                    typeof item.start === "number" ? item.start * 1000 : Date.now()
-                  ),
-                  finalized: !!isFinal,
-                };
-
-                if (message.finalized) {
-                  finalMessages.set(message.id, message);
-                } else if (messageType === "user") {
-                  latestUserDraft = message;
-                } else if (messageType === "agent") {
-                  latestAgentDraft = message;
+                // If same role as current turn, append text; otherwise start new turn
+                if (currentTurn && currentTurn.role === role) {
+                  currentTurn.texts.push(content.trim());
+                  // A turn is final only if ALL its items are final
+                  if (!isFinal) currentTurn.isFinal = false;
+                } else {
+                  if (currentTurn) turns.push(currentTurn);
+                  currentTurn = { role, texts: [content.trim()], isFinal };
                 }
               });
+              if (currentTurn) turns.push(currentTurn);
 
-              const orderedMessages = Array.from(finalMessages.values()).sort(
-                (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+              // Convert turns to messages
+              const builtMessages: Message[] = turns.map((turn, idx) => ({
+                id: `turn-${idx}`,
+                type: turn.role,
+                text: turn.texts.join(" "),
+                timestamp: new Date(),
+                finalized: turn.isFinal,
+              }));
+
+              setMessages(builtMessages);
+
+              // Update live transcription for unfinished user turn
+              const lastUserTurn = [...builtMessages].reverse().find(
+                (m) => m.type === "user" && !m.finalized
               );
-
-              if (latestUserDraft) {
-                const userDraft: Message = latestUserDraft;
-                orderedMessages.push({
-                  id: userDraft.id,
-                  type: userDraft.type,
-                  text: userDraft.text,
-                  timestamp: userDraft.timestamp,
-                  finalized: false,
-                });
-              }
-              if (latestAgentDraft) {
-                const agentDraft: Message = latestAgentDraft;
-                orderedMessages.push({
-                  id: agentDraft.id,
-                  type: agentDraft.type,
-                  text: agentDraft.text,
-                  timestamp: agentDraft.timestamp,
-                  finalized: false,
-                });
-              }
-
-              setMessages(orderedMessages);
-
-              let currentUserDraftText = "";
-              for (let i = orderedMessages.length - 1; i >= 0; i--) {
-                const msg = orderedMessages[i];
-                if (msg.type === "user" && msg.finalized === false) {
-                  currentUserDraftText = msg.text;
-                  break;
-                }
-              }
-
-              setTranscription(currentUserDraftText);
+              setTranscription(lastUserTurn ? lastUserTurn.text : "");
               return;
             }
 
@@ -720,7 +682,7 @@ export default function AgentInteractionModal({
                   ...updated,
                   {
                     id: `user-${Date.now()}`,
-                    type: "user",
+                    type: "user" as const,
                     text: trimmed,
                     timestamp: new Date(),
                     finalized: true,
@@ -744,7 +706,7 @@ export default function AgentInteractionModal({
                   ...updated,
                   {
                     id: `agent-${Date.now()}`,
-                    type: "agent",
+                    type: "agent" as const,
                     text: trimmed,
                     timestamp: new Date(),
                     finalized: true,
