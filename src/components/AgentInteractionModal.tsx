@@ -578,92 +578,53 @@ export default function AgentInteractionModal({
             }
           });
 
-          // ROBUST APPROACH:
-          // The SDK provides update events with transcript data
-          // We need to check ALL possible data structures and log everything
-          // to understand exactly what we're getting
+          // CORRECT APPROACH:
+          // The SDK's update event provides data.transcript as an ARRAY of {role, content} objects
+          // Each item represents a turn in the conversation
+          // The array is cumulative - it grows with each update
+          // We simply map this array directly to our messages
           
-          let messageCounter = 0;
-          let conversationMessages: Message[] = [];
-
           retellClient.on("update", (data: any) => {
             setIsInitializing(false);
             isInitializingRef.current = false;
             
-            // COMPREHENSIVE DEBUG: Log EVERYTHING
-            console.log("📊 UPDATE EVENT - RAW DATA:", JSON.stringify(data, null, 2));
-            console.log("  Keys:", Object.keys(data));
-            console.log("  isAgentTalking (SDK prop):", retellClient.isAgentTalking);
-            
-            // Check for transcript_object (array of turns with roles)
-            if (data.transcript_object) {
-              console.log("  ✅ Has transcript_object:", typeof data.transcript_object);
-            }
-            
-            // Check for transcript_with_tool_calls
-            if (data.transcript_with_tool_calls) {
-              console.log("  ✅ Has transcript_with_tool_calls");
-            }
-            
-            // PRIORITY 1: Use transcript_object if available (structured turn data)
-            if (data.transcript_object && Array.isArray(data.transcript_object)) {
-              console.log("  Using transcript_object array with", data.transcript_object.length, "items");
+            // The transcript is an ARRAY of {role: "user"|"agent", content: string}
+            if (data.transcript && Array.isArray(data.transcript)) {
+              const transcriptArray = data.transcript as Array<{role: string; content: string}>;
               
-              conversationMessages = data.transcript_object.map((item: any, index: number) => {
-                const role = (item.role || item.speaker || "").toLowerCase();
-                const content = item.content || item.text || item.message || "";
+              // Map each transcript item to a message
+              // Each item is a separate turn in the conversation
+              const newMessages: Message[] = transcriptArray.map((item, index) => {
+                const role = (item.role || "").toLowerCase();
+                const content = (item.content || "").trim();
                 const isAgent = role === "agent" || role === "assistant" || role === "bot";
+                
+                // Determine if this message is finalized
+                // The last message is not finalized if it's still being spoken
+                const isLastItem = index === transcriptArray.length - 1;
+                const isFinalized = !isLastItem || 
+                  (isAgent ? !retellClient.isAgentTalking : retellClient.isAgentTalking);
                 
                 return {
                   id: `turn-${index}`,
                   type: isAgent ? "agent" as const : "user" as const,
-                  text: extractCleanText(content).trim(),
+                  text: content,
                   timestamp: new Date(),
-                  finalized: true,
+                  finalized: isFinalized,
                 };
               }).filter((m: Message) => m.text.length > 0);
               
-              setMessages(conversationMessages);
-              return;
-            }
-            
-            // PRIORITY 2: Build conversation from separate transcript/response fields
-            // transcript = user speech, response = agent speech
-            const userText = data.transcript ? extractCleanText(data.transcript).trim() : "";
-            const agentText = data.response ? extractCleanText(data.response).trim() : "";
-            
-            console.log("  transcript (user):", userText ? userText.substring(0, 80) + "..." : "(empty)");
-            console.log("  response (agent):", agentText ? agentText.substring(0, 80) + "..." : "(empty)");
-            
-            // Create messages array with proper ordering
-            // User speaks first, then agent responds
-            const newMessages: Message[] = [];
-            
-            if (userText) {
-              newMessages.push({
-                id: "user-transcript",
-                type: "user",
-                text: userText,
-                timestamp: new Date(),
-                finalized: retellClient.isAgentTalking, // Finalized when agent starts talking
-              });
-            }
-            
-            if (agentText) {
-              newMessages.push({
-                id: "agent-response", 
-                type: "agent",
-                text: agentText,
-                timestamp: new Date(),
-                finalized: !retellClient.isAgentTalking, // Finalized when agent stops
-              });
-            }
-            
-            setMessages(newMessages);
-            
-            // Update live transcription (show user's current speech)
-            if (!retellClient.isAgentTalking && userText) {
-              setTranscription(userText);
+              setMessages(newMessages);
+              
+              // Update live transcription for the current speaker
+              if (newMessages.length > 0) {
+                const lastMessage = newMessages[newMessages.length - 1];
+                if (!lastMessage.finalized) {
+                  setTranscription(lastMessage.text);
+                } else {
+                  setTranscription("");
+                }
+              }
             }
           });
 
