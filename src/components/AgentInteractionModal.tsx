@@ -572,170 +572,115 @@ export default function AgentInteractionModal({
             }
           });
 
+          // NEW APPROACH: Simple event-driven conversation tracking
+          // We maintain two "current" utterances (user and agent) that get updated in place
+          // When a turn ends, we finalize it and start fresh
+          
+          let currentUserText = "";
+          let currentAgentText = "";
+          let userTurnId = 0;
+          let agentTurnId = 0;
+
           retellClient.on("update", (data: any) => {
             setIsInitializing(false);
             isInitializingRef.current = false;
-
-            // Parse transcript_object into an array
-            const parseTranscriptArray = (source: any): any[] => {
-              if (!source) return [];
-              if (Array.isArray(source)) return source;
-              if (typeof source === "string") {
-                try {
-                  const parsed = JSON.parse(source);
-                  return Array.isArray(parsed) ? parsed : [];
-                } catch (err) {
-                  console.warn("Failed to parse transcript_object:", err);
+            
+            // Extract the latest transcript and response from the update
+            // These represent the CURRENT state, not incremental additions
+            const userText = data.transcript ? extractCleanText(data.transcript).trim() : "";
+            const agentText = data.response ? extractCleanText(data.response).trim() : "";
+            
+            // Only process if we have actual content
+            if (!userText && !agentText) return;
+            
+            // Remove init message if present
+            setMessages((prev) => prev.filter((msg) => msg.id !== "init"));
+            
+            // Build the conversation from scratch each update
+            // This is simpler and avoids state accumulation bugs
+            setMessages((prev) => {
+              const newMessages: Message[] = [];
+              
+              // Check if user text changed - means new/updated user turn
+              if (userText && userText !== currentUserText) {
+                currentUserText = userText;
+                // If this is genuinely new content (not just an update), increment turn
+                if (!prev.some(m => m.type === "user" && m.text === userText)) {
+                  // Check if we need a new turn or update existing
+                  const existingUserMsg = prev.find(m => m.id === `user-turn-${userTurnId}` && !m.finalized);
+                  if (!existingUserMsg) {
+                    userTurnId++;
+                  }
                 }
               }
-              if (typeof source === "object" && source !== null) {
-                return [source];
+              
+              // Check if agent text changed
+              if (agentText && agentText !== currentAgentText) {
+                currentAgentText = agentText;
+                if (!prev.some(m => m.type === "agent" && m.text === agentText)) {
+                  const existingAgentMsg = prev.find(m => m.id === `agent-turn-${agentTurnId}` && !m.finalized);
+                  if (!existingAgentMsg) {
+                    agentTurnId++;
+                  }
+                }
               }
-              return [];
-            };
-
-            const transcriptArray = parseTranscriptArray(data.transcript_object);
-
-            if (transcriptArray.length > 0) {
-              // Group consecutive items by role into turns
-              // Each "turn" is one bubble in the UI
-              const turns: { role: "user" | "agent"; texts: string[]; isFinal: boolean }[] = [];
-              let currentTurn: { role: "user" | "agent"; texts: string[]; isFinal: boolean } | null = null;
-
-              transcriptArray.forEach((item: any) => {
-                const rawRole = (item.role || item.type || "user").toLowerCase();
-                const role: "user" | "agent" =
-                  rawRole === "agent" || rawRole === "assistant" || rawRole === "system"
-                    ? "agent"
-                    : "user";
-                const content = extractCleanText(item.content || item.text || item.message || "");
-                if (!content || !content.trim()) return;
-
-                const isFinal =
-                  item.final === true ||
-                  item.finalized === true ||
-                  item.status === "final" ||
-                  item.completion === "done";
-
-                // If same role as current turn, append text; otherwise start new turn
-                if (currentTurn && currentTurn.role === role) {
-                  currentTurn.texts.push(content.trim());
-                  // A turn is final only if ALL its items are final
-                  if (!isFinal) currentTurn.isFinal = false;
-                } else {
-                  if (currentTurn) turns.push(currentTurn);
-                  currentTurn = { role, texts: [content.trim()], isFinal };
-                }
-              });
-              if (currentTurn) turns.push(currentTurn);
-
-              // Convert turns to messages
-              const builtMessages: Message[] = turns.map((turn, idx) => ({
-                id: `turn-${idx}`,
-                type: turn.role,
-                text: turn.texts.join(" "),
-                timestamp: new Date(),
-                finalized: turn.isFinal,
-              }));
-
-              setMessages(builtMessages);
-
-              // Update live transcription for unfinished user turn
-              const lastUserTurn = [...builtMessages].reverse().find(
-                (m) => m.type === "user" && !m.finalized
-              );
-              setTranscription(lastUserTurn ? lastUserTurn.text : "");
-              return;
-            }
-
-            // Fallback: simple transcript/response payloads
-            let transcript: string | null = null;
-            let response: string | null = null;
-
-            if (data.transcript) {
-              const cleanText = extractCleanText(data.transcript);
-              transcript = cleanText.trim() || null;
-            }
-
-            if (data.response) {
-              const cleanText = extractCleanText(data.response);
-              response = cleanText.trim() || null;
-            }
-
-            if (transcript || response) {
-              setMessages((prev) => prev.filter((msg) => msg.id !== "init"));
-            }
-
-            if (transcript) {
-              const trimmed = transcript.trim();
-              setTranscription(trimmed);
-              setMessages((prev) => {
-                const updated = prev.map((msg) =>
-                  msg.type === "user" && !msg.finalized
-                    ? { ...msg, text: trimmed, finalized: true }
-                    : msg
-                );
-                if (updated.some((msg) => msg.type === "user" && msg.text === trimmed)) {
-                  return updated;
-                }
-                return [
-                  ...updated,
-                  {
-                    id: `user-${Date.now()}`,
-                    type: "user" as const,
-                    text: trimmed,
+              
+              // Add finalized messages from previous state
+              prev.filter(m => m.finalized).forEach(m => newMessages.push(m));
+              
+              // Add current user utterance if exists
+              if (userText) {
+                const existingIdx = newMessages.findIndex(m => m.type === "user" && m.text === userText);
+                if (existingIdx === -1) {
+                  newMessages.push({
+                    id: `user-turn-${userTurnId}`,
+                    type: "user",
+                    text: userText,
                     timestamp: new Date(),
-                    finalized: true,
-                  },
-                ];
-              });
-            }
-
-            if (response) {
-              const trimmed = response.trim();
-              setMessages((prev) => {
-                const updated = prev.map((msg) =>
-                  msg.type === "agent" && !msg.finalized
-                    ? { ...msg, text: trimmed, finalized: true }
-                    : msg
-                );
-                if (updated.some((msg) => msg.type === "agent" && msg.text === trimmed)) {
-                  return updated;
+                    finalized: false,
+                  });
                 }
-                return [
-                  ...updated,
-                  {
-                    id: `agent-${Date.now()}`,
-                    type: "agent" as const,
-                    text: trimmed,
+              }
+              
+              // Add current agent utterance if exists
+              if (agentText) {
+                const existingIdx = newMessages.findIndex(m => m.type === "agent" && m.text === agentText);
+                if (existingIdx === -1) {
+                  newMessages.push({
+                    id: `agent-turn-${agentTurnId}`,
+                    type: "agent",
+                    text: agentText,
                     timestamp: new Date(),
-                    finalized: true,
-                  },
-                ];
-              });
-            }
+                    finalized: false,
+                  });
+                }
+              }
+              
+              return newMessages;
+            });
+            
+            // Update transcription display
+            setTranscription(userText);
           });
 
           retellClient.on("agent_start_talking", () => {
             console.log("🎤 Agent started talking");
             setIsSpeaking(true);
+            // Finalize any pending user message when agent starts talking
+            setMessages((prev) => prev.map(m => 
+              m.type === "user" && !m.finalized ? { ...m, finalized: true } : m
+            ));
+            currentUserText = ""; // Reset for next user turn
           });
 
           retellClient.on("agent_stop_talking", () => {
             console.log("🔇 Agent stopped talking");
             setIsSpeaking(false);
-          });
-
-          // Handle interim transcript updates - show live transcription without creating bubbles
-          retellClient.on("transcript", (data: any) => {
-            // This handles interim (live) transcription
-            // Show in transcription state, not as a message bubble
-            if (data.transcript) {
-              const cleanText = extractCleanText(data.transcript);
-              if (cleanText && cleanText.trim()) {
-                setTranscription(cleanText.trim());
-              }
-            }
+            // Finalize the agent message when agent stops talking
+            setMessages((prev) => prev.map(m => 
+              m.type === "agent" && !m.finalized ? { ...m, finalized: true } : m
+            ));
+            currentAgentText = ""; // Reset for next agent turn
           });
 
           // Start the call - NO MUTING, let SDK handle everything (matches test page exactly)
