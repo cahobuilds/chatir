@@ -131,17 +131,31 @@ export default function RolesManagement() {
   };
 
   const handleEdit = async (role: Role) => {
-    setEditingRole(role);
-    const rolePermissions = await fetchRolePermissions(role.id);
-    setFormData({
-      name: role.name,
-      display_name: role.display_name,
-      description: role.description || "",
-      hierarchy_level: role.hierarchy_level,
-      category: role.category,
-      permissions: rolePermissions,
-    });
-    setIsModalOpen(true);
+    try {
+      setEditingRole(role);
+      
+      // Fetch role permissions, but don't block modal opening if it fails
+      let rolePermissions: string[] = [];
+      try {
+        rolePermissions = await fetchRolePermissions(role.id);
+      } catch (error) {
+        console.error("Failed to fetch role permissions:", error);
+        // Continue with empty permissions array
+      }
+      
+      setFormData({
+        name: role.name,
+        display_name: role.display_name,
+        description: role.description || "",
+        hierarchy_level: role.hierarchy_level,
+        category: role.category,
+        permissions: rolePermissions,
+      });
+      setIsModalOpen(true);
+    } catch (error) {
+      console.error("Failed to edit role:", error);
+      alert("Failed to load role data. Please try again.");
+    }
   };
 
   const handleDelete = async (role: Role) => {
