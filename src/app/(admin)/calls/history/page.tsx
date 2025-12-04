@@ -33,7 +33,7 @@ export default function CallHistoryPage() {
       }
 
       try {
-        // Check if user is admin (tenant_admin, super_admin, or system_admin)
+        // Check if user is admin (tenant_admin, super_admin, system_admin, organization_admin, or manager)
         const { data: userTenant } = await supabase
           .from('user_tenants')
           .select('role')
@@ -43,7 +43,7 @@ export default function CallHistoryPage() {
           .single();
 
         if (userTenant) {
-          const isAdminRole = ['tenant_admin', 'super_admin', 'system_admin'].includes(userTenant.role);
+          const isAdminRole = ['tenant_admin', 'super_admin', 'system_admin', 'organization_admin', 'manager'].includes(userTenant.role);
           setIsAdmin(isAdminRole);
           
           if (!isAdminRole) {

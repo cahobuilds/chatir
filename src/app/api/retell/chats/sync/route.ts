@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user has admin role
-    const isAdmin = ['tenant_admin', 'super_admin', 'system_admin'].includes(userTenant.role);
+    const isAdmin = ['tenant_admin', 'super_admin', 'system_admin', 'organization_admin', 'manager'].includes(userTenant.role);
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
