@@ -239,6 +239,7 @@ export async function POST(request: NextRequest) {
               .update({
                 name: retellAgent.agent_name || `Agent ${retellAgent.agent_id}`,
                 type: agentType, // Always update type in case it changed
+                description: `Synced on ${new Date().toISOString()}`,
                 configuration: {
                   ...retellAgent,
                   retell_agent_id: retellAgent.agent_id,
