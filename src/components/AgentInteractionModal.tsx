@@ -262,9 +262,10 @@ export default function AgentInteractionModal({
   const { roleInfo, loading: permissionsLoading } = usePermissions(currentOrganization?.id || null);
 
   // Check if user can view configuration (system_admin, super_admin, or organization_admin only)
+  // Note: organization_admin is normalized to tenant_admin in the database
   // Check BOTH currentOrganization.role AND roleInfo.role - if EITHER matches allowed roles, show config
   // This handles cases where role_id might point to a different role than what's displayed
-  const allowedRoles = ['system_admin', 'super_admin', 'organization_admin'];
+  const allowedRoles = ['system_admin', 'super_admin', 'organization_admin', 'tenant_admin'];
   const currentOrgRole = currentOrganization?.role;
   const roleInfoRole = roleInfo?.role;
   
