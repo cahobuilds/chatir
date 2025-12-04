@@ -246,10 +246,6 @@ export default function AgentInteractionModal({
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   
-  // Check if user can view configuration (system_admin, super_admin, or organization_admin only)
-  const canViewConfiguration = currentOrganization?.role && 
-    ['system_admin', 'super_admin', 'organization_admin'].includes(currentOrganization.role);
-
   const recognitionRef = useRef<SpeechRecognitionInterface | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const retellClientRef = useRef<RetellWebClient | null>(null);
@@ -264,6 +260,11 @@ export default function AgentInteractionModal({
 
   // Get permissions
   const { roleInfo } = usePermissions(currentOrganization?.id || null);
+
+  // Check if user can view configuration (system_admin, super_admin, or organization_admin only)
+  // Use roleInfo which properly handles both legacy role column and new role_id system
+  const canViewConfiguration = roleInfo?.role && 
+    ['system_admin', 'super_admin', 'organization_admin'].includes(roleInfo.role);
 
   // Check if user is admin
   useEffect(() => {
