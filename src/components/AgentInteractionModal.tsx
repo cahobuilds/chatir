@@ -262,27 +262,33 @@ export default function AgentInteractionModal({
   const { roleInfo, loading: permissionsLoading } = usePermissions(currentOrganization?.id || null);
 
   // Check if user can view configuration (system_admin, super_admin, or organization_admin only)
-  // Use roleInfo which properly handles both legacy role column and new role_id system
-  // Fallback to currentOrganization.role for legacy system support
-  // Only check after permissions have loaded to avoid false negatives
-  const userRole = roleInfo?.role || currentOrganization?.role;
+  // Check BOTH currentOrganization.role AND roleInfo.role - if EITHER matches allowed roles, show config
+  // This handles cases where role_id might point to a different role than what's displayed
+  const allowedRoles = ['system_admin', 'super_admin', 'organization_admin'];
+  const currentOrgRole = currentOrganization?.role;
+  const roleInfoRole = roleInfo?.role;
   
   // Debug logging (remove in production)
   useEffect(() => {
     if (isOpen) {
+      const canView = !permissionsLoading && (
+        (currentOrgRole && allowedRoles.includes(currentOrgRole)) ||
+        (roleInfoRole && allowedRoles.includes(roleInfoRole))
+      );
       console.log('[AgentInteractionModal] Debug:', {
-        userRole,
-        roleInfoRole: roleInfo?.role,
-        currentOrgRole: currentOrganization?.role,
+        currentOrgRole,
+        roleInfoRole,
         permissionsLoading,
-        canViewConfig: !permissionsLoading && userRole && 
-          ['system_admin', 'super_admin', 'organization_admin'].includes(userRole)
+        canViewConfig: canView
       });
     }
-  }, [isOpen, userRole, roleInfo?.role, currentOrganization?.role, permissionsLoading]);
+  }, [isOpen, roleInfoRole, currentOrgRole, permissionsLoading]);
   
-  const canViewConfiguration = !permissionsLoading && userRole && 
-    ['system_admin', 'super_admin', 'organization_admin'].includes(userRole);
+  // Show configuration if EITHER role matches allowed roles
+  const canViewConfiguration = !permissionsLoading && (
+    (currentOrgRole && allowedRoles.includes(currentOrgRole)) ||
+    (roleInfoRole && allowedRoles.includes(roleInfoRole))
+  );
 
   // Check if user is admin
   useEffect(() => {
