@@ -32,7 +32,7 @@ export async function DELETE(
       .select('role')
       .eq('user_id', user.id)
       .eq('tenant_id', assignment.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'system_admin'])
+      .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'system_admin', 'manager'])
       .single();
 
     if (!userTenant) {

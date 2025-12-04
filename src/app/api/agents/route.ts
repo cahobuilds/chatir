@@ -80,9 +80,9 @@ export async function GET(request: NextRequest) {
     
     console.log(`[Agents API] User ${user.id} has access to tenants:`, tenantIds, 'with roles:', userRoles);
     
-    // Check if user is admin (tenant_admin, super_admin, organization_admin)
+    // Check if user is admin (tenant_admin, super_admin, organization_admin, manager)
     const isAdmin = userRoles.some(role => 
-      ['tenant_admin', 'super_admin', 'organization_admin'].includes(role)
+      ['tenant_admin', 'super_admin', 'organization_admin', 'manager'].includes(role)
     );
 
     let agentsQuery = supabase
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
         .select('role')
         .eq('user_id', user.id)
         .eq('tenant_id', tenant_id)
-        .in('role', ['tenant_admin', 'super_admin', 'agent'])
+        .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'manager', 'agent'])
         .single();
 
       if (!userTenant) {
