@@ -244,6 +244,7 @@ export default function AgentInteractionModal({
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [editedPrompt, setEditedPrompt] = useState("");
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Check if user can view configuration (system_admin, super_admin, or organization_admin only)
   const canViewConfiguration = currentOrganization?.role && 
@@ -269,7 +270,6 @@ export default function AgentInteractionModal({
     if (roleInfo) {
       const adminRoles = ['organization_admin', 'tenant_admin', 'super_admin', 'system_admin'];
       setIsAdmin(adminRoles.includes(roleInfo.role));
-      setUserRole(roleInfo.role);
     }
   }, [roleInfo]);
 
