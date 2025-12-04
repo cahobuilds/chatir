@@ -259,12 +259,30 @@ export default function AgentInteractionModal({
   }, [messages]);
 
   // Get permissions
-  const { roleInfo } = usePermissions(currentOrganization?.id || null);
+  const { roleInfo, loading: permissionsLoading } = usePermissions(currentOrganization?.id || null);
 
   // Check if user can view configuration (system_admin, super_admin, or organization_admin only)
   // Use roleInfo which properly handles both legacy role column and new role_id system
-  const canViewConfiguration = roleInfo?.role && 
-    ['system_admin', 'super_admin', 'organization_admin'].includes(roleInfo.role);
+  // Fallback to currentOrganization.role for legacy system support
+  // Only check after permissions have loaded to avoid false negatives
+  const userRole = roleInfo?.role || currentOrganization?.role;
+  
+  // Debug logging (remove in production)
+  useEffect(() => {
+    if (isOpen) {
+      console.log('[AgentInteractionModal] Debug:', {
+        userRole,
+        roleInfoRole: roleInfo?.role,
+        currentOrgRole: currentOrganization?.role,
+        permissionsLoading,
+        canViewConfig: !permissionsLoading && userRole && 
+          ['system_admin', 'super_admin', 'organization_admin'].includes(userRole)
+      });
+    }
+  }, [isOpen, userRole, roleInfo?.role, currentOrganization?.role, permissionsLoading]);
+  
+  const canViewConfiguration = !permissionsLoading && userRole && 
+    ['system_admin', 'super_admin', 'organization_admin'].includes(userRole);
 
   // Check if user is admin
   useEffect(() => {
