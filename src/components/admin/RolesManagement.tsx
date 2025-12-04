@@ -368,7 +368,6 @@ export default function RolesManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleEdit(role)}
-                            disabled={role.is_system_role}
                           >
                             Edit
                           </Button>

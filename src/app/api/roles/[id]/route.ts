@@ -98,16 +98,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden: System admin only' }, { status: 403 });
     }
 
-    // Check if role is system role
-    const { data: role } = await supabase
-      .from('roles')
-      .select('is_system_role')
-      .eq('id', id)
-      .single();
-
-    if (role?.is_system_role) {
-      return NextResponse.json({ error: 'Cannot modify system roles' }, { status: 400 });
-    }
+    // System admin can edit all roles, including system roles
+    // Only prevent deletion of system roles (handled in DELETE endpoint)
 
     const body = await request.json();
     const { display_name, description, hierarchy_level, category, is_active, permissions } = body;
