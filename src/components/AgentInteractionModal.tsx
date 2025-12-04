@@ -224,6 +224,7 @@ export default function AgentInteractionModal({
   isOpen,
   onClose,
 }: AgentInteractionModalProps) {
+  const { currentOrganization } = useOrganization();
   const [activeTab, setActiveTab] = useState<"voice" | "chat">("voice");
   const [isRecording, setIsRecording] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -243,8 +244,10 @@ export default function AgentInteractionModal({
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [editedPrompt, setEditedPrompt] = useState("");
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  
+  // Check if user can view configuration (system_admin, super_admin, or organization_admin only)
+  const canViewConfiguration = currentOrganization?.role && 
+    ['system_admin', 'super_admin', 'organization_admin'].includes(currentOrganization.role);
 
   const recognitionRef = useRef<SpeechRecognitionInterface | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -258,14 +261,13 @@ export default function AgentInteractionModal({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Get organization context and permissions
-  const { currentOrganization } = useOrganization();
+  // Get permissions
   const { roleInfo } = usePermissions(currentOrganization?.id || null);
 
   // Check if user is admin
   useEffect(() => {
     if (roleInfo) {
-      const adminRoles = ['organization_admin', 'tenant_admin', 'super_admin'];
+      const adminRoles = ['organization_admin', 'tenant_admin', 'super_admin', 'system_admin'];
       setIsAdmin(adminRoles.includes(roleInfo.role));
       setUserRole(roleInfo.role);
     }
@@ -965,8 +967,8 @@ export default function AgentInteractionModal({
               </div>
             </div>
 
-            {/* Configuration Details */}
-            {agentConfig?.configuration && (
+            {/* Configuration Details - Only visible to system_admin, super_admin, and organization_admin */}
+            {canViewConfiguration && agentConfig?.configuration && (
               <div className="mb-6">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
                   Configuration
