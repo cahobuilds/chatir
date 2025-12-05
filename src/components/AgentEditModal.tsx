@@ -76,12 +76,10 @@ export default function AgentEditModal({
   const [interruptionSensitivity, setInterruptionSensitivity] = useState(0.5);
   const [language, setLanguage] = useState("en-US");
 
-  // LLM Configuration State
-  const [llmProvider, setLlmProvider] = useState("openai");
-  const [llmModel, setLlmModel] = useState("gpt-4");
+  // LLM Configuration State (Retell API compatible)
+  const [llmModel, setLlmModel] = useState("gpt-4.1");
   const [llmTemperature, setLlmTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(1000);
-  const [enableFunctionCalling, setEnableFunctionCalling] = useState(true);
+  const [toolCallStrictMode, setToolCallStrictMode] = useState(false);
   const [dynamicVariables, setDynamicVariables] = useState<string[]>([]);
 
   // Prompt State
@@ -95,17 +93,26 @@ export default function AgentEditModal({
     { value: "david-standard", label: "David (Standard)", gender: "Male" },
   ];
 
-  const llmProviders = [
-    { value: "openai", label: "OpenAI" },
-    { value: "anthropic", label: "Anthropic" },
-    { value: "google", label: "Google" },
+  // Retell AI supported models (from LlmUpdateParams)
+  const retellModels = [
+    { value: "gpt-5", label: "GPT-5" },
+    { value: "gpt-5-mini", label: "GPT-5 Mini" },
+    { value: "gpt-5-nano", label: "GPT-5 Nano" },
+    { value: "gpt-4o", label: "GPT-4o" },
+    { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+    { value: "gpt-4.1", label: "GPT-4.1 (Default)" },
+    { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+    { value: "gpt-4.1-nano", label: "GPT-4.1 Nano" },
+    { value: "claude-3.7-sonnet", label: "Claude 3.7 Sonnet" },
+    { value: "claude-3.5-haiku", label: "Claude 3.5 Haiku" },
+    { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+    { value: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite" },
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+    { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
   ];
-
-  const llmModels: Record<string, string[]> = {
-    openai: ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"],
-    anthropic: ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku"],
-    google: ["gemini-pro", "gemini-pro-vision"],
-  };
+  
+  // Models that support tool_call_strict_mode
+  const strictModeSupportedModels = ["gpt-4o", "gpt-4o-mini"];
 
   // Fetch agent details from API when modal opens
   useEffect(() => {
@@ -152,14 +159,21 @@ export default function AgentEditModal({
             setInterruptionSensitivity(voiceConfig.interruption_sensitivity ?? 0.5);
             setLanguage(voiceConfig.language || "en-US");
 
-            // LLM Configuration
+            // LLM Configuration (Retell API compatible)
             const llmConfig = config.llm_config || config.llm || {};
-            setLlmProvider(llmConfig.provider || "openai");
-            setLlmModel(llmConfig.model || "gpt-4");
-            setLlmTemperature(llmConfig.temperature ?? 0.7);
-            setMaxTokens(llmConfig.max_tokens ?? 1000);
-            setEnableFunctionCalling(llmConfig.enable_function_calling !== false);
-            setDynamicVariables(config.dynamic_variables || []);
+            // Use Retell model names directly (no provider concept)
+            setLlmModel(llmConfig.model || "gpt-4.1");
+            // Prefer model_temperature (Retell API field) over temperature (legacy)
+            setLlmTemperature(llmConfig.model_temperature ?? llmConfig.temperature ?? 0.7);
+            setToolCallStrictMode(llmConfig.tool_call_strict_mode ?? false);
+            // Handle dynamic variables - can be array or object
+            if (Array.isArray(config.dynamic_variables)) {
+              setDynamicVariables(config.dynamic_variables);
+            } else if (config.default_dynamic_variables && typeof config.default_dynamic_variables === 'object') {
+              setDynamicVariables(Object.keys(config.default_dynamic_variables));
+            } else {
+              setDynamicVariables([]);
+            }
 
             // Prompt - check multiple possible locations
             // Agents store prompt in different places:
@@ -215,15 +229,13 @@ export default function AgentEditModal({
     setIsSubmitting(true);
 
     try {
-      // Build configuration object
+      // Build configuration object (Retell API compatible)
       const configuration = {
         prompt: prompt,
         llm: {
-          provider: llmProvider,
           model: llmModel,
-          temperature: llmTemperature,
-          max_tokens: maxTokens,
-          enable_function_calling: enableFunctionCalling,
+          model_temperature: llmTemperature, // Use model_temperature for Retell API
+          tool_call_strict_mode: toolCallStrictMode,
         },
         voice: {
           voice_id: voiceId,
@@ -234,11 +246,14 @@ export default function AgentEditModal({
           interruption_sensitivity: interruptionSensitivity,
           language: language,
         },
-        dynamic_variables: dynamicVariables,
+        default_dynamic_variables: dynamicVariables.reduce((acc, key) => {
+          acc[key] = `{${key}}`; // Format as key-value pairs for Retell
+          return acc;
+        }, {} as Record<string, string>),
       };
 
-      // Update agent via PATCH endpoint
-      const response = await fetch(`/api/agents/${agent.id}`, {
+      // Update agent basic info via PATCH endpoint
+      const agentResponse = await fetch(`/api/agents/${agent.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -250,16 +265,48 @@ export default function AgentEditModal({
         }),
       });
 
-      if (response.ok) {
-        setSuccess("Agent updated successfully!");
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 1000);
-      } else {
-        const errorData = await response.json();
+      if (!agentResponse.ok) {
+        const errorData = await agentResponse.json();
         setError(errorData.error || "Failed to update agent");
+        setIsSubmitting(false);
+        return;
       }
+
+      // If LLM tab is active and we have LLM config changes, sync to Retell
+      if (activeTab === "llm" && agent.retell_agent_id) {
+        try {
+          const llmConfigResponse = await fetch(`/api/agents/${agent.id}/llm-config`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: llmModel,
+              model_temperature: llmTemperature,
+              tool_call_strict_mode: toolCallStrictMode,
+              general_prompt: prompt,
+            }),
+          });
+
+          if (llmConfigResponse.ok) {
+            const llmData = await llmConfigResponse.json();
+            setSuccess(llmData.message || "Agent and LLM configuration updated successfully!");
+          } else {
+            const llmErrorData = await llmConfigResponse.json();
+            // Show warning but don't fail - agent was updated successfully
+            setSuccess(`Agent updated successfully. ${llmErrorData.warning || 'LLM config may not have synced to Retell.'}`);
+          }
+        } catch (llmError: any) {
+          console.error("Failed to update LLM config:", llmError);
+          // Don't fail - agent was updated successfully
+          setSuccess("Agent updated successfully. LLM config sync may have failed.");
+        }
+      } else {
+        setSuccess("Agent updated successfully!");
+      }
+
+      setTimeout(() => {
+        onSuccess();
+        onClose();
+      }, 1000);
     } catch (error: any) {
       console.error("Failed to update agent:", error);
       setError(error.message || "Failed to update agent");
@@ -584,39 +631,27 @@ export default function AgentEditModal({
               {activeTab === "llm" && (
                 <div className="space-y-5">
                   <div>
-                  <Label htmlFor="llm-provider">LLM Provider</Label>
-                  <Select
-                    id="llm-provider"
-                    value={llmProvider}
-                    onChange={(value) => {
-                      setLlmProvider(value);
-                      // Reset model to first option for new provider
-                      const models = llmModels[value] || [];
-                      if (models.length > 0) {
-                        setLlmModel(models[0]);
-                      }
-                    }}
-                    disabled={isSubmitting}
-                    options={llmProviders.map((p) => ({
-                      value: p.value,
-                      label: p.label,
-                    }))}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="llm-model">Model Version</Label>
-                  <Select
-                    id="llm-model"
-                    value={llmModel}
-                    onChange={(value) => setLlmModel(value)}
-                    disabled={isSubmitting}
-                    options={(llmModels[llmProvider] || []).map((m) => ({
-                      value: m,
-                      label: m,
-                    }))}
-                  />
-                </div>
+                    <Label htmlFor="llm-model">Model</Label>
+                    <Select
+                      id="llm-model"
+                      value={llmModel}
+                      onChange={(value) => {
+                        setLlmModel(value);
+                        // Reset tool_call_strict_mode if model doesn't support it
+                        if (!strictModeSupportedModels.includes(value)) {
+                          setToolCallStrictMode(false);
+                        }
+                      }}
+                      disabled={isSubmitting}
+                      options={retellModels.map((m) => ({
+                        value: m.value,
+                        label: m.label,
+                      }))}
+                    />
+                    <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      Select the underlying text LLM. Default is GPT-4.1.
+                    </p>
+                  </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -631,7 +666,7 @@ export default function AgentEditModal({
                     type="range"
                     id="llm-temperature"
                     min="0"
-                    max="2"
+                    max="1"
                     step="0.1"
                     value={llmTemperature}
                     onChange={(e) => setLlmTemperature(parseFloat(e.target.value))}
@@ -639,50 +674,29 @@ export default function AgentEditModal({
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
                   />
                   <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    Controls randomness (0 = deterministic, 2 = very creative)
-                  </p>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label htmlFor="max-tokens" className="mb-0">
-                      Max Response Tokens
-                    </Label>
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {maxTokens}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    id="max-tokens"
-                    min="100"
-                    max="4000"
-                    step="100"
-                    value={maxTokens}
-                    onChange={(e) => setMaxTokens(parseInt(e.target.value))}
-                    disabled={isSubmitting}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
-                  />
-                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    Maximum length of AI responses
+                    Controls randomness (0 = deterministic, 1 = very creative). Lower values recommended for tool calling.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    id="enable-function-calling"
-                    checked={enableFunctionCalling}
-                    onChange={(e) => setEnableFunctionCalling(e.target.checked)}
-                    disabled={isSubmitting}
-                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    id="tool-call-strict-mode"
+                    checked={toolCallStrictMode}
+                    onChange={(e) => setToolCallStrictMode(e.target.checked)}
+                    disabled={isSubmitting || !strictModeSupportedModels.includes(llmModel)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                  <Label htmlFor="enable-function-calling" className="mb-0">
-                    Enable Function Calling
-                  </Label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Allow AI to call external APIs and functions
-                  </p>
+                  <div className="flex-1">
+                    <Label htmlFor="tool-call-strict-mode" className="mb-0">
+                      Tool Call Strict Mode
+                    </Label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {strictModeSupportedModels.includes(llmModel) 
+                        ? "Use structured output to ensure tool call arguments follow JSON schema (GPT-4o models only)"
+                        : "Only available for GPT-4o and GPT-4o Mini models"}
+                    </p>
+                  </div>
                 </div>
 
                 <div>
