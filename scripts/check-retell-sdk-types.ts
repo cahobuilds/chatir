@@ -115,10 +115,10 @@ async function checkRetellSDKTypes() {
             if (content.includes('LLM') || content.includes('llm')) {
               console.log(`\n   📄 ${path.basename(file)}:`);
               
-              // Extract type definitions
-              const updateMatch = content.match(/interface\s+LLMUpdateParams\s*\{([^}]+)\}/s);
-              const createMatch = content.match(/interface\s+LLMCreateParams\s*\{([^}]+)\}/s);
-              const typeMatch = content.match(/type\s+LLMUpdateParams\s*=\s*\{([^}]+)\}/s);
+              // Extract type definitions (using [\s\S] instead of . with 's' flag for ES2017 compatibility)
+              const updateMatch = content.match(/interface\s+LLMUpdateParams\s*\{([\s\S]+?)\}/);
+              const createMatch = content.match(/interface\s+LLMCreateParams\s*\{([\s\S]+?)\}/);
+              const typeMatch = content.match(/type\s+LLMUpdateParams\s*=\s*\{([\s\S]+?)\}/);
               
               if (updateMatch) {
                 console.log('   ✅ Found LLMUpdateParams interface:');
