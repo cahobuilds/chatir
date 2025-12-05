@@ -137,9 +137,10 @@ export async function PATCH(
           // Always update agent name (use updated name or keep current)
           retellUpdatePayload.agent_name = name !== undefined ? name : updatedAgent.name;
           
-          // Update voice configuration if present
-          if (voiceConfig.voice_id) {
-            retellUpdatePayload.voice_id = voiceConfig.voice_id;
+          // Update voice configuration - check both nested and top-level locations
+          const voiceIdToSync = voiceConfig.voice_id || config.voice_id;
+          if (voiceIdToSync) {
+            retellUpdatePayload.voice_id = voiceIdToSync;
           }
           
           // Update LLM websocket URL if present (for custom LLM)

@@ -150,14 +150,16 @@ export default function AgentEditModal({
             setIsActive(agentData.is_active !== false);
 
             // Voice Configuration
+            // Read from both top-level (from sync) and nested (legacy) locations for backward compatibility
             const voiceConfig = config.voice || {};
-            setVoiceId(voiceConfig.voice_id || "sarah-neural");
+            const voiceIdFromConfig = config.voice_id || voiceConfig.voice_id || "sarah-neural";
+            setVoiceId(voiceIdFromConfig);
             setVoiceTemperature(voiceConfig.voice_temperature ?? 0.7);
             setVoiceSpeed(voiceConfig.voice_speed ?? 1.0);
             setVolume(voiceConfig.volume ?? 80);
             setResponsiveness(voiceConfig.responsiveness ?? 0.8);
             setInterruptionSensitivity(voiceConfig.interruption_sensitivity ?? 0.5);
-            setLanguage(voiceConfig.language || "en-US");
+            setLanguage(config.language || voiceConfig.language || "en-US");
 
             // LLM Configuration (Retell API compatible)
             const llmConfig = config.llm_config || config.llm || {};
@@ -194,8 +196,33 @@ export default function AgentEditModal({
             console.log('Config structure:', { config, llmConfig, promptValue });
             setPrompt(promptValue);
 
-            // If agent is linked to Retell, fetch LLM config from Retell API
+            // If agent is linked to Retell, fetch current config from Retell API (source of truth)
             if (agentData.retell_agent_id) {
+              try {
+                // Fetch Retell agent details (includes voice_id and other agent-level config)
+                const retellAgentResponse = await fetch(`/api/retell/agents/${agent.id}`);
+                if (retellAgentResponse.ok) {
+                  const retellAgentData = await retellAgentResponse.json();
+                  const retellAgent = retellAgentData.retell_agent;
+                  if (retellAgent) {
+                    // Override voice_id with Retell's current value (source of truth)
+                    if (retellAgent.voice_id) {
+                      setVoiceId(retellAgent.voice_id);
+                    }
+                    // Override language with Retell's current value
+                    if (retellAgent.language) {
+                      setLanguage(retellAgent.language);
+                    }
+                  }
+                } else {
+                  console.warn("Failed to fetch Retell agent config:", await retellAgentResponse.json());
+                }
+              } catch (retellError: any) {
+                // Non-critical error - use local config as fallback
+                console.warn("Error fetching Retell agent config:", retellError);
+              }
+
+              // Fetch LLM config from Retell API (if agent uses Retell LLM)
               try {
                 const llmConfigResponse = await fetch(`/api/agents/${agent.id}/llm-config`);
                 if (llmConfigResponse.ok) {
@@ -218,9 +245,9 @@ export default function AgentEditModal({
                   // Agent might not use Retell LLM, or error fetching - use local config
                   console.warn("Failed to fetch Retell LLM config:", await llmConfigResponse.json());
                 }
-              } catch (retellError: any) {
+              } catch (llmError: any) {
                 // Non-critical error - use local config as fallback
-                console.warn("Error fetching Retell LLM config:", retellError);
+                console.warn("Error fetching Retell LLM config:", llmError);
               }
             }
           } else {
@@ -260,15 +287,18 @@ export default function AgentEditModal({
 
     try {
       // Build configuration object (Retell API compatible)
+      // Store voice_id at both top-level (for Retell sync compatibility) and nested (for UI compatibility)
       const configuration = {
         prompt: prompt,
+        voice_id: voiceId, // Top-level for Retell sync compatibility
+        language: language, // Top-level for Retell sync compatibility
         llm: {
           model: llmModel,
           model_temperature: llmTemperature, // Use model_temperature for Retell API
           tool_call_strict_mode: toolCallStrictMode,
         },
         voice: {
-          voice_id: voiceId,
+          voice_id: voiceId, // Nested for UI compatibility
           voice_temperature: voiceTemperature,
           voice_speed: voiceSpeed,
           volume: volume,
