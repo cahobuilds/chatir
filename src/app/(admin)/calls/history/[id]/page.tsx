@@ -304,12 +304,50 @@ export default function CallDetailPage() {
                 </div>
               </div>
 
+              {/* Summary Section */}
+              {interaction.retell_call_data?.call_analysis?.summary && (
+                <div className="mt-6">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 block">Summary</label>
+                  <div className="mt-1 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+                      {interaction.retell_call_data.call_analysis.summary}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Metadata Section - Formatted like other fields */}
               {interaction.metadata && Object.keys(interaction.metadata).length > 0 && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Metadata</label>
-                  <pre className="mt-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs overflow-auto">
-                    {JSON.stringify(interaction.metadata, null, 2)}
-                  </pre>
+                <div className="mt-6">
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4">Metadata</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {Object.entries(interaction.metadata).map(([key, value]) => {
+                      // Format the key to be more readable
+                      const formattedKey = key
+                        .split('_')
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(' ');
+                      
+                      // Format the value
+                      let formattedValue: string;
+                      if (value === null || value === undefined) {
+                        formattedValue = "N/A";
+                      } else if (typeof value === 'object') {
+                        formattedValue = JSON.stringify(value);
+                      } else {
+                        formattedValue = String(value);
+                      }
+
+                      return (
+                        <div key={key}>
+                          <label className="text-sm font-medium text-gray-500 dark:text-gray-400">{formattedKey}</label>
+                          <p className="mt-1 text-sm text-gray-900 dark:text-white">
+                            {formattedValue}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
