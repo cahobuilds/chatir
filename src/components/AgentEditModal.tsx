@@ -228,7 +228,10 @@ export default function AgentEditModal({
             setVoiceId(voiceIdFromConfig);
             setVoiceTemperature(voiceConfig.voice_temperature ?? 0.7);
             setVoiceSpeed(voiceConfig.voice_speed ?? 1.0);
-            setVolume(voiceConfig.volume ?? 80);
+            // Handle volume: if stored in Retell format (0-2), convert to percentage (0-100)
+            // Otherwise assume it's already in percentage format
+            const volumeValue = voiceConfig.volume ?? config.volume ?? 80;
+            setVolume(volumeValue > 1 ? Math.round(volumeValue * 100) : volumeValue);
             setResponsiveness(voiceConfig.responsiveness ?? 0.8);
             setInterruptionSensitivity(voiceConfig.interruption_sensitivity ?? 0.5);
             setLanguage(config.language || voiceConfig.language || "en-US");
@@ -286,6 +289,25 @@ export default function AgentEditModal({
                     // Override language with Retell's current value
                     if (retellAgent.language) {
                       setLanguage(retellAgent.language);
+                    }
+                    // Override voice configuration fields with Retell's current values (source of truth)
+                    // Retell API returns these values directly
+                    if (retellAgent.voice_temperature !== undefined) {
+                      setVoiceTemperature(retellAgent.voice_temperature);
+                    }
+                    if (retellAgent.voice_speed !== undefined) {
+                      setVoiceSpeed(retellAgent.voice_speed);
+                    }
+                    if (retellAgent.volume !== undefined) {
+                      // Retell uses 0-2 scale (1.0 = 100%), our UI uses 0-100 scale
+                      // Convert Retell value to percentage: multiply by 100
+                      setVolume(Math.round(retellAgent.volume * 100));
+                    }
+                    if (retellAgent.responsiveness !== undefined) {
+                      setResponsiveness(retellAgent.responsiveness);
+                    }
+                    if (retellAgent.interruption_sensitivity !== undefined) {
+                      setInterruptionSensitivity(retellAgent.interruption_sensitivity);
                     }
                   }
                 } else {

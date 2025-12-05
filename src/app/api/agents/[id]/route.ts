@@ -152,7 +152,10 @@ export async function PATCH(
             retellUpdatePayload.voice_speed = voiceConfig.voice_speed ?? config.voice_speed;
           }
           if (voiceConfig.volume !== undefined || config.volume !== undefined) {
-            retellUpdatePayload.volume = voiceConfig.volume ?? config.volume;
+            // Handle volume conversion: UI stores as 0-100 (percentage), Retell expects 0-2 scale
+            // If volume is > 1, it's likely in percentage format (0-100), convert to Retell scale (0-2)
+            const volumeValue = voiceConfig.volume ?? config.volume;
+            retellUpdatePayload.volume = volumeValue > 1 ? volumeValue / 100 : volumeValue;
           }
           if (voiceConfig.responsiveness !== undefined || config.responsiveness !== undefined) {
             retellUpdatePayload.responsiveness = voiceConfig.responsiveness ?? config.responsiveness;
