@@ -1,8 +1,93 @@
+// GET /api/agents/[id]/llm-config - Get Retell LLM configuration for an agent
 // PATCH /api/agents/[id]/llm-config - Update LLM configuration and sync to Retell
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { getResellerRetellConfig } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
+
+// GET endpoint to fetch Retell LLM configuration
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get agent and verify access
+    const { data: agent, error: agentError } = await supabase
+      .from('agents')
+      .select('tenant_id, retell_agent_id, configuration')
+      .eq('id', id)
+      .single();
+
+    if (agentError || !agent) {
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
+    }
+
+    // Verify user has access
+    const { data: userTenant } = await supabase
+      .from('user_tenants')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('tenant_id', agent.tenant_id)
+      .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'system_admin', 'manager'])
+      .single();
+
+    if (!userTenant) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (!agent.retell_agent_id) {
+      return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+    }
+
+    const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
+    if (!retellApiKey) {
+      return NextResponse.json(
+        { error: 'Retell AI not configured for this organization\'s reseller.' },
+        { status: 400 }
+      );
+    }
+
+    const retellClient = createRetellClient(retellApiKey, {
+      timeout: 30 * 1000,
+      maxRetries: 3,
+    });
+
+    const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
+    const retellAgentData = retellAgent as any;
+
+    if (retellAgentData.response_engine?.type === 'retell-llm' && 'llm_id' in retellAgentData.response_engine) {
+      const llmId = retellAgentData.response_engine.llm_id;
+      const llm = await retellClient.llm.retrieve(llmId);
+      const llmData = llm as any;
+      
+      return NextResponse.json({ 
+        llm: {
+          model: llmData.model,
+          model_temperature: llmData.model_temperature,
+          tool_call_strict_mode: llmData.tool_call_strict_mode,
+          general_prompt: llmData.general_prompt,
+          default_dynamic_variables: llmData.default_dynamic_variables || {},
+        }
+      });
+    } else {
+      return NextResponse.json({ error: 'Agent uses custom LLM or no LLM configured' }, { status: 400 });
+    }
+  } catch (error: any) {
+    console.error('Retell LLM retrieval error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to retrieve Retell LLM configuration' },
+      { status: 500 }
+    );
+  }
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -42,7 +127,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { model, model_temperature, tool_call_strict_mode, general_prompt } = body;
+    const { model, model_temperature, tool_call_strict_mode, general_prompt, default_dynamic_variables } = body;
 
     // Update local configuration
     const currentConfig = typeof agent.configuration === 'string' 
@@ -59,6 +144,7 @@ export async function PATCH(
         tool_call_strict_mode: tool_call_strict_mode !== undefined ? tool_call_strict_mode : currentConfig.llm?.tool_call_strict_mode,
       },
       prompt: general_prompt !== undefined ? general_prompt : currentConfig.prompt,
+      default_dynamic_variables: default_dynamic_variables !== undefined ? default_dynamic_variables : currentConfig.default_dynamic_variables,
     };
 
     // Update agent in database
@@ -113,6 +199,9 @@ export async function PATCH(
             }
             if (general_prompt !== undefined) {
               llmUpdatePayload.general_prompt = general_prompt || null;
+            }
+            if (default_dynamic_variables !== undefined) {
+              llmUpdatePayload.default_dynamic_variables = default_dynamic_variables || {};
             }
 
             // Update Retell LLM

@@ -193,6 +193,36 @@ export default function AgentEditModal({
             
             console.log('Config structure:', { config, llmConfig, promptValue });
             setPrompt(promptValue);
+
+            // If agent is linked to Retell, fetch LLM config from Retell API
+            if (agentData.retell_agent_id) {
+              try {
+                const llmConfigResponse = await fetch(`/api/agents/${agent.id}/llm-config`);
+                if (llmConfigResponse.ok) {
+                  const retellLlmData = await llmConfigResponse.json();
+                  const retellLlm = retellLlmData.llm;
+                  if (retellLlm) {
+                    // Override local config with Retell config (source of truth)
+                    setLlmModel(retellLlm.model || llmModel);
+                    setLlmTemperature(retellLlm.model_temperature ?? llmTemperature);
+                    setToolCallStrictMode(retellLlm.tool_call_strict_mode ?? false);
+                    if (retellLlm.general_prompt) {
+                      setPrompt(retellLlm.general_prompt);
+                    }
+                    // Handle dynamic variables from Retell
+                    if (retellLlm.default_dynamic_variables && typeof retellLlm.default_dynamic_variables === 'object') {
+                      setDynamicVariables(Object.keys(retellLlm.default_dynamic_variables));
+                    }
+                  }
+                } else {
+                  // Agent might not use Retell LLM, or error fetching - use local config
+                  console.warn("Failed to fetch Retell LLM config:", await llmConfigResponse.json());
+                }
+              } catch (retellError: any) {
+                // Non-critical error - use local config as fallback
+                console.warn("Error fetching Retell LLM config:", retellError);
+              }
+            }
           } else {
             const errorData = await response.json();
             setError(errorData.error || "Failed to load agent data");
@@ -272,8 +302,8 @@ export default function AgentEditModal({
         return;
       }
 
-      // If LLM tab is active and we have LLM config changes, sync to Retell
-      if (activeTab === "llm" && agent.retell_agent_id) {
+      // Always sync LLM config to Retell if agent is linked (regardless of active tab)
+      if (agent.retell_agent_id) {
         try {
           const llmConfigResponse = await fetch(`/api/agents/${agent.id}/llm-config`, {
             method: "PATCH",
@@ -283,6 +313,10 @@ export default function AgentEditModal({
               model_temperature: llmTemperature,
               tool_call_strict_mode: toolCallStrictMode,
               general_prompt: prompt,
+              default_dynamic_variables: dynamicVariables.reduce((acc, key) => {
+                acc[key] = `{${key}}`; // Format as key-value pairs for Retell
+                return acc;
+              }, {} as Record<string, string>),
             }),
           });
 
@@ -292,7 +326,7 @@ export default function AgentEditModal({
           } else {
             const llmErrorData = await llmConfigResponse.json();
             // Show warning but don't fail - agent was updated successfully
-            setSuccess(`Agent updated successfully. ${llmErrorData.warning || 'LLM config may not have synced to Retell.'}`);
+            setSuccess(`Agent updated successfully. ${llmErrorData.warning || llmErrorData.error || 'LLM config may not have synced to Retell.'}`);
           }
         } catch (llmError: any) {
           console.error("Failed to update LLM config:", llmError);
