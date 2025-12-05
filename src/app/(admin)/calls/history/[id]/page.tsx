@@ -61,6 +61,7 @@ export default function CallDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("details");
+  const [callSummary, setCallSummary] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -83,6 +84,20 @@ export default function CallDetailPage() {
 
         const data = await response.json();
         setInteraction(data.interaction);
+
+        // Fetch analytics to get summary if available
+        try {
+          const analyticsResponse = await fetch(`/api/interactions/${params.id}/analytics`);
+          if (analyticsResponse.ok) {
+            const analyticsData = await analyticsResponse.json();
+            if (analyticsData.analytics?.quality?.summary) {
+              setCallSummary(analyticsData.analytics.quality.summary);
+            }
+          }
+        } catch (analyticsErr) {
+          // Non-critical error - summary might not be available
+          console.warn("Could not fetch call summary:", analyticsErr);
+        }
       } catch (err: any) {
         console.error("Error fetching interaction:", err);
         setError(err.message || "Failed to load call details");
@@ -305,12 +320,12 @@ export default function CallDetailPage() {
               </div>
 
               {/* Summary Section */}
-              {interaction.retell_call_data?.call_analysis?.summary && (
+              {(callSummary || interaction.retell_call_data?.call_analysis?.summary) && (
                 <div className="mt-6">
                   <label className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 block">Summary</label>
                   <div className="mt-1 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                     <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
-                      {interaction.retell_call_data.call_analysis.summary}
+                      {callSummary || interaction.retell_call_data?.call_analysis?.summary}
                     </p>
                   </div>
                 </div>
