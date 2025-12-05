@@ -85,18 +85,48 @@ export default function CallDetailPage() {
         const data = await response.json();
         setInteraction(data.interaction);
 
-        // Fetch analytics to get summary if available
-        try {
-          const analyticsResponse = await fetch(`/api/interactions/${params.id}/analytics`);
-          if (analyticsResponse.ok) {
-            const analyticsData = await analyticsResponse.json();
-            if (analyticsData.analytics?.quality?.summary) {
-              setCallSummary(analyticsData.analytics.quality.summary);
-            }
+        // Debug: Log the full retell_call_data structure
+        console.log('[CallDetails] Full retell_call_data:', JSON.stringify(data.interaction?.retell_call_data, null, 2));
+        
+        let foundSummary: string | null = null;
+        
+        // Check if summary is in retell_call_data directly (from Retell API)
+        if (data.interaction?.retell_call_data?.call_analysis?.summary) {
+          console.log('[CallDetails] Found summary in retell_call_data.call_analysis:', data.interaction.retell_call_data.call_analysis.summary);
+          foundSummary = data.interaction.retell_call_data.call_analysis.summary;
+        } else {
+          console.log('[CallDetails] No summary in retell_call_data.call_analysis');
+          // Try alternative paths
+          if (data.interaction?.retell_call_data?.summary) {
+            console.log('[CallDetails] Found summary at retell_call_data.summary:', data.interaction.retell_call_data.summary);
+            foundSummary = data.interaction.retell_call_data.summary;
           }
-        } catch (analyticsErr) {
-          // Non-critical error - summary might not be available
-          console.warn("Could not fetch call summary:", analyticsErr);
+        }
+
+        // If summary found, set it
+        if (foundSummary) {
+          setCallSummary(foundSummary);
+        } else {
+          // Fetch analytics to get summary if not already found
+          try {
+            const analyticsResponse = await fetch(`/api/interactions/${params.id}/analytics`);
+            if (analyticsResponse.ok) {
+              const analyticsData = await analyticsResponse.json();
+              console.log('[CallDetails] Analytics data:', analyticsData);
+              if (analyticsData.analytics?.quality?.summary) {
+                console.log('[CallDetails] Found summary in analytics:', analyticsData.analytics.quality.summary);
+                setCallSummary(analyticsData.analytics.quality.summary);
+              } else {
+                console.log('[CallDetails] No summary found in analytics.quality');
+              }
+            } else {
+              const errorText = await analyticsResponse.text();
+              console.warn('[CallDetails] Analytics API returned error:', analyticsResponse.status, errorText);
+            }
+          } catch (analyticsErr) {
+            // Non-critical error - summary might not be available
+            console.warn("[CallDetails] Could not fetch call summary:", analyticsErr);
+          }
         }
       } catch (err: any) {
         console.error("Error fetching interaction:", err);
@@ -328,6 +358,14 @@ export default function CallDetailPage() {
                       {callSummary || interaction.retell_call_data?.call_analysis?.summary}
                     </p>
                   </div>
+                </div>
+              )}
+              
+              {/* Debug: Show if summary is missing */}
+              {!callSummary && !interaction.retell_call_data?.call_analysis?.summary && (
+                <div className="mt-6 text-xs text-gray-400 dark:text-gray-500">
+                  <p>Summary not available for this call.</p>
+                  <p className="mt-1">Debug: callSummary={callSummary ? 'exists' : 'null'}, retell_call_data.call_analysis={interaction.retell_call_data?.call_analysis ? 'exists' : 'null'}</p>
                 </div>
               )}
 
