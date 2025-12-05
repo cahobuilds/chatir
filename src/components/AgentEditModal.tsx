@@ -9,6 +9,7 @@ import Button from "./ui/button/Button";
 import Alert from "./ui/alert/Alert";
 import Input from "./form/input/InputField";
 import Select from "./form/Select";
+import { useOrganization } from "@/context/OrganizationContext";
 
 interface Agent {
   id: string;
@@ -55,6 +56,7 @@ export default function AgentEditModal({
   onClose,
   onSuccess,
 }: AgentEditModalProps) {
+  const { currentOrganization } = useOrganization();
   const [activeTab, setActiveTab] = useState<TabType>("agent");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -85,15 +87,48 @@ export default function AgentEditModal({
   // Prompt State
   const [prompt, setPrompt] = useState("");
 
-  // Voice options - base list, can be extended dynamically
-  const [voiceOptions, setVoiceOptions] = useState([
-    { value: "sarah-neural", label: "Sarah (Neural)", gender: "Female" },
-    { value: "marcus-neural", label: "Marcus (Neural)", gender: "Male" },
-    { value: "elena-neural", label: "Elena (Neural)", gender: "Female" },
-    { value: "david-standard", label: "David (Standard)", gender: "Male" },
-  ]);
+  // Voice options - will be populated from Retell API
+  const [voiceOptions, setVoiceOptions] = useState<Array<{ value: string; label: string; gender: string }>>([]);
+  const [voicesLoading, setVoicesLoading] = useState(false);
 
-  // Helper function to add a voice option if it doesn't exist
+  // Fetch available voices from Retell AI when modal opens
+  useEffect(() => {
+    if (isOpen && currentOrganization?.id) {
+      const fetchVoices = async () => {
+        setVoicesLoading(true);
+        try {
+          const response = await fetch(`/api/retell/voices?tenant_id=${currentOrganization.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.voices && Array.isArray(data.voices)) {
+              // Transform Retell voices to dropdown options
+              const options = data.voices.map((voice: any) => ({
+                value: voice.voice_id,
+                label: voice.voice_name 
+                  ? `${voice.voice_name} (${voice.provider || 'unknown'})`
+                  : voice.voice_id.split('-').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+                gender: voice.gender || 'Unknown',
+              }));
+              setVoiceOptions(options);
+            }
+          } else {
+            console.warn('Failed to fetch voices from Retell:', await response.json());
+            // Fallback to empty array - ensureVoiceOption will add voices as needed
+            setVoiceOptions([]);
+          }
+        } catch (error: any) {
+          console.warn('Error fetching voices from Retell:', error);
+          // Fallback to empty array - ensureVoiceOption will add voices as needed
+          setVoiceOptions([]);
+        } finally {
+          setVoicesLoading(false);
+        }
+      };
+      fetchVoices();
+    }
+  }, [isOpen, currentOrganization?.id]);
+
+  // Helper function to add a voice option if it doesn't exist (for backward compatibility)
   const ensureVoiceOption = (voiceId: string) => {
     if (!voiceId) return;
     setVoiceOptions((prev) => {
@@ -576,16 +611,26 @@ export default function AgentEditModal({
                   <>
                     <div>
                       <Label htmlFor="voice-id">Voice Selection</Label>
-                      <Select
-                        id="voice-id"
-                        value={voiceId}
-                        onChange={(value) => setVoiceId(value)}
-                        disabled={isSubmitting}
-                        options={voiceOptions.map((v) => ({
-                          value: v.value,
-                          label: `${v.label} (${v.gender})`,
-                        }))}
-                      />
+                      {voicesLoading ? (
+                        <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
+                          Loading voices from Retell AI...
+                        </div>
+                      ) : voiceOptions.length === 0 ? (
+                        <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
+                          No voices available. Please ensure Retell AI is configured.
+                        </div>
+                      ) : (
+                        <Select
+                          id="voice-id"
+                          value={voiceId}
+                          onChange={(value) => setVoiceId(value)}
+                          disabled={isSubmitting || voicesLoading}
+                          options={voiceOptions.map((v) => ({
+                            value: v.value,
+                            label: `${v.label} (${v.gender})`,
+                          }))}
+                        />
+                      )}
                     </div>
 
                     <div>
