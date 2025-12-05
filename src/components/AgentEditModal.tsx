@@ -281,6 +281,21 @@ export default function AgentEditModal({
                   const retellAgentData = await retellAgentResponse.json();
                   const retellAgent = retellAgentData.retell_agent;
                   if (retellAgent) {
+                    // Debug: Log full Retell response to see actual structure
+                    console.log('[AgentEditModal] Full Retell agent response:', JSON.stringify(retellAgent, null, 2));
+                    console.log('[AgentEditModal] Retell agent voice fields:', {
+                      voice_id: retellAgent.voice_id,
+                      voice_temperature: retellAgent.voice_temperature,
+                      voice_speed: retellAgent.voice_speed,
+                      volume: retellAgent.volume,
+                      responsiveness: retellAgent.responsiveness,
+                      interruption_sensitivity: retellAgent.interruption_sensitivity,
+                      language: retellAgent.language,
+                      // Check for nested structures
+                      voice: retellAgent.voice,
+                      voice_config: retellAgent.voice_config,
+                    });
+
                     // Override voice_id with Retell's current value (source of truth)
                     if (retellAgent.voice_id) {
                       // Ensure the voice option exists in the dropdown
@@ -293,21 +308,27 @@ export default function AgentEditModal({
                     }
                     // Override voice configuration fields with Retell's current values (source of truth)
                     // Retell API returns these values directly
-                    if (retellAgent.voice_temperature !== undefined) {
+                    if (retellAgent.voice_temperature !== undefined && retellAgent.voice_temperature !== null) {
+                      console.log('[AgentEditModal] Setting voice_temperature from Retell:', retellAgent.voice_temperature);
                       setVoiceTemperature(retellAgent.voice_temperature);
                     }
-                    if (retellAgent.voice_speed !== undefined) {
+                    if (retellAgent.voice_speed !== undefined && retellAgent.voice_speed !== null) {
+                      console.log('[AgentEditModal] Setting voice_speed from Retell:', retellAgent.voice_speed);
                       setVoiceSpeed(retellAgent.voice_speed);
                     }
-                    if (retellAgent.volume !== undefined) {
+                    if (retellAgent.volume !== undefined && retellAgent.volume !== null) {
                       // Retell uses 0-2 scale (2.0 = 100%), our UI uses 0-100 scale
                       // Convert Retell value to percentage: multiply by 50 (2 * 50 = 100%)
-                      setVolume(Math.round(retellAgent.volume * 50));
+                      const volumePercentage = Math.round(retellAgent.volume * 50);
+                      console.log('[AgentEditModal] Setting volume from Retell:', retellAgent.volume, '->', volumePercentage + '%');
+                      setVolume(volumePercentage);
                     }
-                    if (retellAgent.responsiveness !== undefined) {
+                    if (retellAgent.responsiveness !== undefined && retellAgent.responsiveness !== null) {
+                      console.log('[AgentEditModal] Setting responsiveness from Retell:', retellAgent.responsiveness);
                       setResponsiveness(retellAgent.responsiveness);
                     }
-                    if (retellAgent.interruption_sensitivity !== undefined) {
+                    if (retellAgent.interruption_sensitivity !== undefined && retellAgent.interruption_sensitivity !== null) {
+                      console.log('[AgentEditModal] Setting interruption_sensitivity from Retell:', retellAgent.interruption_sensitivity);
                       setInterruptionSensitivity(retellAgent.interruption_sensitivity);
                     }
                   }
