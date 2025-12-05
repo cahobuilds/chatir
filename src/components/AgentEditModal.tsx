@@ -85,13 +85,48 @@ export default function AgentEditModal({
   // Prompt State
   const [prompt, setPrompt] = useState("");
 
-  // Voice options
-  const voiceOptions = [
+  // Voice options - base list, can be extended dynamically
+  const [voiceOptions, setVoiceOptions] = useState([
     { value: "sarah-neural", label: "Sarah (Neural)", gender: "Female" },
     { value: "marcus-neural", label: "Marcus (Neural)", gender: "Male" },
     { value: "elena-neural", label: "Elena (Neural)", gender: "Female" },
     { value: "david-standard", label: "David (Standard)", gender: "Male" },
-  ];
+  ]);
+
+  // Helper function to add a voice option if it doesn't exist
+  const ensureVoiceOption = (voiceId: string) => {
+    if (!voiceId) return;
+    setVoiceOptions((prev) => {
+      const exists = prev.some((v) => v.value === voiceId);
+      if (!exists) {
+        // Format the voice_id for display
+        // Examples: "11labs-Cimo" -> "Cimo (11labs)", "sarah-neural" -> "Sarah (Neural)"
+        let displayName = voiceId;
+        if (voiceId.includes("-")) {
+          const parts = voiceId.split("-");
+          if (parts.length === 2) {
+            // Format as "VoiceName (Provider)" for provider-voice pattern
+            const provider = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+            const voiceName = parts[1].charAt(0).toUpperCase() + parts[1].slice(1);
+            displayName = `${voiceName} (${provider})`;
+          } else {
+            // Multiple parts: capitalize each word
+            displayName = parts
+              .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(" ");
+          }
+        } else {
+          // Single word: capitalize first letter
+          displayName = voiceId.charAt(0).toUpperCase() + voiceId.slice(1);
+        }
+        return [
+          ...prev,
+          { value: voiceId, label: displayName, gender: "Unknown" },
+        ];
+      }
+      return prev;
+    });
+  };
 
   // Retell AI supported models (from LlmUpdateParams)
   const retellModels = [
@@ -153,6 +188,8 @@ export default function AgentEditModal({
             // Read from both top-level (from sync) and nested (legacy) locations for backward compatibility
             const voiceConfig = config.voice || {};
             const voiceIdFromConfig = config.voice_id || voiceConfig.voice_id || "sarah-neural";
+            // Ensure the voice option exists in the dropdown
+            ensureVoiceOption(voiceIdFromConfig);
             setVoiceId(voiceIdFromConfig);
             setVoiceTemperature(voiceConfig.voice_temperature ?? 0.7);
             setVoiceSpeed(voiceConfig.voice_speed ?? 1.0);
@@ -207,6 +244,8 @@ export default function AgentEditModal({
                   if (retellAgent) {
                     // Override voice_id with Retell's current value (source of truth)
                     if (retellAgent.voice_id) {
+                      // Ensure the voice option exists in the dropdown
+                      ensureVoiceOption(retellAgent.voice_id);
                       setVoiceId(retellAgent.voice_id);
                     }
                     // Override language with Retell's current value
