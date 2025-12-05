@@ -323,10 +323,14 @@ export default function AgentEditModal({
                       console.log('[AgentEditModal] Setting volume from Retell:', retellAgent.volume, '->', volumePercentage + '%');
                       setVolume(volumePercentage);
                     }
-                    if (retellAgent.responsiveness !== undefined && retellAgent.responsiveness !== null) {
-                      console.log('[AgentEditModal] Setting responsiveness from Retell:', retellAgent.responsiveness);
-                      setResponsiveness(retellAgent.responsiveness);
-                    }
+                    // Note: Retell API does NOT return 'responsiveness' in agent.retrieve() response
+                    // even though it's configurable in the dashboard. We can SET it via agent.update()
+                    // but cannot READ it from Retell. Therefore, we use the local database value.
+                    // The responsiveness value will be synced TO Retell when saving.
+                    // if (retellAgent.responsiveness !== undefined && retellAgent.responsiveness !== null) {
+                    //   console.log('[AgentEditModal] Setting responsiveness from Retell:', retellAgent.responsiveness);
+                    //   setResponsiveness(retellAgent.responsiveness);
+                    // }
                     if (retellAgent.interruption_sensitivity !== undefined && retellAgent.interruption_sensitivity !== null) {
                       console.log('[AgentEditModal] Setting interruption_sensitivity from Retell:', retellAgent.interruption_sensitivity);
                       setInterruptionSensitivity(retellAgent.interruption_sensitivity);
