@@ -229,9 +229,10 @@ export default function AgentEditModal({
             setVoiceTemperature(voiceConfig.voice_temperature ?? 0.7);
             setVoiceSpeed(voiceConfig.voice_speed ?? 1.0);
             // Handle volume: if stored in Retell format (0-2), convert to percentage (0-100)
-            // Otherwise assume it's already in percentage format
+            // Retell: 0-2 scale (2 = 100%), UI: 0-100% scale
+            // Conversion: Retell value * 50 = percentage (2 * 50 = 100%)
             const volumeValue = voiceConfig.volume ?? config.volume ?? 80;
-            setVolume(volumeValue > 1 ? Math.round(volumeValue * 100) : volumeValue);
+            setVolume(volumeValue <= 2 ? Math.round(volumeValue * 50) : volumeValue);
             setResponsiveness(voiceConfig.responsiveness ?? 0.8);
             setInterruptionSensitivity(voiceConfig.interruption_sensitivity ?? 0.5);
             setLanguage(config.language || voiceConfig.language || "en-US");
@@ -299,9 +300,9 @@ export default function AgentEditModal({
                       setVoiceSpeed(retellAgent.voice_speed);
                     }
                     if (retellAgent.volume !== undefined) {
-                      // Retell uses 0-2 scale (1.0 = 100%), our UI uses 0-100 scale
-                      // Convert Retell value to percentage: multiply by 100
-                      setVolume(Math.round(retellAgent.volume * 100));
+                      // Retell uses 0-2 scale (2.0 = 100%), our UI uses 0-100 scale
+                      // Convert Retell value to percentage: multiply by 50 (2 * 50 = 100%)
+                      setVolume(Math.round(retellAgent.volume * 50));
                     }
                     if (retellAgent.responsiveness !== undefined) {
                       setResponsiveness(retellAgent.responsiveness);
@@ -397,7 +398,7 @@ export default function AgentEditModal({
           voice_id: voiceId, // Nested for UI compatibility
           voice_temperature: voiceTemperature,
           voice_speed: voiceSpeed,
-          volume: volume,
+          volume: volume / 50, // Convert UI percentage (0-100) to Retell scale (0-2): divide by 50 (100% / 50 = 2.0)
           responsiveness: responsiveness,
           interruption_sensitivity: interruptionSensitivity,
           language: language,
@@ -668,7 +669,7 @@ export default function AgentEditModal({
                         type="range"
                         id="voice-temperature"
                         min="0"
-                        max="1"
+                        max="2"
                         step="0.1"
                         value={voiceTemperature}
                         onChange={(e) => setVoiceTemperature(parseFloat(e.target.value))}
@@ -676,7 +677,7 @@ export default function AgentEditModal({
                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
                       />
                       <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                        Controls voice naturalness (0 = robotic, 1 = very natural)
+                        Controls voice naturalness (0 = robotic, 2 = very natural)
                       </p>
                     </div>
 
