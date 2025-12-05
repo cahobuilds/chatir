@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     logRetellError('Failed to fetch Retell voices', error);
     return NextResponse.json(
-      { error: formatRetellError(error, 'Failed to fetch available voices from Retell AI') },
+      { error: `Failed to fetch available voices from Retell AI: ${formatRetellError(error)}` },
       { status: 500 }
     );
   }
