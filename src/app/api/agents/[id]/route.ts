@@ -143,6 +143,24 @@ export async function PATCH(
             retellUpdatePayload.voice_id = voiceIdToSync;
           }
           
+          // Update voice-specific settings (if present in configuration)
+          // Check both nested (config.voice.*) and top-level (config.*) locations for backward compatibility
+          if (voiceConfig.voice_temperature !== undefined || config.voice_temperature !== undefined) {
+            retellUpdatePayload.voice_temperature = voiceConfig.voice_temperature ?? config.voice_temperature;
+          }
+          if (voiceConfig.voice_speed !== undefined || config.voice_speed !== undefined) {
+            retellUpdatePayload.voice_speed = voiceConfig.voice_speed ?? config.voice_speed;
+          }
+          if (voiceConfig.volume !== undefined || config.volume !== undefined) {
+            retellUpdatePayload.volume = voiceConfig.volume ?? config.volume;
+          }
+          if (voiceConfig.responsiveness !== undefined || config.responsiveness !== undefined) {
+            retellUpdatePayload.responsiveness = voiceConfig.responsiveness ?? config.responsiveness;
+          }
+          if (voiceConfig.interruption_sensitivity !== undefined || config.interruption_sensitivity !== undefined) {
+            retellUpdatePayload.interruption_sensitivity = voiceConfig.interruption_sensitivity ?? config.interruption_sensitivity;
+          }
+          
           // Update LLM websocket URL if present (for custom LLM)
           if (llmConfig.llm_websocket_url) {
             retellUpdatePayload.llm_websocket_url = llmConfig.llm_websocket_url;
