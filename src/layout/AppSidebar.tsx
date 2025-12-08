@@ -454,7 +454,7 @@ const AppSidebar: React.FC = () => {
                 />
               ) : (
                 <span className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">
-                  {currentOrganization?.name || "TailAdmin"}
+                  {currentOrganization?.name || "AI Bots"}
                 </span>
               )}
             </>
