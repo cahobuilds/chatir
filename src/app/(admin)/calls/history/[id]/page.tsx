@@ -90,16 +90,21 @@ export default function CallDetailPage() {
         
         let foundSummary: string | null = null;
         
-        // Check if summary is in retell_call_data directly (from Retell API)
-        if (data.interaction?.retell_call_data?.call_analysis?.summary) {
-          console.log('[CallDetails] Found summary in retell_call_data.call_analysis:', data.interaction.retell_call_data.call_analysis.summary);
+        // Check if call_summary is in retell_call_data.call_analysis (correct Retell API field name)
+        if (data.interaction?.retell_call_data?.call_analysis?.call_summary) {
+          console.log('[CallDetails] Found call_summary in retell_call_data.call_analysis:', data.interaction.retell_call_data.call_analysis.call_summary);
+          foundSummary = data.interaction.retell_call_data.call_analysis.call_summary;
+        } 
+        // Fallback: Try legacy 'summary' field name
+        else if (data.interaction?.retell_call_data?.call_analysis?.summary) {
+          console.log('[CallDetails] Found summary in retell_call_data.call_analysis (legacy):', data.interaction.retell_call_data.call_analysis.summary);
           foundSummary = data.interaction.retell_call_data.call_analysis.summary;
         } else {
-          console.log('[CallDetails] No summary in retell_call_data.call_analysis');
+          console.log('[CallDetails] No call_summary in retell_call_data.call_analysis');
           // Try alternative paths
-          if (data.interaction?.retell_call_data?.summary) {
-            console.log('[CallDetails] Found summary at retell_call_data.summary:', data.interaction.retell_call_data.summary);
-            foundSummary = data.interaction.retell_call_data.summary;
+          if (data.interaction?.retell_call_data?.call_summary) {
+            console.log('[CallDetails] Found call_summary at retell_call_data.call_summary:', data.interaction.retell_call_data.call_summary);
+            foundSummary = data.interaction.retell_call_data.call_summary;
           }
         }
 
@@ -350,22 +355,22 @@ export default function CallDetailPage() {
               </div>
 
               {/* Summary Section */}
-              {(callSummary || interaction.retell_call_data?.call_analysis?.summary) && (
+              {(callSummary || interaction.retell_call_data?.call_analysis?.call_summary) && (
                 <div className="mt-6">
                   <label className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 block">Summary</label>
                   <div className="mt-1 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                     <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
-                      {callSummary || interaction.retell_call_data?.call_analysis?.summary}
+                      {callSummary || interaction.retell_call_data?.call_analysis?.call_summary}
                     </p>
                   </div>
                 </div>
               )}
               
               {/* Debug: Show if summary is missing */}
-              {!callSummary && !interaction.retell_call_data?.call_analysis?.summary && (
+              {!callSummary && !interaction.retell_call_data?.call_analysis?.call_summary && (
                 <div className="mt-6 text-xs text-gray-400 dark:text-gray-500">
                   <p>Summary not available for this call.</p>
-                  <p className="mt-1">Debug: callSummary={callSummary ? 'exists' : 'null'}, retell_call_data.call_analysis={interaction.retell_call_data?.call_analysis ? 'exists' : 'null'}</p>
+                  <p className="mt-1">Debug: callSummary={callSummary ? 'exists' : 'null'}, call_analysis.call_summary={interaction.retell_call_data?.call_analysis?.call_summary ? 'exists' : 'null'}</p>
                 </div>
               )}
 

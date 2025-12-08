@@ -103,9 +103,11 @@ export async function GET(
             if (callData.call_analysis) {
               analytics.quality = {
                 score: callData.call_analysis.quality_score || null,
-                sentiment: callData.call_analysis.sentiment || null,
+                sentiment: callData.call_analysis.user_sentiment || null,
                 sentimentScore: callData.call_analysis.sentiment_score || null,
-                summary: callData.call_analysis.summary || null,
+                // Retell API uses 'call_summary' not 'summary'
+                summary: callData.call_analysis.call_summary || callData.call_analysis.summary || null,
+                callSuccessful: callData.call_analysis.call_successful || null,
               };
             }
             

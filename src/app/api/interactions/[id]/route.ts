@@ -46,6 +46,14 @@ async function enrichInteraction(supabase: any, interaction: any) {
       if (retellApiKey) {
         const retellClient = createRetellClient(retellApiKey);
         const callData = await retellClient.call.retrieve(interaction.retell_call_id);
+        
+        // Log call_summary availability for debugging
+        if (callData.call_analysis) {
+          console.log('[Retell API] call_id:', interaction.retell_call_id, 
+            '| call_summary:', callData.call_analysis.call_summary ? 'present' : 'missing',
+            '| user_sentiment:', callData.call_analysis.user_sentiment || 'N/A');
+        }
+        
         retellCallData = callData;
       }
     } catch (error: any) {
