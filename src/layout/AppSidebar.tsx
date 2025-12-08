@@ -498,8 +498,8 @@ const AppSidebar: React.FC = () => {
               </div>
             )}
 
-            {/* Admin Section */}
-            {navigationByCategory.admin.length > 0 && (
+            {/* Admin Section - Only visible to admins */}
+            {isAdmin && navigationByCategory.admin.length > 0 && (
               <div>
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
@@ -518,8 +518,8 @@ const AppSidebar: React.FC = () => {
               </div>
             )}
 
-            {/* Analytics Section */}
-            {navigationByCategory.analytics && navigationByCategory.analytics.length > 0 && (
+            {/* Analytics Section - Only visible to admins */}
+            {isAdmin && navigationByCategory.analytics && navigationByCategory.analytics.length > 0 && (
               <div>
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
@@ -538,8 +538,8 @@ const AppSidebar: React.FC = () => {
               </div>
             )}
 
-            {/* Settings Section */}
-            {navigationByCategory.settings.length > 0 && (
+            {/* Settings Section - Only visible to admins */}
+            {isAdmin && navigationByCategory.settings.length > 0 && (
               <div>
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
@@ -558,8 +558,8 @@ const AppSidebar: React.FC = () => {
               </div>
             )}
 
-            {/* Templates Section */}
-            {navigationByCategory.templates.length > 0 && (
+            {/* Templates Section - Only visible to admins */}
+            {isAdmin && navigationByCategory.templates.length > 0 && (
               <div>
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
