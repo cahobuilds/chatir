@@ -1,12 +1,15 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/context/OrganizationContext";
 import CallHistoryFilters from "@/components/CallHistoryFilters";
 import CallHistoryTable from "@/components/CallHistoryTable";
 import { createClient } from "@/lib/supabase/client";
+
+// Auto-poll interval in milliseconds (60 seconds)
+const AUTO_POLL_INTERVAL = 60 * 1000;
 
 export default function CallHistoryPage() {
   const { user, loading: authLoading } = useAuth();
@@ -23,7 +26,65 @@ export default function CallHistoryPage() {
   }>({});
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [autoPolling, setAutoPolling] = useState(true);
+  const [lastPollTime, setLastPollTime] = useState<Date | null>(null);
+  const [newCallsCount, setNewCallsCount] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const supabase = createClient();
+
+  // Incremental sync - polls for new calls without full database sync
+  const performIncrementalSync = useCallback(async () => {
+    if (!currentOrganization?.id || syncing) return;
+
+    try {
+      const response = await fetch('/api/retell/calls/sync-incremental', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          tenant_id: currentOrganization.id,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.synced > 0) {
+        setNewCallsCount(prev => prev + data.synced);
+        // Trigger table refresh
+        setRefreshKey(prev => prev + 1);
+        console.log(`[Auto-Poll] Synced ${data.synced} new calls`);
+      }
+      
+      setLastPollTime(new Date());
+    } catch (error) {
+      console.error('[Auto-Poll] Error:', error);
+    }
+  }, [currentOrganization?.id, syncing]);
+
+  // Set up auto-polling
+  useEffect(() => {
+    if (!isAdmin || !currentOrganization?.id || !autoPolling) {
+      return;
+    }
+
+    // Initial poll after 5 seconds
+    const initialPoll = setTimeout(() => {
+      performIncrementalSync();
+    }, 5000);
+
+    // Set up recurring poll
+    pollIntervalRef.current = setInterval(() => {
+      performIncrementalSync();
+    }, AUTO_POLL_INTERVAL);
+
+    return () => {
+      clearTimeout(initialPoll);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [isAdmin, currentOrganization?.id, autoPolling, performIncrementalSync]);
 
   useEffect(() => {
     const checkAdminAccess = async () => {
@@ -76,7 +137,8 @@ export default function CallHistoryPage() {
     return null; // Will redirect
   }
 
-  const handleSync = async () => {
+  // Full database sync (for initial sync or catching up)
+  const handleFullSync = async () => {
     if (!currentOrganization?.id || syncing) return;
 
     setSyncing(true);
@@ -98,7 +160,7 @@ export default function CallHistoryPage() {
           tenant_id: currentOrganization.id,
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
-          limit: 1000, // Sync up to 1000 calls
+          limit: 1000,
         }),
       });
 
@@ -113,10 +175,9 @@ export default function CallHistoryPage() {
         message: `Successfully synced ${data.synced || 0} calls. ${data.skipped || 0} skipped.`,
       });
 
-      // Refresh the table after sync
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
+      // Trigger table refresh
+      setRefreshKey(prev => prev + 1);
+      setNewCallsCount(0);
     } catch (error: any) {
       setSyncResult({
         success: false,
@@ -125,6 +186,17 @@ export default function CallHistoryPage() {
     } finally {
       setSyncing(false);
     }
+  };
+
+  // Quick refresh - just refreshes the table data from local DB
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+    setNewCallsCount(0);
+  };
+
+  // Toggle auto-polling
+  const toggleAutoPolling = () => {
+    setAutoPolling(prev => !prev);
   };
 
   return (
@@ -139,11 +211,45 @@ export default function CallHistoryPage() {
             Complete call log with recordings, transcripts, and analytics
           </p>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
+          {/* Auto-polling indicator */}
+          <div className="flex items-center space-x-2 text-sm">
+            <button
+              onClick={toggleAutoPolling}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full transition-colors ${
+                autoPolling 
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                  : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+              }`}
+              title={autoPolling ? 'Auto-refresh is ON (every 60s)' : 'Auto-refresh is OFF'}
+            >
+              <div className={`w-2 h-2 rounded-full ${autoPolling ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+              <span>{autoPolling ? 'Live' : 'Paused'}</span>
+            </button>
+            {lastPollTime && (
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                Updated {lastPollTime.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+
+          {/* New calls badge */}
+          {newCallsCount > 0 && (
+            <button
+              onClick={handleRefresh}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-sm animate-pulse"
+            >
+              <span>{newCallsCount} new call{newCallsCount > 1 ? 's' : ''}</span>
+              <span>- Click to view</span>
+            </button>
+          )}
+
+          {/* Full Sync Button */}
           <button
-            onClick={handleSync}
+            onClick={handleFullSync}
             disabled={syncing || !currentOrganization?.id}
             className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            title="Full sync from Retell API (last 30 days)"
           >
             {syncing ? (
               <>
@@ -193,7 +299,7 @@ export default function CallHistoryPage() {
       <CallHistoryFilters onFiltersChange={setFilters} />
 
       {/* Main Content */}
-      <CallHistoryTable filters={filters} />
+      <CallHistoryTable key={refreshKey} filters={filters} />
     </div>
   );
 }
