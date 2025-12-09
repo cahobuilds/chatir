@@ -1,6 +1,6 @@
 {
   "name": "tinadmin-ai-client-care-template",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI Client Care Template - Enterprise-grade admin platform for managing AI voice agents, chat conversations, and call analytics",
   "private": false,
   "main": "bin/create-ai-client-care.js",
