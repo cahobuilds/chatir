@@ -32,7 +32,8 @@ const AppHeader: React.FC = () => {
           const data = await response.json();
           const branding = data.tenant?.branding;
           
-          let parsedBranding: Record<string, string> = {};
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let parsedBranding: any = {};
           if (branding && typeof branding === 'object') {
             parsedBranding = branding;
           } else if (branding && typeof branding === 'string') {
@@ -43,7 +44,8 @@ const AppHeader: React.FC = () => {
             }
           }
           
-          setOrganizationLogo(parsedBranding.logo || parsedBranding.logoUrl || null);
+          // Use logo_url to match sidebar logic
+          setOrganizationLogo(parsedBranding.logo_url || null);
         }
       } catch (error) {
         console.error('Error fetching organization branding:', error);
@@ -51,7 +53,7 @@ const AppHeader: React.FC = () => {
     };
 
     fetchOrganizationBranding();
-  }, [currentOrganization]);
+  }, [currentOrganization?.id]);
 
   const handleToggle = () => {
     if (window.innerWidth >= 1280) {
