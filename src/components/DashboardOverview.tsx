@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import ComponentCard from "./common/ComponentCard";
 import {
   Table,
@@ -12,6 +12,8 @@ import {
 import Badge from "./ui/badge/Badge";
 import Button from "./ui/button/Button";
 import Link from "next/link";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useOrganization } from "@/context/OrganizationContext";
 
 interface Tenant {
   id: string;
@@ -40,6 +42,10 @@ interface DashboardStats {
 }
 
 export default function DashboardOverview() {
+  const { currentOrganization } = useOrganization();
+  const { hasPermission } = usePermissions(currentOrganization?.id || null);
+  const canViewOrganizations = hasPermission("tenant.view");
+
   const [stats, setStats] = useState<DashboardStats>({
     totalOrganizations: 0,
     totalAgents: 0,
@@ -51,26 +57,29 @@ export default function DashboardOverview() {
   });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       
-      // Fetch tenants and agents in parallel
-      const [tenantsResponse, agentsResponse] = await Promise.all([
-        fetch("/api/tenants"),
-        fetch("/api/agents"),
-      ]);
+      // Only fetch tenants if user has permission to view them
+      const fetchPromises = [fetch("/api/agents")];
+      if (canViewOrganizations) {
+        fetchPromises.push(fetch("/api/tenants"));
+      }
+      
+      // Fetch tenants and agents in parallel (or just agents if no permission)
+      const responses = await Promise.all(fetchPromises);
+      const agentsResponse = responses[0];
+      const tenantsResponse = canViewOrganizations ? responses[1] : null;
 
       // Log response status for debugging
-      console.log('[Dashboard] Tenants API response:', {
-        ok: tenantsResponse.ok,
-        status: tenantsResponse.status,
-        statusText: tenantsResponse.statusText,
-      });
+      if (tenantsResponse) {
+        console.log('[Dashboard] Tenants API response:', {
+          ok: tenantsResponse.ok,
+          status: tenantsResponse.status,
+          statusText: tenantsResponse.statusText,
+        });
+      }
       console.log('[Dashboard] Agents API response:', {
         ok: agentsResponse.ok,
         status: agentsResponse.status,
@@ -80,10 +89,10 @@ export default function DashboardOverview() {
       let tenantsData = { tenants: [] };
       let agentsData = { agents: [] };
 
-      if (tenantsResponse.ok) {
+      if (tenantsResponse && tenantsResponse.ok) {
         tenantsData = await tenantsResponse.json();
         console.log('[Dashboard] Tenants data:', tenantsData);
-      } else {
+      } else if (tenantsResponse) {
         const errorData = await tenantsResponse.json().catch(() => ({ error: 'Unknown error' }));
         console.error('[Dashboard] Failed to fetch tenants:', {
           status: tenantsResponse.status,
@@ -183,16 +192,21 @@ export default function DashboardOverview() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canViewOrganizations]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const metricCards = [
-    {
+    // Only show "Total Organizations" if user has permission
+    ...(canViewOrganizations ? [{
       title: "Total Organizations",
       value: stats.totalOrganizations,
       icon: "🏢",
       color: "bg-blue-500",
       description: "Active organizations",
-    },
+    }] : []),
     {
       title: "Total Agents",
       value: stats.totalAgents,
@@ -231,9 +245,10 @@ export default function DashboardOverview() {
   ];
 
   if (loading) {
+    const cardCount = canViewOrganizations ? 6 : 5;
     return (
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        {[...Array(6)].map((_, i) => (
+      <div className={`grid grid-cols-2 gap-4 md:grid-cols-3 ${canViewOrganizations ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
+        {[...Array(cardCount)].map((_, i) => (
           <div
             key={i}
             className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800 animate-pulse"
@@ -250,7 +265,7 @@ export default function DashboardOverview() {
   return (
     <div className="space-y-6">
       {/* Metrics Overview */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+      <div className={`grid grid-cols-2 gap-4 md:grid-cols-3 ${canViewOrganizations ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
         {metricCards.map((metric, index) => (
           <div
             key={index}
@@ -277,7 +292,7 @@ export default function DashboardOverview() {
       </div>
 
       {/* Recent Activity Grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className={`grid grid-cols-1 gap-6 ${canViewOrganizations ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
         {/* Recent Agents */}
         <ComponentCard title="Recent Agents" desc="Latest agents created">
           {stats.recentAgents.length === 0 ? (
@@ -364,8 +379,9 @@ export default function DashboardOverview() {
           )}
         </ComponentCard>
 
-        {/* Recent Organizations */}
-        <ComponentCard title="Recent Organizations" desc="Latest organizations">
+        {/* Recent Organizations - Only show if user has permission */}
+        {canViewOrganizations && (
+          <ComponentCard title="Recent Organizations" desc="Latest organizations">
           {stats.recentOrganizations.length === 0 ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <p>No organizations yet</p>
@@ -434,7 +450,8 @@ export default function DashboardOverview() {
               </div>
             </div>
           )}
-        </ComponentCard>
+          </ComponentCard>
+        )}
       </div>
     </div>
   );
