@@ -1,7 +1,10 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { createRetellClient } from '@/lib/retell';
+import { formatRetellError, logRetellError } from '@/lib/retell-errors';
+import { getResellerRetellConfig } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
-// PATCH /api/agents/[id]/prompt - Update only the prompt in agent configuration (admin only)
+// PATCH /api/agents/[id]/prompt - Update agent prompt and sync to Retell
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,10 +18,10 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // First, get the agent to check tenant access
+    // Get agent and verify access
     const { data: agent } = await supabase
       .from('agents')
-      .select('tenant_id, configuration')
+      .select('tenant_id, retell_agent_id, configuration')
       .eq('id', id)
       .single();
 
@@ -26,62 +29,138 @@ export async function PATCH(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // Check if user is system_admin (can update any agent)
-    const { data: systemAdminCheck } = await supabase
+    // Verify user is admin (organization_admin, tenant_admin, or super_admin)
+    const { data: userTenant } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
-      .in('role', ['system_admin'])
+      .eq('tenant_id', agent.tenant_id)
+      .in('role', ['organization_admin', 'tenant_admin', 'super_admin'])
       .single();
 
-    const isSystemAdmin = !!systemAdminCheck;
-
-    // If not system_admin, verify user is admin for this tenant
-    if (!isSystemAdmin) {
-      const { data: userTenant } = await supabase
-        .from('user_tenants')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('tenant_id', agent.tenant_id)
-        .in('role', ['tenant_admin', 'super_admin', 'organization_admin'])
-        .single();
-
-      if (!userTenant) {
-        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-      }
+    if (!userTenant) {
+      return NextResponse.json({ 
+        error: 'Forbidden: Admin access required. You need organization_admin, tenant_admin, or super_admin role to update prompts.' 
+      }, { status: 403 });
     }
 
     const body = await request.json();
     const { prompt } = body;
 
-    if (prompt === undefined) {
-      return NextResponse.json({ error: 'prompt is required' }, { status: 400 });
+    if (!prompt || typeof prompt !== 'string') {
+      return NextResponse.json({ error: 'Prompt is required and must be a string' }, { status: 400 });
     }
 
-    // Get current configuration and update only the prompt
-    const currentConfig = (agent.configuration as any) || {};
+    // Update local database configuration
+    let currentConfig: any = {};
+    if (agent.configuration) {
+      currentConfig = typeof agent.configuration === 'string' 
+        ? JSON.parse(agent.configuration) 
+        : agent.configuration;
+    }
+
+    // Update prompt in configuration
     const updatedConfig = {
       ...currentConfig,
       prompt: prompt,
+      system_instructions: prompt, // Also update common field names
+      systemPrompt: prompt,
+      llm_config: {
+        ...currentConfig.llm_config,
+        system_instructions: prompt,
+        prompt: prompt,
+      },
     };
 
-    // Use admin client for system admin to bypass RLS, regular client for others
-    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
-
-    const { data: updatedAgent, error: updateError } = await clientToUse
+    // Update local agent configuration
+    const { data: updatedAgent, error: updateError } = await supabase
       .from('agents')
-      .update({ configuration: updatedConfig })
+      .update({
+        configuration: updatedConfig,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', id)
       .select()
       .single();
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
+      console.error('Failed to update agent configuration:', updateError);
+      return NextResponse.json({ error: 'Failed to update agent configuration' }, { status: 500 });
     }
 
-    return NextResponse.json({ agent: updatedAgent });
+    // If agent has Retell agent ID, sync prompt to Retell
+    if (agent.retell_agent_id) {
+      try {
+        // Get reseller's Retell API key
+        const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
+
+        if (!retellApiKey) {
+          console.warn('Retell API key not configured - prompt updated locally but not synced to Retell');
+          return NextResponse.json({
+            success: true,
+            agent: updatedAgent,
+            warning: 'Prompt updated locally but Retell API key not configured - prompt not synced to Retell',
+          });
+        }
+
+        // Create Retell client
+        const retellClient = createRetellClient(retellApiKey, {
+          timeout: 30 * 1000,
+          maxRetries: 3,
+        });
+
+        // Get current Retell agent details to check LLM type
+        const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
+        const retellAgentData = retellAgent as any;
+
+        // If agent uses Retell LLM, update the LLM prompt
+        if (retellAgentData?.response_engine?.type === 'retell-llm' && retellAgentData?.response_engine?.llm_id) {
+          const llmId = retellAgentData.response_engine.llm_id;
+          
+          // Update Retell LLM prompt
+          await retellClient.llm.update(llmId, {
+            general_prompt: prompt,
+          });
+
+          return NextResponse.json({
+            success: true,
+            agent: updatedAgent,
+            message: 'Prompt updated successfully and synced to Retell LLM',
+          });
+        } else {
+          // For custom LLM or other types, the prompt is managed by the websocket endpoint
+          // Still return success since local config is updated
+          return NextResponse.json({
+            success: true,
+            agent: updatedAgent,
+            message: 'Prompt updated successfully (custom LLM - prompt managed by websocket endpoint)',
+          });
+        }
+      } catch (retellError: any) {
+        // Log error but don't fail - local update was successful
+        logRetellError(retellError, 'Prompt Sync to Retell');
+        console.error('Failed to sync prompt to Retell:', retellError);
+        
+        return NextResponse.json({
+          success: true,
+          agent: updatedAgent,
+          warning: 'Prompt updated locally but failed to sync to Retell: ' + formatRetellError(retellError),
+        });
+      }
+    }
+
+    // If no Retell agent ID, just return success for local update
+    return NextResponse.json({
+      success: true,
+      agent: updatedAgent,
+      message: 'Prompt updated successfully',
+    });
+
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Prompt update error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to update prompt' },
+      { status: 500 }
+    );
   }
 }
-

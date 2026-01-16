@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import React from "react";
 import AnalyticsOverview from "@/components/AnalyticsOverview";
+import RealTimeMetrics from "@/components/RealTimeMetrics";
 import CallVolumeAnalytics from "@/components/CallVolumeAnalytics";
+import AdvancedCallAnalytics from "@/components/AdvancedCallAnalytics";
 import PerformanceMetrics from "@/components/PerformanceMetrics";
 import QualityMetrics from "@/components/QualityMetrics";
-import AgentPerformance from "@/components/AgentPerformance";
+import CustomerExperienceMetrics from "@/components/CustomerExperienceMetrics";
 
 export const metadata: Metadata = {
   title:
@@ -19,7 +21,7 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Analytics & Reporting
+            Analytics Overview
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             Comprehensive performance analytics and business intelligence
@@ -38,19 +40,26 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Overview Cards */}
+      {/* Summary Metrics Cards */}
       <AnalyticsOverview />
 
-      {/* Main Analytics Grid */}
+      {/* Real-Time Analytics */}
+      <RealTimeMetrics />
+
+      {/* Main Analytics Charts - Time Series */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <CallVolumeAnalytics />
         <PerformanceMetrics />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* Advanced Call Analytics - Outcomes & Quality */}
+      <AdvancedCallAnalytics />
+
+      {/* Quality Metrics Overview - Full Width */}
         <QualityMetrics />
-        <AgentPerformance />
-      </div>
+
+      {/* Customer Experience Metrics */}
+      <CustomerExperienceMetrics />
     </div>
   );
 }

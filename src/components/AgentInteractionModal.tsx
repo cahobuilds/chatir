@@ -4,8 +4,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { Modal } from "./ui/modal";
 import Button from "./ui/button/Button";
 import Alert from "./ui/alert/Alert";
-import { MicrophoneIcon, StopIcon, ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
+import { MicrophoneIcon, StopIcon, ChatBubbleLeftRightIcon, PencilIcon } from "@heroicons/react/24/outline";
 import { RetellWebClient } from "retell-client-js-sdk";
+import { useOrganization } from "@/context/OrganizationContext";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Agent {
   id: string;
@@ -82,11 +84,147 @@ declare global {
   }
 }
 
+// Helper function to extract clean text from transcript/response data
+function arrayPairsToObject(entries: any[]): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (let i = 0; i < entries.length; i += 2) {
+    const key = entries[i];
+    const value = entries[i + 1];
+    if (typeof key === "string") {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function extractCleanText(data: any): string {
+  if (!data) return '';
+  
+  // If it's already a string, return it (but check if it's JSON)
+  if (typeof data === 'string') {
+    // Check if it looks like JSON (starts with [ or {)
+    if (data.trim().startsWith('[') || data.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(data);
+        return extractCleanText(parsed);
+      } catch {
+        // Not valid JSON, return as is
+        return data;
+      }
+    }
+    return data;
+  }
+  
+  // If it's an array, extract messages
+  if (Array.isArray(data)) {
+    const messages: string[] = [];
+    for (const item of data) {
+      if (typeof item === 'string') {
+        messages.push(item);
+      } else if (Array.isArray(item)) {
+        const looksLikePairs = item.every((entry, index) => 
+          index % 2 === 0 ? typeof entry === 'string' : true
+        );
+        const flattenedSource = looksLikePairs ? arrayPairsToObject(item) : item;
+        const nested = extractCleanText(flattenedSource);
+        if (nested && nested.trim()) {
+          messages.push(nested.trim());
+        }
+      } else if (item && typeof item === 'object') {
+        // Extract content/role/text fields
+        const text = item.content || item.text || item.message || item.transcript;
+        if (text && typeof text === 'string') {
+          messages.push(text);
+          continue;
+        }
+
+        if (text) {
+          const nested = extractCleanText(text);
+          if (nested && nested.trim()) {
+            messages.push(nested.trim());
+            continue;
+          }
+        }
+
+        const nestedPieces = Object.values(item)
+          .map((value) => {
+            if (typeof value === 'string') return value;
+            return extractCleanText(value);
+          })
+          .filter((value) => typeof value === 'string' && value.trim().length > 0);
+
+        if (nestedPieces.length > 0) {
+          messages.push(nestedPieces.join(' ').trim());
+        } else {
+          messages.push(JSON.stringify(item, null, 2));
+        }
+      }
+    }
+    return messages.join('\n');
+  }
+  
+  // If it's an object, try to extract text fields
+  if (typeof data === 'object') {
+    return data.content || data.text || data.message || data.transcript || JSON.stringify(data, null, 2);
+  }
+  
+  return String(data);
+}
+
+// Helper function to obfuscate Retell mentions
+function obfuscateRetell(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  return text
+    .replace(/retell/gi, 'voice-platform')
+    .replace(/Retell/gi, 'Voice Platform')
+    .replace(/RETELL/gi, 'VOICE PLATFORM');
+}
+
+// Helper function to sanitize configuration JSON
+function sanitizeConfiguration(config: any): any {
+  if (!config || typeof config !== 'object') return config;
+  
+  const sanitized = JSON.parse(JSON.stringify(config));
+  
+  // Recursively sanitize object
+  function sanitizeObject(obj: any): any {
+    if (Array.isArray(obj)) {
+      return obj.map(sanitizeObject);
+    }
+    if (obj && typeof obj === 'object') {
+      const result: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        // Obfuscate Retell-related keys
+        let newKey = key;
+        if (key.toLowerCase().includes('retell')) {
+          newKey = key.replace(/retell/gi, 'voice-platform').replace(/Retell/gi, 'VoicePlatform');
+        }
+        
+        if (value && typeof value === 'object') {
+          result[newKey] = sanitizeObject(value);
+        } else if (typeof value === 'string') {
+          result[newKey] = obfuscateRetell(value);
+        } else {
+          result[newKey] = value;
+        }
+      }
+      return result;
+    }
+    if (typeof obj === 'string') {
+      return obfuscateRetell(obj);
+    }
+    return obj;
+  }
+  
+  return sanitizeObject(sanitized);
+}
+
 export default function AgentInteractionModal({
   agent,
   isOpen,
   onClose,
 }: AgentInteractionModalProps) {
+  const { currentOrganization } = useOrganization();
   const [activeTab, setActiveTab] = useState<"voice" | "chat">("voice");
   const [isRecording, setIsRecording] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -103,7 +241,11 @@ export default function AgentInteractionModal({
     latency: "0ms",
     tokens: "0",
   });
-
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false);
+  const [editedPrompt, setEditedPrompt] = useState("");
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  
   const recognitionRef = useRef<SpeechRecognitionInterface | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const retellClientRef = useRef<RetellWebClient | null>(null);
@@ -115,6 +257,47 @@ export default function AgentInteractionModal({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Get permissions
+  const { roleInfo, loading: permissionsLoading } = usePermissions(currentOrganization?.id || null);
+
+  // Check if user can view configuration (system_admin, super_admin, or organization_admin only)
+  // Note: organization_admin is normalized to tenant_admin in the database
+  // Check BOTH currentOrganization.role AND roleInfo.role - if EITHER matches allowed roles, show config
+  // This handles cases where role_id might point to a different role than what's displayed
+  const allowedRoles = ['system_admin', 'super_admin', 'organization_admin', 'tenant_admin'];
+  const currentOrgRole = currentOrganization?.role;
+  const roleInfoRole = roleInfo?.role;
+  
+  // Debug logging (remove in production)
+  useEffect(() => {
+    if (isOpen) {
+      const canView = !permissionsLoading && (
+        (currentOrgRole && allowedRoles.includes(currentOrgRole)) ||
+        (roleInfoRole && allowedRoles.includes(roleInfoRole))
+      );
+      console.log('[AgentInteractionModal] Debug:', {
+        currentOrgRole,
+        roleInfoRole,
+        permissionsLoading,
+        canViewConfig: canView
+      });
+    }
+  }, [isOpen, roleInfoRole, currentOrgRole, permissionsLoading]);
+  
+  // Show configuration if EITHER role matches allowed roles
+  const canViewConfiguration = !permissionsLoading && (
+    (currentOrgRole && allowedRoles.includes(currentOrgRole)) ||
+    (roleInfoRole && allowedRoles.includes(roleInfoRole))
+  );
+
+  // Check if user is admin
+  useEffect(() => {
+    if (roleInfo) {
+      const adminRoles = ['organization_admin', 'tenant_admin', 'super_admin', 'system_admin'];
+      setIsAdmin(adminRoles.includes(roleInfo.role));
+    }
+  }, [roleInfo]);
 
   // Fetch agent configuration and prompt from Retell when modal opens
   useEffect(() => {
@@ -317,6 +500,12 @@ export default function AgentInteractionModal({
       return;
     }
 
+    // Prevent double-clicks / multiple calls
+    if (isRecording || retellClientRef.current) {
+      console.log("Call already in progress, ignoring duplicate start request");
+      return;
+    }
+
     setError(null);
     setSuccess(null);
     setTranscription("");
@@ -417,73 +606,60 @@ export default function AgentInteractionModal({
             }
           });
 
+          // CORRECT APPROACH:
+          // The SDK's update event provides data.transcript as an ARRAY of {role, content} objects
+          // Each item represents a turn in the conversation
+          // The array is cumulative - it grows with each update
+          // We simply map this array directly to our messages
+
           retellClient.on("update", (data: any) => {
-            // Simple handling like test page - extract strings safely
-            let transcript: string | null = null;
-            let response: string | null = null;
-            
-            if (data.transcript) {
-              transcript = typeof data.transcript === 'string' ? data.transcript : JSON.stringify(data.transcript);
-            }
-            if (data.response) {
-              response = typeof data.response === 'string' ? data.response : JSON.stringify(data.response);
-            }
-            
-            if (transcript || response) {
-              setIsInitializing(false);
-              isInitializingRef.current = false;
-              setMessages((prev) => prev.filter(msg => msg.id !== 'init'));
-            }
-            
-            if (transcript) {
-              setTranscription(transcript);
-              setMessages((prev) => {
-                const lastMessage = prev[prev.length - 1];
-                if (lastMessage && lastMessage.type === 'user' && !lastMessage.finalized) {
-                  return prev.map((msg, idx) => 
-                    idx === prev.length - 1 
-                      ? { ...msg, text: transcript!, finalized: false }
-                      : msg
-                  );
-                } else {
-                  return [...prev, {
-                    id: `user-${Date.now()}`,
-                    type: 'user' as const,
-                    text: transcript!,
-                    timestamp: new Date(),
-                    finalized: false,
-                  }];
-                }
-              });
-            }
-            
-            if (response) {
-              setMessages((prev) => {
-                const withoutTyping = prev.filter(msg => !msg.isTyping && msg.id !== 'init');
-                const lastMessage = withoutTyping[withoutTyping.length - 1];
+            setIsInitializing(false);
+            isInitializingRef.current = false;
+
+            // The transcript is an ARRAY of {role: "user"|"agent", content: string}
+            if (data.transcript && Array.isArray(data.transcript)) {
+              const transcriptArray = data.transcript as Array<{role: string; content: string}>;
+              
+              // Map each transcript item to a message
+              // Each item is a separate turn in the conversation
+              const newMessages: Message[] = transcriptArray.map((item, index) => {
+                const role = (item.role || "").toLowerCase();
+                const content = (item.content || "").trim();
+                const isAgent = role === "agent" || role === "assistant" || role === "bot";
                 
-                if (lastMessage && lastMessage.type === 'agent' && !lastMessage.finalized) {
-                  return withoutTyping.map((msg, idx) => 
-                    idx === withoutTyping.length - 1 
-                      ? { ...msg, text: response!, finalized: true }
-                      : msg
-                  );
+                // Determine if this message is finalized
+                // The last message is not finalized if it's still being spoken
+                const isLastItem = index === transcriptArray.length - 1;
+                const isFinalized = !isLastItem || 
+                  (isAgent ? !retellClient.isAgentTalking : retellClient.isAgentTalking);
+                
+                return {
+                  id: `turn-${index}`,
+                  type: isAgent ? "agent" as const : "user" as const,
+                  text: content,
+                  timestamp: new Date(),
+                  finalized: isFinalized,
+                };
+              }).filter((m: Message) => m.text.length > 0);
+              
+              setMessages(newMessages);
+              
+              // Update live transcription for the current speaker
+              if (newMessages.length > 0) {
+                const lastMessage = newMessages[newMessages.length - 1];
+                if (!lastMessage.finalized) {
+                  setTranscription(lastMessage.text);
                 } else {
-                  return [...withoutTyping, {
-                    id: `agent-${Date.now()}`,
-                    type: 'agent' as const,
-                    text: response!,
-                    timestamp: new Date(),
-                    finalized: true,
-                  }];
+                  setTranscription("");
                 }
-              });
+              }
             }
           });
 
           retellClient.on("agent_start_talking", () => {
             console.log("🎤 Agent started talking");
             setIsSpeaking(true);
+            setTranscription(""); // Clear user transcription
           });
 
           retellClient.on("agent_stop_talking", () => {
@@ -535,6 +711,8 @@ export default function AgentInteractionModal({
   const handleStopTest = () => {
     setIsRecording(false);
     setIsListening(false);
+    setSuccess(null);
+    setTranscription("");
 
     if (retellClientRef.current) {
       try {
@@ -594,27 +772,126 @@ export default function AgentInteractionModal({
     }
   };
 
-  // Extract prompt from Retell or local configuration
+  // Extract prompt from configuration - obfuscate Retell mentions
   const getAgentPrompt = () => {
-    // Priority 1: Retell LLM prompt (from Retell API)
+    let prompt: string | null = null;
+    
+    // Priority 1: Voice Platform LLM prompt (from API)
     if (agentConfig?.retell_prompt) {
-      return agentConfig.retell_prompt;
+      prompt = agentConfig.retell_prompt;
     }
     
     // Priority 2: Local configuration prompt
-    if (agentConfig?.configuration) {
+    if (!prompt && agentConfig?.configuration) {
       const config = typeof agentConfig.configuration === 'string' 
         ? JSON.parse(agentConfig.configuration) 
         : agentConfig.configuration;
       
-      return config.prompt || 
+      prompt = config.prompt || 
              config.system_instructions || 
              config.systemPrompt || 
              config.llmConfig?.system_instructions ||
              null;
     }
     
-    return "No prompt configured. Fetching from Retell...";
+    // Obfuscate Retell mentions in prompt
+    if (prompt) {
+      return obfuscateRetell(prompt);
+    }
+    
+    return "No prompt configured. Fetching from voice platform...";
+  };
+
+  // Initialize edited prompt when prompt changes
+  useEffect(() => {
+    if (agentConfig && !isEditingPrompt) {
+      // Get original prompt without obfuscation for editing
+      let originalPrompt = "";
+      
+      if (agentConfig.retell_prompt) {
+        originalPrompt = agentConfig.retell_prompt;
+      } else if (agentConfig.configuration) {
+        const config = typeof agentConfig.configuration === 'string' 
+          ? JSON.parse(agentConfig.configuration) 
+          : agentConfig.configuration;
+        originalPrompt = config.prompt || 
+                        config.system_instructions || 
+                        config.systemPrompt || 
+                        config.llmConfig?.system_instructions ||
+                        "";
+      }
+      
+      setEditedPrompt(originalPrompt);
+    }
+  }, [agentConfig, isEditingPrompt]);
+
+  // Handler to start editing prompt
+  const handleStartEditPrompt = () => {
+    // Get original prompt without obfuscation
+    let originalPrompt = "";
+    
+    if (agentConfig?.retell_prompt) {
+      originalPrompt = agentConfig.retell_prompt;
+    } else if (agentConfig?.configuration) {
+      const config = typeof agentConfig.configuration === 'string' 
+        ? JSON.parse(agentConfig.configuration) 
+        : agentConfig.configuration;
+      originalPrompt = config.prompt || 
+                      config.system_instructions || 
+                      config.systemPrompt || 
+                      config.llmConfig?.system_instructions ||
+                      "";
+    }
+    
+    setEditedPrompt(originalPrompt);
+    setIsEditingPrompt(true);
+  };
+
+  // Handler to cancel editing
+  const handleCancelEditPrompt = () => {
+    setIsEditingPrompt(false);
+    setError(null);
+  };
+
+  // Handler to save prompt
+  const handleSavePrompt = async () => {
+    if (!agent) return;
+
+    setIsSavingPrompt(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch(`/api/agents/${agent.id}/prompt`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: editedPrompt,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(data.message || 'Prompt updated successfully and synced to voice platform');
+        setIsEditingPrompt(false);
+        
+        // Refresh agent config to get updated prompt
+        await fetchAgentConfig();
+        if (agent.retell_agent_id) {
+          await fetchRetellAgentPrompt();
+        }
+      } else {
+        setError(data.error || 'Failed to update prompt');
+      }
+    } catch (error: any) {
+      console.error('Failed to save prompt:', error);
+      setError(error.message || 'Failed to update prompt');
+    } finally {
+      setIsSavingPrompt(false);
+    }
   };
 
   if (!agent) return null;
@@ -664,25 +941,67 @@ export default function AgentInteractionModal({
 
             {/* Agent Prompt */}
             <div className="mb-6">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
                 Agent Prompt
               </h3>
+                {isAdmin && !isEditingPrompt && (
+                  <Button
+                    onClick={handleStartEditPrompt}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1"
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                    Edit
+                  </Button>
+                )}
+              </div>
               <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">
+                {isEditingPrompt ? (
+                  <div className="space-y-3">
+                    <textarea
+                      value={editedPrompt}
+                      onChange={(e) => setEditedPrompt(e.target.value)}
+                      className="w-full min-h-[300px] p-3 text-xs text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md font-mono whitespace-pre-wrap resize-y"
+                      placeholder="Enter agent prompt..."
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        onClick={handleCancelEditPrompt}
+                        variant="outline"
+                        size="sm"
+                        disabled={isSavingPrompt}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleSavePrompt}
+                        variant="primary"
+                        size="sm"
+                        disabled={isSavingPrompt || !editedPrompt.trim()}
+                      >
+                        {isSavingPrompt ? 'Saving...' : 'Save & Sync'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                   {getAgentPrompt()}
-                </pre>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Configuration Details */}
-            {agentConfig?.configuration && (
+            {/* Configuration Details - Only visible to system_admin, super_admin, and organization_admin */}
+            {canViewConfiguration && agentConfig?.configuration && (
               <div className="mb-6">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
                   Configuration
                 </h3>
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto">
-                    {JSON.stringify(agentConfig.configuration, null, 2)}
+                    {JSON.stringify(sanitizeConfiguration(agentConfig.configuration), null, 2)}
                   </pre>
                 </div>
               </div>
@@ -759,9 +1078,9 @@ export default function AgentInteractionModal({
                 </Button>
               </div>
             ) : (
-              <>
-                {/* Status Bar */}
-                <div className="mb-4 flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+              <div className="flex flex-col h-full">
+                {/* Status Bar - Sticky at top */}
+                <div className="sticky top-0 z-10 flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded-lg mb-4 flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${
                       isRecording 
@@ -788,8 +1107,8 @@ export default function AgentInteractionModal({
                   </Button>
                 </div>
 
-                {/* Messages */}
-                <div className="space-y-3">
+                {/* Messages - Scrollable area */}
+                <div className="flex-1 overflow-y-auto space-y-3">
                   {messages.length === 0 ? (
                     <div className="flex items-center justify-center h-64">
                       <div className="text-center">
@@ -809,14 +1128,33 @@ export default function AgentInteractionModal({
                       </div>
                     </div>
                   ) : (
-                    messages.map((message) => (
+                    messages.map((message, index) => {
+                      const isUser = message.type === "user";
+                      const displayName = isUser ? "User" : agent?.name || "Agent";
+                      
+                      // Only show the name label if it's different from the previous message
+                      // This groups consecutive messages from the same speaker
+                      const prevMessage = index > 0 ? messages[index - 1] : null;
+                      const showLabel = !prevMessage || prevMessage.type !== message.type;
+
+                      return (
                       <div
                         key={message.id}
+                          className={`flex flex-col gap-1 ${
+                            isUser ? "items-end text-right" : "items-start text-left"
+                          }`}
+                        >
+                          {showLabel && (
+                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                              {displayName}
+                            </span>
+                          )}
+                          <div
                         className={`flex items-start gap-3 ${
-                          message.type === "user" ? "justify-end" : "justify-start"
+                              isUser ? "flex-row-reverse" : ""
                         }`}
                       >
-                        {message.type === "agent" && (
+                            {!isUser && (
                           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
                             <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="currentColor" viewBox="0 0 20 20">
                               <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
@@ -827,7 +1165,7 @@ export default function AgentInteractionModal({
                         
                         <div
                           className={`max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${
-                            message.type === "user"
+                                isUser
                               ? "bg-indigo-600 text-white rounded-br-sm"
                               : message.isTyping
                               ? "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-bl-sm"
@@ -843,21 +1181,23 @@ export default function AgentInteractionModal({
                           ) : (
                             <>
                               <p className={`text-sm whitespace-pre-wrap ${
-                                message.finalized === false ? 'opacity-70 italic' : ''
+                                    message.finalized === false ? 'opacity-70' : ''
                               }`}>
-                                {typeof message.text === 'string' ? message.text : String(message.text || '')}
+                                {extractCleanText(message.text)}
                               </p>
                               {message.finalized === false && (
                                 <div className="flex items-center gap-1 mt-1">
-                                  <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>
-                                  <span className="text-xs opacity-60">Transcribing...</span>
+                                  <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isUser ? 'bg-indigo-300' : 'bg-green-500'}`}></div>
+                                  <span className="text-xs opacity-60">
+                                    {isUser ? 'Listening...' : 'Speaking...'}
+                                  </span>
                                 </div>
                               )}
                             </>
                           )}
                         </div>
 
-                        {message.type === "user" && (
+                            {isUser && (
                           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
                             <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
@@ -865,32 +1205,17 @@ export default function AgentInteractionModal({
                           </div>
                         )}
                       </div>
-                    ))
+                        </div>
+                      );
+                    })
                   )}
                   
-                  {/* Live transcription */}
-                  {isListening && transcription && !messages.some(m => m.type === 'user' && !m.finalized && m.text === transcription) && (
-                    <div className="flex justify-end items-start gap-3">
-                      <div className="max-w-[75%] rounded-2xl rounded-br-sm px-4 py-2.5 bg-indigo-100 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 shadow-sm">
-                        <p className="text-sm text-gray-700 dark:text-gray-300 italic">
-                          {transcription}
-                        </p>
-                        <div className="flex items-center gap-1 mt-1">
-                          <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-pulse"></div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Listening...</p>
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
-                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                        </svg>
+                  {/* Live transcription - ONLY show when user is speaking (not when agent is speaking) */}
+                  {/* This prevents the agent's voice from being picked up and displayed as user input */}
+                  <div ref={messagesEndRef} />
                       </div>
                     </div>
                   )}
-                  <div ref={messagesEndRef} />
-                </div>
-              </>
-            )}
           </div>
         </div>
       </div>

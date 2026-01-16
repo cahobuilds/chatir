@@ -7,9 +7,10 @@ import {
   CallIcon,
   ChatIcon,
 } from "../icons";
+import { DocumentTextIcon, ClockIcon, CreditCardIcon, ChartBarIcon, UserGroupIcon, CloudIcon } from "@heroicons/react/24/outline";
 
 export type PageType = "functional" | "template";
-export type NavCategory = "dashboard" | "admin" | "settings" | "templates";
+export type NavCategory = "dashboard" | "admin" | "settings" | "analytics" | "templates";
 
 export interface NavSubItem {
   name: string;
@@ -17,6 +18,8 @@ export interface NavSubItem {
   type: PageType;
   badge?: "new" | "pro" | "demo";
   description?: string;
+  icon?: React.ReactNode;
+  adminOnly?: boolean; // If true, only show for admin users
 }
 
 export interface NavItem {
@@ -60,6 +63,33 @@ export const navigationConfig: NavItem[] = [
     badge: "new",
     description: "Manage chat AI agents",
   },
+  {
+    name: "Call History",
+    icon: <ClockIcon className="w-5 h-5" />,
+    category: "dashboard",
+    path: "/calls/history",
+    type: "functional",
+    badge: "new",
+    description: "View call history and recordings",
+  },
+  {
+    name: "Chat History",
+    icon: <ChatIcon />,
+    category: "dashboard",
+    path: "/chats/history",
+    type: "functional",
+    badge: "new",
+    description: "View chat conversation history",
+  },
+  {
+    name: "Knowledge Base",
+    icon: <DocumentTextIcon className="w-5 h-5" />,
+    category: "dashboard",
+    path: "/knowledge",
+    type: "functional",
+    badge: "new",
+    description: "Manage knowledge bases and content",
+  },
 
   // Admin - Functional features
   {
@@ -83,6 +113,22 @@ export const navigationConfig: NavItem[] = [
         badge: "new",
         description: "Manage roles and permissions",
       },
+      {
+        name: "Billing & Usage",
+        path: "/billing",
+        type: "functional",
+        icon: <CreditCardIcon className="w-5 h-5" />,
+        description: "Manage billing, subscription, and usage",
+      },
+      {
+        name: "Railway Services",
+        path: "/admin/railway-services",
+        type: "functional",
+        badge: "new",
+        description: "Manage Railway services for Notion MCP",
+        adminOnly: true,
+        icon: <CloudIcon className="w-5 h-5" />,
+      },
       // Future functional items can be added here
       // {
       //   name: "Tenants",
@@ -96,6 +142,45 @@ export const navigationConfig: NavItem[] = [
       //   type: "functional",
       //   description: "View interaction history",
       // },
+    ],
+  },
+
+  // Analytics - Performance and reporting
+  {
+    name: "Analytics",
+    icon: <ChartBarIcon className="w-5 h-5" />,
+    category: "analytics",
+    type: "functional",
+    defaultOpen: true,
+    subItems: [
+      {
+        name: "Overview",
+        path: "/analytics",
+        type: "functional",
+        badge: "new",
+        description: "Comprehensive analytics dashboard",
+      },
+      {
+        name: "Agent Performance",
+        path: "/analytics/agents",
+        type: "functional",
+        badge: "new",
+        description: "Individual agent performance metrics",
+      },
+      {
+        name: "Call Analytics",
+        path: "/analytics/calls",
+        type: "functional",
+        badge: "new",
+        description: "Advanced call analytics and outcomes",
+      },
+      {
+        name: "Customer Experience",
+        path: "/analytics/customer-experience",
+        type: "functional",
+        badge: "new",
+        description: "Customer satisfaction and sentiment",
+      },
     ],
   },
 
@@ -159,13 +244,6 @@ export const navigationConfig: NavItem[] = [
     defaultOpen: false, // Collapsed by default
     subItems: [
       {
-        name: "Analytics",
-        path: "/analytics",
-        type: "template",
-        badge: "demo",
-        description: "Analytics dashboard template",
-      },
-      {
         name: "Monitoring",
         path: "/monitoring",
         type: "template",
@@ -178,20 +256,6 @@ export const navigationConfig: NavItem[] = [
         type: "template",
         badge: "demo",
         description: "Quality assurance template",
-      },
-      {
-        name: "Call History",
-        path: "/calls/history",
-        type: "template",
-        badge: "demo",
-        description: "Call history template",
-      },
-      {
-        name: "Knowledge Base",
-        path: "/knowledge",
-        type: "template",
-        badge: "demo",
-        description: "Knowledge base template",
       },
       {
         name: "Conversation Flows",

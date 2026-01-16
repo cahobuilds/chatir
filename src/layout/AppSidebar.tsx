@@ -5,6 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { useOrganization } from "../context/OrganizationContext";
+import { useAuth } from "@/hooks/useAuth";
 import {
   ChevronDownIcon,
   HorizontaLDots,
@@ -18,6 +19,7 @@ import {
 } from "../config/navigation";
 import Input from "../components/form/input/InputField";
 import Badge from "../components/ui/badge/Badge";
+import { createClient } from "@/lib/supabase/client";
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
@@ -26,10 +28,49 @@ const AppSidebar: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [organizationLogo, setOrganizationLogo] = useState<string | null>(null);
   const [organizationWordmark, setOrganizationWordmark] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
+  const { user } = useAuth();
+  const supabase = createClient();
   // Track multiple open submenus using Set of keys
   const [openSubmenus, setOpenSubmenus] = useState<Set<string>>(new Set());
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user || !currentOrganization?.id) {
+        setIsAdmin(false);
+        setCheckingAdmin(false);
+        return;
+      }
+
+      try {
+        const { data: userTenant } = await supabase
+          .from('user_tenants')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('tenant_id', currentOrganization.id)
+          .eq('status', 'active')
+          .single();
+
+        if (userTenant) {
+          const isAdminRole = ['tenant_admin', 'super_admin', 'system_admin'].includes(userTenant.role);
+          setIsAdmin(isAdminRole);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+      } finally {
+        setCheckingAdmin(false);
+      }
+    };
+
+    checkAdminStatus();
+  }, [user, currentOrganization, supabase]);
 
   // Fetch organization logo and wordmark when organization changes
   useEffect(() => {
@@ -107,6 +148,7 @@ const AppSidebar: React.FC = () => {
     const categories: Record<string, NavItem[]> = {
       dashboard: [],
       admin: [],
+      analytics: [],
       settings: [],
       templates: [],
     };
@@ -273,7 +315,15 @@ const AppSidebar: React.FC = () => {
               }}
             >
               <ul className="mt-2 space-y-1 ml-9">
-                {nav.subItems.map((subItem) => (
+                {nav.subItems
+                  .filter((subItem) => {
+                    // Filter out admin-only items if user is not admin
+                    if (subItem.adminOnly && !isAdmin) {
+                      return false;
+                    }
+                    return true;
+                  })
+                  .map((subItem) => (
                   <li key={subItem.name}>
                     <Link
                       href={subItem.path}
@@ -283,6 +333,11 @@ const AppSidebar: React.FC = () => {
                           : "menu-dropdown-item-inactive"
                       }`}
                     >
+                      {subItem.icon && (
+                        <span className="mr-2 flex-shrink-0">
+                          {subItem.icon}
+                        </span>
+                      )}
                       {subItem.name}
                       <span className="flex items-center gap-1 ml-auto">
                         {subItem.badge === "new" && (
@@ -337,6 +392,7 @@ const AppSidebar: React.FC = () => {
   const categoryLabels: Record<string, string> = {
     dashboard: "Dashboard",
     admin: "Admin",
+    analytics: "Analytics",
     settings: "Settings",
     templates: "Templates",
   };
@@ -398,7 +454,7 @@ const AppSidebar: React.FC = () => {
                 />
               ) : (
                 <span className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">
-                  {currentOrganization?.name || "TailAdmin"}
+                  {currentOrganization?.name || "AI Bots"}
                 </span>
               )}
             </>
@@ -442,8 +498,8 @@ const AppSidebar: React.FC = () => {
               </div>
             )}
 
-            {/* Admin Section */}
-            {navigationByCategory.admin.length > 0 && (
+            {/* Admin Section - Only visible to admins */}
+            {isAdmin && navigationByCategory.admin.length > 0 && (
               <div>
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
@@ -462,8 +518,28 @@ const AppSidebar: React.FC = () => {
               </div>
             )}
 
-            {/* Settings Section */}
-            {navigationByCategory.settings.length > 0 && (
+            {/* Analytics Section - Only visible to admins */}
+            {isAdmin && navigationByCategory.analytics && navigationByCategory.analytics.length > 0 && (
+              <div>
+                <h2
+                  className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
+                    !isExpanded && !isHovered
+                      ? "xl:justify-center"
+                      : "justify-start"
+                  }`}
+                >
+                  {isExpanded || isHovered || isMobileOpen ? (
+                    categoryLabels.analytics
+                  ) : (
+                    <HorizontaLDots />
+                  )}
+                </h2>
+                {renderMenuItems(navigationByCategory.analytics, "analytics")}
+              </div>
+            )}
+
+            {/* Settings Section - Only visible to admins */}
+            {isAdmin && navigationByCategory.settings.length > 0 && (
               <div>
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
@@ -482,8 +558,8 @@ const AppSidebar: React.FC = () => {
               </div>
             )}
 
-            {/* Templates Section */}
-            {navigationByCategory.templates.length > 0 && (
+            {/* Templates Section - Only visible to admins */}
+            {isAdmin && navigationByCategory.templates.length > 0 && (
               <div>
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${

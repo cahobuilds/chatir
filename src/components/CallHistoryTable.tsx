@@ -1,6 +1,31 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useOrganization } from "@/context/OrganizationContext";
+
+interface Interaction {
+  id: string;
+  tenant_id: string;
+  agent_id: string;
+  type: 'chat' | 'voice';
+  status: 'in_progress' | 'completed' | 'failed';
+  retell_call_id: string | null;
+  retell_conversation_id: string | null;
+  customer_phone: string | null;
+  customer_email: string | null;
+  duration: number | null;
+  transcript: any;
+  metadata: any;
+  started_at: string;
+  ended_at: string | null;
+  agents?: {
+    name: string;
+    type: string;
+  };
+  tenants?: {
+    name: string;
+  };
+}
 
 interface CallRecord {
   id: string;
@@ -9,7 +34,7 @@ interface CallRecord {
   direction: "inbound" | "outbound";
   duration: string;
   agent: string;
-  status: "completed" | "missed" | "failed" | "busy";
+  status: "completed" | "missed" | "failed" | "busy" | "in_progress";
   sentiment: "positive" | "neutral" | "negative";
   hasRecording: boolean;
   hasTranscript: boolean;
@@ -18,86 +43,130 @@ interface CallRecord {
   outcome: string;
 }
 
-const callRecords: CallRecord[] = [
-  {
-    id: "CALL-2024-001",
-    timestamp: "2024-01-15 14:23:45",
-    caller: "+1 (555) 123-4567",
-    direction: "inbound",
-    duration: "3m 24s",
-    agent: "AI Agent Alpha",
-    status: "completed",
-    sentiment: "positive",
-    hasRecording: true,
-    hasTranscript: true,
-    transferred: false,
-    language: "EN",
-    outcome: "Issue Resolved"
-  },
-  {
-    id: "CALL-2024-002",
-    timestamp: "2024-01-15 14:18:12",
-    caller: "+1 (555) 987-6543",
-    direction: "inbound",
-    duration: "1m 45s",
-    agent: "AI Agent Beta",
-    status: "completed",
-    sentiment: "neutral",
-    hasRecording: true,
-    hasTranscript: true,
-    transferred: true,
-    language: "EN",
-    outcome: "Transferred to Human"
-  },
-  {
-    id: "CALL-2024-003",
-    timestamp: "2024-01-15 14:12:33",
-    caller: "+1 (555) 456-7890",
-    direction: "inbound",
-    duration: "0m 0s",
-    agent: "AI Agent Gamma",
-    status: "missed",
-    sentiment: "neutral",
-    hasRecording: false,
-    hasTranscript: false,
-    transferred: false,
-    language: "ES",
-    outcome: "No Answer"
-  },
-  {
-    id: "CALL-2024-004",
-    timestamp: "2024-01-15 14:05:21",
-    caller: "+1 (555) 321-0987",
-    direction: "inbound",
-    duration: "2m 18s",
-    agent: "AI Agent Alpha",
-    status: "completed",
-    sentiment: "negative",
-    hasRecording: true,
-    hasTranscript: true,
-    transferred: false,
-    language: "EN",
-    outcome: "Escalated"
-  },
-  {
-    id: "CALL-2024-005",
-    timestamp: "2024-01-15 13:58:07",
-    caller: "+1 (555) 654-3210",
-    direction: "inbound",
-    duration: "4m 12s",
-    agent: "AI Agent Delta",
-    status: "completed",
-    sentiment: "positive",
-    hasRecording: true,
-    hasTranscript: true,
-    transferred: false,
-    language: "FR",
-    outcome: "Issue Resolved"
-  }
-];
+interface CallHistoryTableProps {
+  filters?: {
+    tenant_id?: string;
+    agent_id?: string;
+    status?: string;
+    dateRange?: string;
+    searchQuery?: string;
+  };
+  onFiltersChange?: (filters: any) => void;
+}
 
-export default function CallHistoryTable() {
+export default function CallHistoryTable({ filters = {}, onFiltersChange }: CallHistoryTableProps) {
+  const { currentOrganization } = useOrganization();
   const [selectedCall, setSelectedCall] = useState<string | null>(null);
+  const [callRecords, setCallRecords] = useState<CallRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(50);
+  const [agents, setAgents] = useState<Array<{ id: string; name: string }>>([]);
+
+  // Fetch agents for filter dropdown
+  useEffect(() => {
+    const fetchAgents = async () => {
+      if (!currentOrganization?.id) return;
+      
+      try {
+        const response = await fetch(`/api/agents?tenant_id=${currentOrganization.id}&type=voice`);
+        if (response.ok) {
+          const data = await response.json();
+          setAgents(data.agents || []);
+        }
+      } catch (err) {
+        console.error('Error fetching agents:', err);
+      }
+    };
+
+    fetchAgents();
+  }, [currentOrganization]);
+
+  // Fetch interactions
+  useEffect(() => {
+    const fetchInteractions = async () => {
+      if (!currentOrganization?.id) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const params = new URLSearchParams({
+          tenant_id: currentOrganization.id,
+          type: 'voice', // Only fetch voice interactions
+          limit: pageSize.toString(),
+          offset: ((currentPage - 1) * pageSize).toString(),
+        });
+
+        if (filters.agent_id && filters.agent_id !== 'all') {
+          params.append('agent_id', filters.agent_id);
+        }
+
+        if (filters.status && filters.status !== 'all') {
+          params.append('status', filters.status);
+        }
+
+        const response = await fetch(`/api/interactions?${params.toString()}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch interactions');
+        }
+
+        const data = await response.json();
+        const interactions: Interaction[] = data.interactions || [];
+        
+        // Map to CallRecord format (already filtered by API)
+        const mappedRecords: CallRecord[] = interactions.map((interaction) => {
+          const durationSeconds = interaction.duration || 0;
+          const minutes = Math.floor(durationSeconds / 60);
+          const seconds = durationSeconds % 60;
+          const durationStr = `${minutes}m ${seconds}s`;
+
+          // Extract sentiment from metadata if available
+          const sentiment = (interaction.metadata?.sentiment || 'neutral') as "positive" | "neutral" | "negative";
+          
+          // Check if transcript exists
+          const hasTranscript = !!interaction.transcript;
+          
+          // Check if recording exists (from metadata or retell_call_id)
+          const hasRecording = !!interaction.retell_call_id;
+
+          return {
+            id: interaction.id,
+            timestamp: interaction.started_at,
+            caller: interaction.customer_phone || 'Unknown',
+            direction: "inbound" as const, // Most calls are inbound, could be enhanced
+            duration: durationStr,
+            agent: interaction.agents?.name || 'Unknown Agent',
+            status: interaction.status === 'completed' ? 'completed' : 
+                   interaction.status === 'failed' ? 'failed' : 
+                   interaction.status === 'in_progress' ? 'in_progress' : 'completed',
+            sentiment,
+            hasRecording,
+            hasTranscript,
+            transferred: interaction.metadata?.transferred || false,
+            language: interaction.metadata?.language || 'EN',
+            outcome: interaction.metadata?.outcome || (interaction.status === 'completed' ? 'Completed' : 'In Progress'),
+          };
+        });
+
+        setCallRecords(mappedRecords);
+        setTotal(data.total || 0);
+      } catch (err: any) {
+        console.error('Error fetching interactions:', err);
+        setError(err.message || 'Failed to load call history');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInteractions();
+  }, [currentOrganization, filters, currentPage, pageSize]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -105,6 +174,7 @@ export default function CallHistoryTable() {
       case "missed": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
       case "failed": return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300";
       case "busy": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
+      case "in_progress": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
       default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300";
     }
   };
@@ -122,6 +192,41 @@ export default function CallHistoryTable() {
     return direction === "inbound" ? "📞" : "📞";
   };
 
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return "0m 0s";
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}m ${secs}s`;
+  };
+
+  const totalPages = Math.ceil(total / pageSize);
+
+  if (loading) {
+    return (
+      <div className="rounded-lg bg-white shadow-sm dark:bg-gray-800 p-6">
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg bg-white shadow-sm dark:bg-gray-800 p-6">
+        <div className="text-center py-12">
+          <p className="text-red-600 dark:text-red-400">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg bg-white shadow-sm dark:bg-gray-800">
       <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -131,9 +236,12 @@ export default function CallHistoryTable() {
           </h3>
           <div className="flex items-center space-x-2">
             <span className="text-sm text-gray-500 dark:text-gray-400">
-              {callRecords.length} calls found
+              {total} calls found
             </span>
-            <button className="rounded-lg bg-indigo-600 px-3 py-1 text-sm text-white hover:bg-indigo-700">
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-lg bg-indigo-600 px-3 py-1 text-sm text-white hover:bg-indigo-700"
+            >
               Refresh
             </button>
           </div>
@@ -144,148 +252,189 @@ export default function CallHistoryTable() {
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Call ID
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Time
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Caller
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Duration
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[200px] max-w-[250px]">
                 Agent
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Sentiment
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {callRecords.map((call) => (
-              <tr 
-                key={call.id} 
-                className={`hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer ${
-                  selectedCall === call.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
-                }`}
-                onClick={() => setSelectedCall(selectedCall === call.id ? null : call.id)}
-              >
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-lg">{getDirectionIcon(call.direction)}</span>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">
-                        {call.id}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {call.direction}
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-white">
-                    {new Date(call.timestamp).toLocaleDateString()}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(call.timestamp).toLocaleTimeString()}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-white">
-                    {call.caller}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {call.language}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-white">
-                    {call.duration}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {call.outcome}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900 dark:text-white">
-                    {call.agent}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(call.status)}`}>
-                    {call.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center space-x-2">
-                    <span className={`text-sm ${getSentimentColor(call.sentiment)}`}>
-                      {call.sentiment === 'positive' ? '😊' : call.sentiment === 'neutral' ? '😐' : '😞'}
-                    </span>
-                    <span className={`text-sm ${getSentimentColor(call.sentiment)}`}>
-                      {call.sentiment}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center space-x-2">
-                    {call.hasRecording && (
-                      <button className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400">
-                        🎵
-                      </button>
-                    )}
-                    {call.hasTranscript && (
-                      <button className="text-green-600 hover:text-green-900 dark:text-green-400">
-                        📝
-                      </button>
-                    )}
-                    {call.transferred && (
-                      <span className="text-blue-600 dark:text-blue-400">🔄</span>
-                    )}
-                    <button className="text-gray-600 hover:text-gray-900 dark:text-gray-400">
-                      👁️
-                    </button>
-                  </div>
+            {callRecords.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
+                  No call records found
                 </td>
               </tr>
-            ))}
+            ) : (
+              callRecords.map((call) => (
+                <tr 
+                  key={call.id} 
+                  className="hover:bg-gray-50 dark:hover:bg-gray-900"
+                >
+                  <td className="px-4 py-4">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-lg flex-shrink-0">{getDirectionIcon(call.direction)}</span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {call.id.substring(0, 8)}...
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {call.direction}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 dark:text-white">
+                      {new Date(call.timestamp).toLocaleDateString()}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {new Date(call.timestamp).toLocaleTimeString()}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 dark:text-white">
+                      {call.caller}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {call.language}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 dark:text-white">
+                      {call.duration}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {call.outcome}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="text-sm text-gray-900 dark:text-white line-clamp-2 break-words max-w-[250px]">
+                      {call.agent}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(call.status)}`}>
+                      {call.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-1">
+                      <span className={`text-sm ${getSentimentColor(call.sentiment)}`}>
+                        {call.sentiment === 'positive' ? '😊' : call.sentiment === 'neutral' ? '😐' : '😞'}
+                      </span>
+                      <span className={`text-xs ${getSentimentColor(call.sentiment)} hidden sm:inline`}>
+                        {call.sentiment}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-1">
+                      {call.hasRecording && (
+                        <span className="text-indigo-600 dark:text-indigo-400" title="Has Recording">
+                          🎵
+                        </span>
+                      )}
+                      {call.hasTranscript && (
+                        <span className="text-green-600 dark:text-green-400" title="Has Transcript">
+                          📝
+                        </span>
+                      )}
+                      {call.transferred && (
+                        <span className="text-blue-600 dark:text-blue-400" title="Transferred">🔄</span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/calls/history/${call.id}`, '_blank');
+                        }}
+                        className="rounded-lg bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 whitespace-nowrap"
+                        title="View Details"
+                      >
+                        Details
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
       {/* Pagination */}
-      <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              Showing 1-{callRecords.length} of {callRecords.length} calls
-            </span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button className="rounded bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-              Previous
-            </button>
-            <button className="rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700">
-              1
-            </button>
-            <button className="rounded bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-              2
-            </button>
-            <button className="rounded bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-              Next
-            </button>
+      {totalPages > 1 && (
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, total)} of {total} calls
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="rounded bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`rounded px-3 py-2 text-sm ${
+                      currentPage === pageNum
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="rounded bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -76,14 +76,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ roles: roles || [] });
     }
     
-    // Full role management - system_admin or super_admin only
-    const canManageRoles = userRole && ['system_admin', 'super_admin'].includes(userRole);
-    
-    if (!canManageRoles) {
+    // Full role management - system_admin only
+    if (userRole !== 'system_admin') {
       return NextResponse.json({ 
-        error: 'Forbidden: Insufficient permissions. System admin or super admin required.',
+        error: 'Forbidden: Insufficient permissions. System admin required.',
         userRole: userRole || 'none',
-        requiredRoles: ['system_admin', 'super_admin']
+        requiredRoles: ['system_admin']
       }, { status: 403 });
     }
 
@@ -136,16 +134,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin
-    const { data: userTenants } = await supabase
+    // Check if user is system_admin - check both role_id (new) and role (legacy)
+    const { data: userTenants, error: userTenantsError } = await supabase
       .from('user_tenants')
-      .select('role')
+      .select('role, role_id, roles(name)')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (userTenants?.role !== 'system_admin') {
+    if (userTenantsError || !userTenants) {
+      return NextResponse.json({ error: 'Forbidden: System admin only' }, { status: 403 });
+    }
+
+    // Determine user role - prefer role_id from roles table, fallback to legacy role column
+    let userRole: string | null = null;
+    if (userTenants.role_id && userTenants.roles) {
+      userRole = (userTenants.roles as any)?.name || null;
+    } else if (userTenants.role) {
+      userRole = userTenants.role;
+    }
+
+    if (userRole !== 'system_admin') {
       return NextResponse.json({ error: 'Forbidden: System admin only' }, { status: 403 });
     }
 

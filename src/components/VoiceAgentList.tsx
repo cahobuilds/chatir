@@ -82,6 +82,9 @@ export default function VoiceAgentList() {
       setError(null);
       setSuccess(null);
 
+      // Check if this is a re-sync (agents already exist)
+      const isResync = agents.length > 0;
+
       const response = await fetch('/api/retell/agents/sync', {
         method: 'POST',
         headers: {
@@ -89,7 +92,9 @@ export default function VoiceAgentList() {
         },
         body: JSON.stringify({ 
           tenant_id: currentOrganization.id,
-          type: 'voice' // Only sync voice agents
+          type: 'voice', // Only sync voice agents
+          published_only: true, // Only sync published agents
+          clear_existing: isResync // Clear existing agents when re-syncing
         }),
       });
 
@@ -99,7 +104,17 @@ export default function VoiceAgentList() {
       }
 
       const data = await response.json();
-      setSuccess(`Successfully synced ${data.synced} agent(s)!${data.errors > 0 ? ` (${data.errors} error(s))` : ''}`);
+      const createdCount = data.agents?.filter((a: any) => a.action === 'created').length || 0;
+      const updatedCount = data.agents?.filter((a: any) => a.action === 'updated').length || 0;
+      const skippedPublished = data.skipped_by_published || 0;
+      
+      let message = `Successfully synced ${data.synced} published agent(s)!`;
+      if (createdCount > 0) message += ` ${createdCount} created`;
+      if (updatedCount > 0) message += ` ${updatedCount} updated`;
+      if (skippedPublished > 0) message += ` (${skippedPublished} unpublished skipped)`;
+      if (data.errors > 0) message += ` (${data.errors} error(s))`;
+      
+      setSuccess(message);
       
       // Refresh agents after sync
       await fetchAgents();
@@ -375,7 +390,11 @@ export default function VoiceAgentList() {
                 disabled={syncing || !currentOrganization?.id}
               >
                 <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                {syncing ? "Syncing..." : "Sync Agents"}
+                {syncing 
+                  ? "Syncing Agents..." 
+                  : agents.length > 0 
+                    ? "Re-sync" 
+                    : "Sync Agents"}
               </Button>
               <Button onClick={handleCreate} size="sm">
                 Create Agent
@@ -512,7 +531,11 @@ export default function VoiceAgentList() {
                           disabled={syncing || !currentOrganization?.id}
                         >
                           <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                          {syncing ? "Syncing..." : "Sync Agents"}
+                          {syncing 
+                            ? "Syncing Agents..." 
+                            : agents.length > 0 
+                              ? "Re-sync" 
+                              : "Sync Agents"}
                         </Button>
                         <span className="text-gray-400 dark:text-gray-500">or</span>
                         <Button onClick={handleCreate} size="sm">

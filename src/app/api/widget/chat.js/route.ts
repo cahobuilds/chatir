@@ -1,17 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/widget/chat.js - Serves the embeddable chat widget script
+// Handle CORS preflight
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const agentId = searchParams.get('agent_id');
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
-                  'http://localhost:3000';
+  
+  // Dynamically determine base URL from request
+  const url = new URL(request.url);
+  const baseUrl = `${url.protocol}//${url.host}`;
 
   if (!agentId) {
     return new NextResponse('// Error: agent_id parameter is required', {
       status: 400,
-      headers: { 'Content-Type': 'application/javascript' },
+      headers: { 
+        'Content-Type': 'text/javascript; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'X-Content-Type-Options': 'nosniff',
+      },
     });
   }
 
@@ -20,8 +40,14 @@ export async function GET(request: NextRequest) {
 (function() {
   'use strict';
   
+  console.log('[Chat Widget] Script loaded');
+  console.log('[Chat Widget] Base URL:', '${baseUrl}');
+  
   const agentId = '${agentId}';
   const apiUrl = '${baseUrl}/api/widget/chat/message';
+  
+  console.log('[Chat Widget] Agent ID:', agentId);
+  console.log('[Chat Widget] API URL:', apiUrl);
   
   // Widget configuration
   const config = {
@@ -40,27 +66,20 @@ export async function GET(request: NextRequest) {
   let conversationId = null;
   
   function createWidget() {
+    // Check if already created
+    if (document.getElementById('chat-widget-button')) {
+      console.log('[Chat Widget] Widget already exists, skipping');
+      return;
+    }
+    
+    console.log('[Chat Widget] Creating widget for agent:', agentId);
+    
     // Create button
     const button = document.createElement('div');
     button.id = 'chat-widget-button';
+    button.setAttribute('aria-label', 'Open chat');
     button.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="currentColor"/></svg>';
-    button.style.cssText = \`
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 60px;
-      height: 60px;
-      background-color: \${config.primaryColor};
-      color: \${config.textColor};
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: \${config.zIndex};
-      transition: transform 0.2s;
-    \`;
+    button.style.cssText = 'position: fixed !important; bottom: 20px !important; right: 20px !important; width: 60px !important; height: 60px !important; background-color: ' + config.primaryColor + ' !important; color: ' + config.textColor + ' !important; border-radius: 50% !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; z-index: 9999 !important; transition: transform 0.2s !important; margin: 0 !important; padding: 0 !important; border: none !important; box-sizing: border-box !important;';
     button.addEventListener('click', toggleChat);
     button.addEventListener('mouseenter', () => {
       button.style.transform = 'scale(1.1)';
@@ -72,88 +91,32 @@ export async function GET(request: NextRequest) {
     // Create chat window
     chatWindow = document.createElement('div');
     chatWindow.id = 'chat-widget-window';
-    chatWindow.style.cssText = \`
-      position: fixed;
-      bottom: 90px;
-      right: 20px;
-      width: 380px;
-      height: 600px;
-      max-height: calc(100vh - 120px);
-      background-color: \${config.backgroundColor};
-      border-radius: \${config.borderRadius};
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-      display: none;
-      flex-direction: column;
-      z-index: \${config.zIndex};
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    \`;
+    chatWindow.style.cssText = 'position: fixed !important; bottom: 90px !important; right: 20px !important; width: 380px !important; height: 600px !important; max-height: calc(100vh - 120px) !important; background-color: ' + config.backgroundColor + ' !important; border-radius: ' + config.borderRadius + ' !important; box-shadow: 0 8px 24px rgba(0,0,0,0.2) !important; display: none !important; flex-direction: column !important; z-index: 9999 !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important; margin: 0 !important; padding: 0 !important; border: none !important; box-sizing: border-box !important;';
     
     // Header
     const header = document.createElement('div');
-    header.style.cssText = \`
-      background-color: \${config.primaryColor};
-      color: \${config.textColor};
-      padding: 16px;
-      border-radius: \${config.borderRadius} \${config.borderRadius} 0 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    \`;
-    header.innerHTML = \`
-      <div>
-        <div style="font-weight: 600; font-size: 16px;">Chat Support</div>
-        <div style="font-size: 12px; opacity: 0.9;">We're here to help</div>
-      </div>
-      <button id="chat-widget-close" style="background: none; border: none; color: \${config.textColor}; cursor: pointer; font-size: 24px; line-height: 1;">&times;</button>
-    \`;
+    header.style.cssText = 'background-color: ' + config.primaryColor + '; color: ' + config.textColor + '; padding: 16px; border-radius: ' + config.borderRadius + ' ' + config.borderRadius + ' 0 0; display: flex; justify-content: space-between; align-items: center;';
+    header.innerHTML = '<div><div style="font-weight: 600; font-size: 16px;">Chat Support</div><div style="font-size: 12px; opacity: 0.9;">We are here to help</div></div><button id="chat-widget-close" style="background: none; border: none; color: ' + config.textColor + '; cursor: pointer; font-size: 24px; line-height: 1;">&times;</button>';
     header.querySelector('#chat-widget-close').addEventListener('click', toggleChat);
     
     // Messages container
     const messagesContainer = document.createElement('div');
     messagesContainer.id = 'chat-widget-messages';
-    messagesContainer.style.cssText = \`
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    \`;
+    messagesContainer.style.cssText = 'flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;';
     
     // Input container
     const inputContainer = document.createElement('div');
-    inputContainer.style.cssText = \`
-      padding: 16px;
-      border-top: 1px solid #e5e7eb;
-      display: flex;
-      gap: 8px;
-    \`;
+    inputContainer.style.cssText = 'padding: 16px; border-top: 1px solid #e5e7eb; display: flex; gap: 8px;';
     
     const input = document.createElement('input');
     input.id = 'chat-widget-input';
     input.type = 'text';
     input.placeholder = 'Type your message...';
-    input.style.cssText = \`
-      flex: 1;
-      padding: 12px;
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      font-size: 14px;
-      outline: none;
-    \`;
+    input.style.cssText = 'flex: 1; padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 14px; outline: none;';
     
     const sendButton = document.createElement('button');
     sendButton.innerHTML = 'Send';
-    sendButton.style.cssText = \`
-      padding: 12px 24px;
-      background-color: \${config.primaryColor};
-      color: \${config.textColor};
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-    \`;
+    sendButton.style.cssText = 'padding: 12px 24px; background-color: ' + config.primaryColor + '; color: ' + config.textColor + '; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;';
     
     sendButton.addEventListener('click', sendMessage);
     input.addEventListener('keypress', (e) => {
@@ -170,12 +133,36 @@ export async function GET(request: NextRequest) {
     chatWindow.appendChild(inputContainer);
     
     widgetContainer = document.createElement('div');
+    widgetContainer.id = 'chat-widget-container';
     widgetContainer.appendChild(button);
     widgetContainer.appendChild(chatWindow);
-    document.body.appendChild(widgetContainer);
+    
+    // Append to body
+    if (document.body) {
+      document.body.appendChild(widgetContainer);
+      console.log('[Chat Widget] Widget container appended to body');
+      
+      // Verify it was added
+      const addedButton = document.getElementById('chat-widget-button');
+      if (addedButton) {
+        console.log('[Chat Widget] Button verified in DOM');
+        const computedStyle = window.getComputedStyle(addedButton);
+        console.log('[Chat Widget] Button display:', computedStyle.display);
+        console.log('[Chat Widget] Button visibility:', computedStyle.visibility);
+        console.log('[Chat Widget] Button position:', computedStyle.position);
+        console.log('[Chat Widget] Button z-index:', computedStyle.zIndex);
+      } else {
+        console.error('[Chat Widget] Button not found in DOM after append!');
+      }
+    } else {
+      console.error('[Chat Widget] Cannot append widget: document.body is null');
+      return;
+    }
     
     // Add welcome message
     addMessage('assistant', 'Hello! How can I help you today?');
+    
+    console.log('[Chat Widget] Widget created successfully');
   }
   
   function toggleChat() {
@@ -189,25 +176,12 @@ export async function GET(request: NextRequest) {
   function addMessage(role, content) {
     const messagesContainer = document.getElementById('chat-widget-messages');
     const messageDiv = document.createElement('div');
-    messageDiv.style.cssText = \`
-      display: flex;
-      justify-content: \${role === 'user' ? 'flex-end' : 'flex-start'};
-      margin-bottom: 8px;
-    \`;
+    messageDiv.style.cssText = 'display: flex; justify-content: ' + (role === 'user' ? 'flex-end' : 'flex-start') + '; margin-bottom: 8px;';
     
     const bubble = document.createElement('div');
-    bubble.style.cssText = \`
-      max-width: 75%;
-      padding: 10px 14px;
-      border-radius: 18px;
-      font-size: 14px;
-      line-height: 1.4;
-      word-wrap: break-word;
-      \${role === 'user' 
-        ? \`background-color: \${config.primaryColor}; color: \${config.textColor};\`
-        : \`background-color: #f3f4f6; color: #1f2937;\`
-      }
-    \`;
+    const bubbleBgColor = role === 'user' ? config.primaryColor : '#f3f4f6';
+    const bubbleTextColor = role === 'user' ? config.textColor : '#1f2937';
+    bubble.style.cssText = 'max-width: 75%; padding: 10px 14px; border-radius: 18px; font-size: 14px; line-height: 1.4; word-wrap: break-word; background-color: ' + bubbleBgColor + '; color: ' + bubbleTextColor + ';';
     bubble.textContent = content;
     
     messageDiv.appendChild(bubble);
@@ -228,20 +202,8 @@ export async function GET(request: NextRequest) {
     // Show typing indicator
     const typingIndicator = document.createElement('div');
     typingIndicator.id = 'typing-indicator';
-    typingIndicator.style.cssText = \`
-      display: flex;
-      justify-content: flex-start;
-      margin-bottom: 8px;
-    \`;
-    typingIndicator.innerHTML = \`
-      <div style="background-color: #f3f4f6; padding: 10px 14px; border-radius: 18px;">
-        <div style="display: flex; gap: 4px;">
-          <div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite;"></div>
-          <div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite 0.2s;"></div>
-          <div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite 0.4s;"></div>
-        </div>
-      </div>
-    \`;
+    typingIndicator.style.cssText = 'display: flex; justify-content: flex-start; margin-bottom: 8px;';
+    typingIndicator.innerHTML = '<div style="background-color: #f3f4f6; padding: 10px 14px; border-radius: 18px;"><div style="display: flex; gap: 4px;"><div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite;"></div><div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite 0.2s;"></div><div style="width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; animation: bounce 1.4s infinite 0.4s;"></div></div></div>';
     document.getElementById('chat-widget-messages').appendChild(typingIndicator);
     
     try {
@@ -257,29 +219,97 @@ export async function GET(request: NextRequest) {
         }),
       });
       
-      const data = await response.json();
-      
       // Remove typing indicator
       typingIndicator.remove();
       
-      if (response.ok) {
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[Chat Widget] API error:', response.status, errorData);
+        
+        let errorMsg = errorData.error || errorData.message || 'Please try again.';
+        
+        // Provide more helpful error messages
+        if (response.status === 422) {
+          errorMsg = 'The chat agent is not available. Please contact support or try again later.';
+        } else if (response.status === 404) {
+          errorMsg = 'Agent not found. Please check the agent configuration.';
+        } else if (response.status === 400) {
+          errorMsg = errorData.error || 'Invalid request. Please try again.';
+        } else if (response.status >= 500) {
+          errorMsg = 'Server error. Please try again in a moment.';
+        }
+        
+        addMessage('assistant', 'Sorry, I encountered an error: ' + errorMsg);
+        return;
+      }
+      
+      const data = await response.json();
+      
+      if (data.response) {
         conversationId = data.conversation_id;
         addMessage('assistant', data.response);
       } else {
-        addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
+        addMessage('assistant', 'Sorry, I did not receive a response. Please try again.');
       }
     } catch (error) {
       typingIndicator.remove();
-      addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
+      console.error('[Chat Widget] Fetch error:', error);
+      addMessage('assistant', 'Sorry, I encountered a connection error. Please check your internet connection and try again.');
     }
   }
   
   // Initialize widget when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', createWidget);
-  } else {
-    createWidget();
+  function initWidget() {
+    try {
+      console.log('[Chat Widget] Initialization attempt, readyState:', document.readyState);
+      
+      // Check if widget already exists
+      if (document.getElementById('chat-widget-button')) {
+        console.log('[Chat Widget] Widget already exists, skipping');
+        return;
+      }
+      
+      // Ensure body exists
+      if (!document.body) {
+        console.log('[Chat Widget] Document body not found, retrying in 100ms...');
+        setTimeout(initWidget, 100);
+        return;
+      }
+      
+      console.log('[Chat Widget] Creating widget...');
+      createWidget();
+      console.log('[Chat Widget] Widget created successfully');
+    } catch (error) {
+      console.error('[Chat Widget] Error initializing:', error);
+      console.error('[Chat Widget] Error stack:', error.stack);
+      // Retry after a delay if initialization fails
+      setTimeout(() => {
+        if (!document.getElementById('chat-widget-button')) {
+          console.log('[Chat Widget] Retrying initialization...');
+          initWidget();
+        }
+      }, 1000);
+    }
   }
+  
+  // Multiple initialization strategies to handle different page load scenarios
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWidget);
+  } else if (document.readyState === 'interactive' || document.readyState === 'complete') {
+    // DOM already loaded, initialize immediately
+    initWidget();
+  } else {
+    // Fallback: wait a bit and try
+    setTimeout(initWidget, 100);
+  }
+  
+  // Also try on window load as a fallback
+  window.addEventListener('load', () => {
+    if (!document.getElementById('chat-widget-button')) {
+      console.log('Window loaded, initializing widget...');
+      initWidget();
+    }
+  });
   
   // Add CSS animation for typing indicator
   const style = document.createElement('style');
@@ -288,15 +318,54 @@ export async function GET(request: NextRequest) {
       0%, 80%, 100% { transform: scale(0); }
       40% { transform: scale(1); }
     }
+    #chat-widget-button {
+      position: fixed !important;
+      z-index: 9999 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      box-sizing: border-box !important;
+    }
+    #chat-widget-window {
+      position: fixed !important;
+      z-index: 9999 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      box-sizing: border-box !important;
+    }
+    #chat-widget-container {
+      position: fixed !important;
+      z-index: 9999 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      box-sizing: border-box !important;
+    }
   \`;
-  document.head.appendChild(style);
+  
+  // Ensure head exists before appending style
+  if (document.head) {
+    document.head.appendChild(style);
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (document.head) {
+        document.head.appendChild(style);
+      }
+    });
+  }
 })();
 `;
 
   return new NextResponse(widgetScript, {
     headers: {
-      'Content-Type': 'application/javascript',
+      'Content-Type': 'text/javascript; charset=utf-8',
       'Cache-Control': 'public, max-age=3600',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'X-Content-Type-Options': 'nosniff',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     },
   });
 }

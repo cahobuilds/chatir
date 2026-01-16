@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { tenant_id, type } = body;
+    const { tenant_id, type, published_only, clear_existing } = body;
 
     if (!tenant_id) {
       return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
@@ -25,13 +25,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'type must be "chat" or "voice"' }, { status: 400 });
     }
 
+    // Validate published_only if provided
+    const filterPublished = published_only === true || published_only === 'true';
+
     // Verify user has access to this tenant
     const { data: userTenant } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
       .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'system_admin'])
+      .in('role', ['tenant_admin', 'super_admin', 'system_admin', 'organization_admin', 'manager'])
       .single();
 
     if (!userTenant) {
@@ -43,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+        { error: 'Agent service not configured for this organization\'s reseller. Please contact your reseller administrator.' },
         { status: 400 }
       );
     }
@@ -55,6 +58,91 @@ export async function POST(request: NextRequest) {
     console.log(`[Sync] Found ${retellAgents.length} total agents from Retell for tenant ${tenant_id}`);
     if (type) {
       console.log(`[Sync] Filtering for type: ${type}`);
+    }
+    if (filterPublished) {
+      console.log(`[Sync] Filtering for published agents only`);
+    }
+
+    // If filtering by published status, check each agent's published status
+    // Note: agent.list() may not include is_published, so we need to retrieve each agent
+    let agentsToSync = retellAgents;
+    if (filterPublished) {
+      console.log(`[Sync] Checking published status for ${retellAgents.length} agents...`);
+      const publishedAgents = [];
+      let checkedCount = 0;
+      
+      // Check if list response already includes is_published
+      const firstAgent = retellAgents[0] as any;
+      const hasPublishedInList = firstAgent && 'is_published' in firstAgent;
+      
+      if (hasPublishedInList) {
+        // List response includes is_published, filter directly
+        console.log(`[Sync] List response includes is_published, filtering directly...`);
+        agentsToSync = retellAgents.filter((agent: any) => agent.is_published === true);
+        console.log(`[Sync] Found ${agentsToSync.length} published agents out of ${retellAgents.length} total`);
+      } else {
+        // Need to retrieve each agent to check published status
+        // Process in batches to avoid overwhelming the API
+        const batchSize = 10;
+        for (let i = 0; i < retellAgents.length; i += batchSize) {
+          const batch = retellAgents.slice(i, i + batchSize);
+          const batchPromises = batch.map(async (retellAgent) => {
+            try {
+              // Retrieve full agent details to check published status
+              const agentDetails = await retellClient.agent.retrieve(retellAgent.agent_id);
+              const agentData = agentDetails as any;
+              const isPublished = agentData.is_published || false;
+              
+              if (isPublished) {
+                return retellAgent;
+              } else {
+                console.log(`[Sync] Skipping unpublished agent: ${retellAgent.agent_id} (${retellAgent.agent_name})`);
+                return null;
+              }
+            } catch (error: any) {
+              // If we can't retrieve the agent (e.g., chat agents return 400), skip it
+              console.warn(`[Sync] Could not check published status for agent ${retellAgent.agent_id}:`, error.message);
+              // For chat agents created in dashboard, we can't check via API
+              // Skip them to be safe - user can link them manually
+              return null;
+            }
+          });
+          
+          const batchResults = await Promise.all(batchPromises);
+          publishedAgents.push(...batchResults.filter(Boolean) as typeof retellAgents);
+          
+          checkedCount += batch.length;
+          if (checkedCount % 20 === 0 || checkedCount === retellAgents.length) {
+            console.log(`[Sync] Checked ${checkedCount}/${retellAgents.length} agents...`);
+          }
+        }
+        
+        agentsToSync = publishedAgents;
+        console.log(`[Sync] Found ${publishedAgents.length} published agents out of ${retellAgents.length} total`);
+      }
+    }
+
+    // If clear_existing is true, delete all existing agents of this type for this tenant
+    if (clear_existing) {
+      console.log(`[Sync] Clearing existing ${type || 'all'} agents for tenant ${tenant_id}`);
+      const deleteQuery = supabase
+        .from('agents')
+        .delete()
+        .eq('tenant_id', tenant_id);
+      
+      if (type) {
+        deleteQuery.eq('type', type);
+      }
+      
+      const { error: deleteError } = await deleteQuery;
+      if (deleteError) {
+        console.error(`[Sync] Error clearing existing agents:`, deleteError);
+        return NextResponse.json(
+          { error: `Failed to clear existing agents: ${deleteError.message}` },
+          { status: 500 }
+        );
+      }
+      console.log(`[Sync] Cleared existing agents for tenant ${tenant_id}`);
     }
 
     // Get existing agents for this tenant (including type to check for type changes)
@@ -69,61 +157,44 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Sync] Found ${existingAgents?.length || 0} existing agents in database for tenant ${tenant_id}`);
 
-    const syncedAgents = [];
-    const errors = [];
+    const syncedAgents: Array<{ action: 'created' | 'updated'; agent: any }> = [];
+    const errors: Array<{ retell_agent_id: string; error: string }> = [];
     let skippedByType = 0;
+    let skippedByPublished = filterPublished ? retellAgents.length - agentsToSync.length : 0;
 
     // Sync each Retell agent
-    for (const retellAgent of retellAgents) {
+    for (const retellAgent of agentsToSync) {
       try {
         // Determine agent type based on Retell agent configuration
-        // Priority: voice_id > response_engine type > default to chat
+        // Priority: llm_websocket_url (chat) > voice_id (voice) > response_engine type > default to chat
         let agentType: 'chat' | 'voice' = 'chat'; // Default to chat
         
-        // If voice_id exists, it's definitely a voice agent
-        if (retellAgent.voice_id) {
-          agentType = 'voice';
-        } else {
-          // No voice_id means it's likely a chat agent
-          // But check response_engine to be sure
-          if (retellAgent.response_engine) {
-            const responseEngine = retellAgent.response_engine;
-            
-            // If response_engine is an object
-            if (typeof responseEngine === 'object' && responseEngine !== null) {
-              // Check if it's a string (simple case)
-              if (typeof responseEngine === 'string') {
-                // String response_engine without voice_id is chat
-                agentType = 'chat';
-              } else {
-                // Object response_engine
-                const engine = responseEngine as any;
-                
-                // Check type property
-                if (engine.type === 'custom-llm') {
-                  // Custom LLM is typically chat (unless it has voice_id, which we already checked)
-                  agentType = 'chat';
-                } else if (engine.type === 'retell-llm') {
-                  // Retell LLM without voice_id is chat
-                  agentType = 'chat';
-                }
-                
-                // If it has llm_websocket_url, it's definitely chat
-                if (engine.llm_websocket_url) {
-                  agentType = 'chat';
-                }
-                
-                // If it has llm_id but no voice_id, it's chat
-                if (engine.llm_id && !retellAgent.voice_id) {
-                  agentType = 'chat';
-                }
-              }
-            }
-          }
+        const hasVoiceId = !!retellAgent.voice_id;
+        const responseEngine = retellAgent.response_engine;
+        
+        // Check response_engine first - chat agents with llm_websocket_url are chat even if they have voice_id
+        if (responseEngine && typeof responseEngine === 'object' && responseEngine !== null) {
+          const engine = responseEngine as any;
           
-          // Final check: if no voice_id and no clear voice indicators, it's chat
-          // This catches edge cases where response_engine might be missing or malformed
-          if (!retellAgent.voice_id) {
+          // If it has llm_websocket_url, it's definitely a chat agent
+          if (engine.llm_websocket_url) {
+            agentType = 'chat';
+          } else if (hasVoiceId) {
+            // Has voice_id and no llm_websocket_url = voice agent
+            agentType = 'voice';
+          } else if (engine.type === 'custom-llm' || engine.type === 'retell-llm') {
+            // Custom or Retell LLM without voice_id = chat
+            agentType = 'chat';
+          } else if (engine.llm_id && !hasVoiceId) {
+            // Has llm_id but no voice_id = chat
+            agentType = 'chat';
+          }
+        } else {
+          // No response_engine - check voice_id
+          if (hasVoiceId) {
+            agentType = 'voice';
+          } else {
+            // No voice_id and no response_engine = chat (default)
             agentType = 'chat';
           }
         }
@@ -136,6 +207,22 @@ export async function POST(request: NextRequest) {
         }
         
         console.log(`[Sync] Processing agent ${retellAgent.agent_id} (${retellAgent.agent_name}): type=${agentType}, voice_id=${retellAgent.voice_id || 'none'}, response_engine=${JSON.stringify(retellAgent.response_engine)}`);
+
+        // Check for duplicate agent_id (Retell sometimes returns duplicates)
+        // Use a combination of agent_id + agent_name to create unique identifier
+        const agentUniqueKey = `${retellAgent.agent_id}_${retellAgent.agent_name || 'unnamed'}`;
+        
+        // Check if we've already processed this exact agent in this sync batch
+        const alreadyProcessed = syncedAgents.some((a: any) => 
+          a.agent?.retell_agent_id === retellAgent.agent_id && 
+          a.agent?.name === (retellAgent.agent_name || `Agent ${retellAgent.agent_id}`)
+        );
+        
+        if (alreadyProcessed) {
+          console.log(`[Sync] Skipping duplicate agent ${retellAgent.agent_id} (${retellAgent.agent_name}) - already processed in this sync`);
+          skippedByType++;
+          continue;
+        }
 
         if (existingRetellIds.has(retellAgent.agent_id)) {
           // Update existing agent (including type in case it changed)
@@ -150,8 +237,9 @@ export async function POST(request: NextRequest) {
             const { data: updatedAgent, error: updateError } = await supabase
               .from('agents')
               .update({
-                name: retellAgent.agent_name || `Retell Agent ${retellAgent.agent_id}`,
+                name: retellAgent.agent_name || `Agent ${retellAgent.agent_id}`,
                 type: agentType, // Always update type in case it changed
+                description: `Synced on ${new Date().toISOString()}`,
                 configuration: {
                   ...retellAgent,
                   retell_agent_id: retellAgent.agent_id,
@@ -175,9 +263,9 @@ export async function POST(request: NextRequest) {
             .from('agents')
             .insert({
               tenant_id,
-              name: retellAgent.agent_name || `Retell Agent ${retellAgent.agent_id}`,
+              name: retellAgent.agent_name || `Agent ${retellAgent.agent_id}`,
               type: agentType,
-              description: `Synced from Retell AI on ${new Date().toISOString()}`,
+              description: `Synced on ${new Date().toISOString()}`,
               configuration: {
                 ...retellAgent,
                 retell_agent_id: retellAgent.agent_id,
@@ -208,6 +296,10 @@ export async function POST(request: NextRequest) {
     
     console.log(`[Sync] Summary for tenant ${tenant_id}:`);
     console.log(`  - Total Retell agents: ${retellAgents.length}`);
+    if (filterPublished) {
+      console.log(`  - Published agents: ${agentsToSync.length}`);
+      console.log(`  - Skipped unpublished: ${skippedByPublished}`);
+    }
     console.log(`  - Skipped by type filter: ${skippedByType}`);
     console.log(`  - Created: ${createdCount}`);
     console.log(`  - Updated: ${updatedCount}`);
@@ -218,15 +310,17 @@ export async function POST(request: NextRequest) {
       synced: syncedAgents.length,
       created: createdCount,
       updated: updatedCount,
-      skipped: skippedByType,
+      skipped: skippedByType + skippedByPublished,
+      skipped_by_type: skippedByType,
+      skipped_by_published: skippedByPublished,
       errors: errors.length,
       agents: syncedAgents,
       errors_list: errors,
     });
   } catch (error: any) {
-    console.error('Retell AI agent sync error:', error);
+    console.error('Agent sync error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to sync Retell AI agents' },
+      { error: error.message || 'Failed to sync agents' },
       { status: 500 }
     );
   }

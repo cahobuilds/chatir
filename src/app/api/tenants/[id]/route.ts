@@ -17,41 +17,132 @@ export async function GET(
     }
 
     // Check if user is system_admin (can access any tenant)
-    const { data: systemAdminCheck } = await supabase
+    // Don't use .single() as user might have multiple tenant relationships
+    const { data: systemAdminCheck, error: systemAdminError } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
       .in('role', ['system_admin'])
-      .single();
+      .limit(1);
 
-    const isSystemAdmin = !!systemAdminCheck;
+    const isSystemAdmin = systemAdminCheck && systemAdminCheck.length > 0;
 
-    // If not system_admin, verify user has access to this tenant
-    if (!isSystemAdmin) {
-      const { data: userTenant } = await supabase
+    // Verify user has access to this tenant and get their role
+    let userTenantRole: string | null = null;
+    let hasVerifiedAccess = false;
+    
+    if (isSystemAdmin) {
+      hasVerifiedAccess = true;
+      userTenantRole = 'system_admin';
+    } else {
+      const { data: userTenants, error: userTenantError } = await supabase
         .from('user_tenants')
         .select('tenant_id, role')
         .eq('user_id', user.id)
         .eq('tenant_id', id)
-        .single();
+        .limit(1);
 
-      if (!userTenant) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      if (userTenantError || !userTenants || userTenants.length === 0) {
+        console.error('Access denied - no user_tenants relationship:', {
+          userId: user.id,
+          tenantId: id,
+          error: userTenantError
+        });
+        return NextResponse.json({ error: 'Forbidden: You do not have access to this organization' }, { status: 403 });
       }
+      
+      userTenantRole = userTenants[0]?.role || null;
+      hasVerifiedAccess = true;
     }
 
-    // Use admin client for system admin to bypass RLS, regular client for others
-    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+    // Use admin client if user is system admin or has admin role for this tenant
+    // This bypasses RLS and ensures the query succeeds after we've verified access
+    const adminRoles = ['system_admin', 'organization_admin', 'tenant_admin', 'super_admin'];
+    const isAdminRole = isSystemAdmin || (userTenantRole && adminRoles.includes(userTenantRole));
+    const clientToUse = isAdminRole ? createAdminClient() : supabase;
 
-    // Get tenant (RLS will ensure user can only access their tenant, unless system admin)
-    const { data: tenant, error: tenantError } = await clientToUse
+    console.log('Tenant fetch attempt:', {
+      tenantId: id,
+      userId: user.id,
+      userRole: userTenantRole,
+      isAdminRole,
+      usingAdminClient: isAdminRole,
+      hasVerifiedAccess
+    });
+    
+    // Get tenant - using admin client for admins ensures access, RLS for others
+    let tenant;
+    let tenantError;
+    
+    try {
+      const result = await clientToUse
       .from('tenants')
       .select('*')
       .eq('id', id)
-      .single();
+        .maybeSingle();
 
+      tenant = result.data;
+      tenantError = result.error;
+    } catch (err: any) {
+      console.error('Exception during tenant fetch:', err);
+      tenantError = err;
+      tenant = null;
+    }
+
+    // Enhanced error logging for debugging
     if (tenantError) {
-      return NextResponse.json({ error: tenantError.message }, { status: 500 });
+      console.error('Tenant fetch error details:', {
+        error: tenantError,
+        errorMessage: tenantError?.message,
+        errorCode: tenantError?.code,
+        errorDetails: tenantError?.details,
+        tenantId: id,
+        userId: user.id,
+        isSystemAdmin,
+        userRole: userTenantRole,
+        hasVerifiedAccess,
+        isAdminRole,
+        usingAdminClient: isAdminRole
+      });
+      
+      // If admin client failed, try fallback with regular client (shouldn't happen, but helps debug)
+      if (isAdminRole && tenantError) {
+        console.log('Admin client failed, attempting fallback with regular client...');
+        try {
+          const fallbackResult = await supabase
+            .from('tenants')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle();
+          
+          if (fallbackResult.data && !fallbackResult.error) {
+            console.log('Fallback query succeeded - RLS may be allowing access');
+            tenant = fallbackResult.data;
+            tenantError = null;
+          }
+        } catch (fallbackErr) {
+          console.error('Fallback query also failed:', fallbackErr);
+        }
+      }
+    }
+
+    if (tenantError && !tenant) {
+      console.error('Tenant fetch error:', tenantError);
+      return NextResponse.json({ 
+        error: tenantError.message || 'Failed to fetch organization',
+        details: isAdminRole ? 'Admin client query failed' : 'RLS query failed'
+      }, { status: 500 });
+    }
+
+    if (!tenant) {
+      console.error('Tenant not found:', {
+        tenantId: id,
+        userId: user.id,
+        userRole: userTenantRole,
+        isAdminRole,
+        usingAdminClient: isAdminRole
+      });
+      return NextResponse.json({ error: 'Organization not found or access denied' }, { status: 404 });
     }
 
     return NextResponse.json({ tenant });
@@ -75,28 +166,39 @@ export async function PATCH(
     }
 
     // Check if user is system_admin (can update any tenant)
-    const { data: systemAdminCheck } = await supabase
+    // Don't use .single() as user might have multiple tenant relationships
+    const { data: systemAdminCheck, error: systemAdminError } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
       .in('role', ['system_admin'])
-      .single();
+      .limit(1);
 
-    const isSystemAdmin = !!systemAdminCheck;
+    const isSystemAdmin = systemAdminCheck && systemAdminCheck.length > 0;
 
-    // If not system_admin, verify user is tenant_admin or super_admin for this specific tenant
+    // If not system_admin, verify user is organization_admin, tenant_admin, or super_admin for this specific tenant
+    let userTenantRole: string | null = null;
     if (!isSystemAdmin) {
-      const { data: userTenant } = await supabase
+      const { data: userTenants, error: userTenantError } = await supabase
         .from('user_tenants')
         .select('role')
         .eq('user_id', user.id)
         .eq('tenant_id', id)
-        .in('role', ['tenant_admin', 'super_admin'])
-        .single();
+        .in('role', ['organization_admin', 'tenant_admin', 'super_admin'])
+        .limit(1);
 
-      if (!userTenant) {
-        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+      if (userTenantError || !userTenants || userTenants.length === 0) {
+        console.error('PATCH access denied:', {
+          userId: user.id,
+          tenantId: id,
+          error: userTenantError
+        });
+        return NextResponse.json({ error: 'Forbidden: Admin access required. You need system_admin, organization_admin, or super_admin role to update organization settings.' }, { status: 403 });
       }
+      
+      userTenantRole = userTenants[0]?.role || null;
+    } else {
+      userTenantRole = 'system_admin';
     }
 
     const body = await request.json();
@@ -127,7 +229,14 @@ export async function PATCH(
     }
 
     const updateData: any = {};
-    if (name !== undefined) updateData.name = name;
+    if (name !== undefined) {
+      // Validate name is not empty or just whitespace
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        return NextResponse.json({ error: 'Organization name cannot be empty' }, { status: 400 });
+      }
+      updateData.name = trimmedName;
+    }
     if (subdomain !== undefined) updateData.subdomain = subdomain;
     if (tier !== undefined) updateData.tier = tier;
     if (settings !== undefined) updateData.settings = settings;
@@ -145,23 +254,34 @@ export async function PATCH(
       }
     }
 
-    // Use admin client for system admin operations to bypass RLS
-    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+    // Use admin client for system admin and other admin roles to bypass RLS
+    // This ensures the update succeeds after we've verified access
+    const adminRoles = ['system_admin', 'organization_admin', 'tenant_admin', 'super_admin'];
+    const isAdminRole = isSystemAdmin || (userTenantRole && adminRoles.includes(userTenantRole));
+    const clientToUse = isAdminRole ? createAdminClient() : supabase;
+    
+    console.log('Tenant update attempt:', {
+      tenantId: id,
+      userId: user.id,
+      userRole: userTenantRole,
+      isAdminRole,
+      usingAdminClient: isAdminRole
+    });
 
     const { data: tenant, error: tenantError } = await clientToUse
       .from('tenants')
       .update(updateData)
       .eq('id', id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (tenantError) {
       console.error('Tenant update error:', tenantError);
-      return NextResponse.json({ error: tenantError.message }, { status: 500 });
+      return NextResponse.json({ error: tenantError.message || 'Failed to update organization' }, { status: 500 });
     }
 
     if (!tenant) {
-      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Organization not found or access denied' }, { status: 404 });
     }
 
     return NextResponse.json({ tenant });

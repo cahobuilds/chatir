@@ -11,10 +11,24 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    
+    // Check environment variables before creating client
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('[Retell Agent API] Missing Supabase environment variables');
+      return NextResponse.json(
+        { 
+          error: 'Server configuration error: Supabase not configured',
+          details: 'Please check server environment variables'
+        },
+        { status: 500 }
+      );
+    }
+    
     const supabase = await createClient();
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
+      console.error('[Retell Agent API] Auth error:', authError?.message);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -64,8 +78,18 @@ export async function GET(
 
     // Get Retell AI agent details using reseller's API key
     const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
+    const retellAgentData = retellAgent as any;
 
-    return NextResponse.json({ retell_agent: retellAgent });
+    // Extract channel information for chat agent detection
+    const channel = retellAgentData.channel || null;
+    const isPublished = retellAgentData.is_published || false;
+
+    return NextResponse.json({ 
+      retell_agent: retellAgent,
+      channel: channel, // 'chat' or 'voice'
+      is_published: isPublished,
+      is_chat_agent: channel === 'chat',
+    });
   } catch (error: any) {
     // Log error with context
     logRetellError(error, 'Agent Retrieval');
@@ -104,13 +128,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // Verify user is admin
+    // Verify user is admin (organization_admin, tenant_admin, or super_admin)
     const { data: userTenant } = await supabase
       .from('user_tenants')
       .select('role')
       .eq('user_id', user.id)
       .eq('tenant_id', agent.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
+      .in('role', ['organization_admin', 'tenant_admin', 'super_admin'])
       .single();
 
     if (!userTenant) {

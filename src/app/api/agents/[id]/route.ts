@@ -137,9 +137,32 @@ export async function PATCH(
           // Always update agent name (use updated name or keep current)
           retellUpdatePayload.agent_name = name !== undefined ? name : updatedAgent.name;
           
-          // Update voice configuration if present
-          if (voiceConfig.voice_id) {
-            retellUpdatePayload.voice_id = voiceConfig.voice_id;
+          // Update voice configuration - check both nested and top-level locations
+          const voiceIdToSync = voiceConfig.voice_id || config.voice_id;
+          if (voiceIdToSync) {
+            retellUpdatePayload.voice_id = voiceIdToSync;
+          }
+          
+          // Update voice-specific settings (if present in configuration)
+          // Check both nested (config.voice.*) and top-level (config.*) locations for backward compatibility
+          if (voiceConfig.voice_temperature !== undefined || config.voice_temperature !== undefined) {
+            retellUpdatePayload.voice_temperature = voiceConfig.voice_temperature ?? config.voice_temperature;
+          }
+          if (voiceConfig.voice_speed !== undefined || config.voice_speed !== undefined) {
+            retellUpdatePayload.voice_speed = voiceConfig.voice_speed ?? config.voice_speed;
+          }
+          if (voiceConfig.volume !== undefined || config.volume !== undefined) {
+            // Handle volume conversion: UI stores as 0-100 (percentage), Retell expects 0-2 scale
+            // Retell: 0-2 scale (2 = 100%), UI: 0-100% scale
+            // Conversion: percentage / 50 = Retell value (100% / 50 = 2.0)
+            const volumeValue = voiceConfig.volume ?? config.volume;
+            retellUpdatePayload.volume = volumeValue > 2 ? volumeValue / 50 : volumeValue;
+          }
+          if (voiceConfig.responsiveness !== undefined || config.responsiveness !== undefined) {
+            retellUpdatePayload.responsiveness = voiceConfig.responsiveness ?? config.responsiveness;
+          }
+          if (voiceConfig.interruption_sensitivity !== undefined || config.interruption_sensitivity !== undefined) {
+            retellUpdatePayload.interruption_sensitivity = voiceConfig.interruption_sensitivity ?? config.interruption_sensitivity;
           }
           
           // Update LLM websocket URL if present (for custom LLM)
@@ -164,10 +187,10 @@ export async function PATCH(
           await retellClient.agent.update(retellAgentId, retellUpdatePayload);
           console.log(`Successfully synced agent ${id} (${retellAgentId}) to Retell AI with fields:`, Object.keys(retellUpdatePayload));
           
-          // Handle prompt/system instructions sync
-          // For Retell LLM: Update the LLM's general_prompt
-          // For Custom LLM: Prompt is handled by the websocket endpoint (can't update directly)
-          // Only sync prompt if configuration was updated
+          // Handle LLM configuration sync (prompt, model, temperature, tool_call_strict_mode)
+          // For Retell LLM: Update the LLM's configuration
+          // For Custom LLM: Config is handled by the websocket endpoint (can't update directly)
+          // Only sync if configuration was updated
           if (configuration !== undefined) {
             const prompt = config.prompt || 
                           config.system_instructions || 
@@ -175,8 +198,12 @@ export async function PATCH(
                           llmConfig.system_instructions ||
                           llmConfig.prompt;
             
-            // Only sync if we have a prompt value (empty string means clear it)
-            if (prompt !== undefined && prompt !== null) {
+            const model = llmConfig.model;
+            const modelTemperature = llmConfig.model_temperature ?? llmConfig.temperature;
+            const toolCallStrictMode = llmConfig.tool_call_strict_mode;
+            
+            // Only sync if we have LLM config changes
+            if (prompt !== undefined || model !== undefined || modelTemperature !== undefined || toolCallStrictMode !== undefined) {
               try {
                 // Get the agent from Retell to find the LLM ID
                 const retellAgent = await retellClient.agent.retrieve(retellAgentId);
@@ -190,20 +217,35 @@ export async function PATCH(
                   // Retrieve current LLM configuration to preserve required fields
                   const currentLlm = await retellClient.llm.retrieve(llmId);
                   
-                  // Update the LLM's general_prompt (empty string clears it)
-                  // Must include start_speaker as it's required
-                  await retellClient.llm.update(llmId, {
-                    start_speaker: currentLlm.start_speaker || 'agent', // Preserve existing or default to 'agent'
-                    general_prompt: prompt || null, // null clears the prompt in Retell
-                  });
+                  // Build LLM update payload
+                  const llmUpdatePayload: any = {
+                    start_speaker: currentLlm.start_speaker || 'agent', // Required field
+                  };
                   
-                  console.log(`Successfully synced prompt to Retell LLM ${llmId} for agent ${id}`);
+                  // Add fields that are provided
+                  if (prompt !== undefined) {
+                    llmUpdatePayload.general_prompt = prompt || null; // null clears the prompt in Retell
+                  }
+                  if (model !== undefined) {
+                    llmUpdatePayload.model = model;
+                  }
+                  if (modelTemperature !== undefined) {
+                    llmUpdatePayload.model_temperature = modelTemperature;
+                  }
+                  if (toolCallStrictMode !== undefined) {
+                    llmUpdatePayload.tool_call_strict_mode = toolCallStrictMode;
+                  }
+                  
+                  // Update the LLM configuration
+                  await retellClient.llm.update(llmId, llmUpdatePayload);
+                  
+                  console.log(`Successfully synced LLM config to Retell LLM ${llmId} for agent ${id}:`, Object.keys(llmUpdatePayload));
                 } else if (retellAgent.response_engine?.type === 'custom-llm') {
-                  console.log(`Agent ${id} uses custom LLM - prompt updates must be handled by the LLM websocket endpoint`);
+                  console.log(`Agent ${id} uses custom LLM - LLM config updates must be handled by the LLM websocket endpoint`);
                 }
-              } catch (promptError: any) {
-                console.error(`Failed to sync prompt to Retell LLM for agent ${id}:`, promptError);
-                // Don't fail the entire update if prompt sync fails
+              } catch (llmError: any) {
+                console.error(`Failed to sync LLM config to Retell LLM for agent ${id}:`, llmError);
+                // Don't fail the entire update if LLM sync fails
               }
             }
           }

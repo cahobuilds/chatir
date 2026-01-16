@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Badge from "../ui/badge/Badge";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -8,6 +8,7 @@ import { getRoleDisplayName } from "@/lib/roles-client";
 import ComponentCard from "../common/ComponentCard";
 import Link from "next/link";
 import { type LegacyRole } from "@/lib/permissions";
+import { ClipboardDocumentIcon, CheckIcon } from "@heroicons/react/24/outline";
 
 interface Tenant {
   id: string;
@@ -47,6 +48,9 @@ interface AccountSettingsProps {
 
 export default function AccountSettings({ profile, selectedTenant, onTenantChange }: AccountSettingsProps) {
   const { roleInfo } = usePermissions(selectedTenant?.tenants.id || null);
+  const [copiedTenantId, setCopiedTenantId] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(profile?.avatar_url || null);
 
   if (!profile) {
     return (
@@ -73,16 +77,85 @@ export default function AccountSettings({ profile, selectedTenant, onTenantChang
     }
   };
 
+  // Update avatar preview when profile changes
+  useEffect(() => {
+    if (profile?.avatar_url) {
+      setAvatarPreview(profile.avatar_url);
+    }
+  }, [profile?.avatar_url]);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Invalid file type. Allowed: JPEG, PNG, GIF, WebP');
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      alert('File size exceeds 5MB limit');
+      return;
+    }
+
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload to server
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/profile/avatar', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAvatarPreview(data.avatar_url);
+        // Refresh the page to update profile data
+        window.location.reload();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to upload avatar');
+        // Revert preview on error
+        setAvatarPreview(profile?.avatar_url || null);
+      }
+    } catch (error) {
+      console.error('Failed to upload avatar:', error);
+      alert('Failed to upload avatar');
+      // Revert preview on error
+      setAvatarPreview(profile?.avatar_url || null);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   return (
     <ComponentCard title="Account Settings">
       <div className="space-y-6">
         {/* User Profile Section */}
         <div className="flex items-start gap-4 pb-6 border-b border-gray-200 dark:border-gray-700">
           <div className="relative">
-            <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-              {profile.avatar_url ? (
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center relative">
+              {uploadingAvatar ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                </div>
+              ) : null}
+              {avatarPreview ? (
                 <Image
-                  src={profile.avatar_url}
+                  src={avatarPreview}
                   alt={profile.name}
                   width={80}
                   height={80}
@@ -94,7 +167,14 @@ export default function AccountSettings({ profile, selectedTenant, onTenantChang
                 </span>
               )}
             </div>
-            <button className="absolute bottom-0 right-0 p-1.5 bg-blue-600 rounded-full text-white hover:bg-blue-700 transition-colors">
+            <label className="absolute bottom-0 right-0 p-1.5 bg-blue-600 rounded-full text-white hover:bg-blue-700 transition-colors cursor-pointer">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="hidden"
+                disabled={uploadingAvatar}
+              />
               <svg
                 className="w-4 h-4"
                 fill="none"
@@ -114,7 +194,7 @@ export default function AccountSettings({ profile, selectedTenant, onTenantChang
                   d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
                 />
               </svg>
-            </button>
+            </label>
           </div>
           <div className="flex-1">
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -129,28 +209,51 @@ export default function AccountSettings({ profile, selectedTenant, onTenantChang
               </p>
             )}
             {selectedTenant && (
-              <div className="flex items-center gap-2 mt-3">
-                <Badge
-                  size="sm"
-                  color={getRoleBadgeColor(selectedTenant.role)}
-                  variant="light"
-                >
-                  <svg
-                    className="w-3 h-3 mr-1"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
+              <div className="space-y-2 mt-3">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    size="sm"
+                    color={getRoleBadgeColor(selectedTenant.role)}
+                    variant="light"
                   >
-                    <path
-                      fillRule="evenodd"
-                      d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                    <svg
+                      className="w-3 h-3 mr-1"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
                       {roleInfo?.displayName || getRoleDisplayName(selectedTenant.role)}
-                </Badge>
-                <Badge size="sm" color="light" variant="light">
-                  {selectedTenant.tenants.name}
-                </Badge>
+                  </Badge>
+                  <Badge size="sm" color="light" variant="light">
+                    {selectedTenant.tenants.name}
+                  </Badge>
+                </div>
+                {/* Tenant ID Display */}
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                    Tenant ID: {selectedTenant.tenants.id}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(selectedTenant.tenants.id);
+                      setCopiedTenantId(selectedTenant.tenants.id);
+                      setTimeout(() => setCopiedTenantId(null), 2000);
+                    }}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    title="Copy tenant ID"
+                  >
+                    {copiedTenantId === selectedTenant.tenants.id ? (
+                      <CheckIcon className="w-3 h-3 text-green-600 dark:text-green-400" />
+                    ) : (
+                      <ClipboardDocumentIcon className="w-3 h-3" />
+                    )}
+                  </button>
+                </div>
               </div>
             )}
           </div>

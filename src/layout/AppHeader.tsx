@@ -5,6 +5,7 @@ import UserDropdown from "@/components/header/UserDropdown";
 import OrganizationSwitcher from "@/components/header/OrganizationSwitcher";
 import NavigationSearch from "@/components/common/NavigationSearch";
 import { useSidebar } from "@/context/SidebarContext";
+import { useOrganization } from "@/context/OrganizationContext";
 import Image from "next/image";
 import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
@@ -12,8 +13,47 @@ import React, { useEffect, useRef, useState } from "react";
 const AppHeader: React.FC = () => {
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [organizationLogo, setOrganizationLogo] = useState<string | null>(null);
 
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
+  const { currentOrganization } = useOrganization();
+
+  // Fetch organization logo when organization changes
+  useEffect(() => {
+    const fetchOrganizationBranding = async () => {
+      if (!currentOrganization?.id) {
+        setOrganizationLogo(null);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/tenants/${currentOrganization.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          const branding = data.tenant?.branding;
+          
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let parsedBranding: any = {};
+          if (branding && typeof branding === 'object') {
+            parsedBranding = branding;
+          } else if (branding && typeof branding === 'string') {
+            try {
+              parsedBranding = JSON.parse(branding);
+            } catch {
+              parsedBranding = {};
+            }
+          }
+          
+          // Use logo_url to match sidebar logic
+          setOrganizationLogo(parsedBranding.logo_url || null);
+        }
+      } catch (error) {
+        console.error('Error fetching organization branding:', error);
+      }
+    };
+
+    fetchOrganizationBranding();
+  }, [currentOrganization?.id]);
 
   const handleToggle = () => {
     if (window.innerWidth >= 1280) {
@@ -89,21 +129,28 @@ const AppHeader: React.FC = () => {
             {/* Cross Icon */}
           </button>
 
-          <Link href="/" className="xl:hidden">
-            <Image
-              width={154}
-              height={32}
-              className="dark:hidden"
-              src="/images/logo/logo.svg"
-              alt="Logo"
-            />
-            <Image
-              width={154}
-              height={32}
-              className="hidden dark:block"
-              src="/images/logo/logo-dark.svg"
-              alt="Logo"
-            />
+          <Link href="/" className="xl:hidden flex items-center gap-2">
+            {organizationLogo ? (
+              <Image
+                width={32}
+                height={32}
+                className="h-8 w-8 object-contain"
+                src={organizationLogo}
+                alt={currentOrganization?.name || "Logo"}
+                unoptimized
+              />
+            ) : (
+              <Image
+                width={32}
+                height={32}
+                className="h-8 w-8"
+                src="/images/logo/logo-icon.svg"
+                alt="Logo"
+              />
+            )}
+            <span className="text-lg font-bold text-gray-900 dark:text-white whitespace-nowrap">
+              {currentOrganization?.name || "AI Bots"}
+            </span>
           </Link>
 
           <button
