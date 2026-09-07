@@ -107,7 +107,8 @@ async function investigateAgentVersions() {
     // Try publishing again
     console.log('4. Publishing agent after update...');
     try {
-      await retellClient.agent.publish(agentId);
+      const agentToPublish = await retellClient.agent.retrieve(agentId);
+      await retellClient.agent.publish(agentId, { version: agentToPublish.version });
       console.log('   ✅ Publish request sent');
     } catch (publishError: any) {
       if (publishError.message?.includes('JSON') || publishError.message?.includes('Unexpected end')) {

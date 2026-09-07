@@ -38,16 +38,21 @@ export async function GET(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
         { status: 400 }
       );
     }
 
-    // Get phone numbers from Retell AI using reseller's API key
+    // Get phone numbers from Retell AI using reseller's API key.
+    // Note: list response shape is { items, has_more, pagination_key }, not a bare array.
     const retellClient = createRetellClient(retellApiKey);
-    const phoneNumbers = await retellClient.phoneNumber.list();
+    const phoneNumbersResponse = await retellClient.phoneNumber.list();
 
-    return NextResponse.json({ phone_numbers: phoneNumbers });
+    return NextResponse.json({
+      phone_numbers: phoneNumbersResponse.items || [],
+      has_more: phoneNumbersResponse.has_more || false,
+      pagination_key: phoneNumbersResponse.pagination_key,
+    });
   } catch (error: any) {
     console.error('Retell AI phone numbers retrieval error:', error);
     return NextResponse.json(
@@ -95,17 +100,21 @@ export async function POST(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
         { status: 400 }
       );
     }
 
-    // Purchase phone number from Retell AI using reseller's API key
-    const retellClient = createRetellClient(retellApiKey);
+    // Purchase phone number from Retell AI using reseller's API key.
+    // Note: single-agent binding fields (agent_id) were removed from the phone number API
+    // in favor of weighted inbound/outbound/SMS agent lists -- see
+    // https://docs.retellai.com/deprecation-notice/2026/03-31_phone_number_agent_fields.md
+    // A single agent is expressed as one entry in inbound_agents with weight 1.
     const phoneNumberParams: any = { area_code };
     if (agent_id) {
-      phoneNumberParams.agent_id = agent_id;
+      phoneNumberParams.inbound_agents = [{ agent_id, weight: 1 }];
     }
+    const retellClient = createRetellClient(retellApiKey);
     const phoneNumber = await retellClient.phoneNumber.create(phoneNumberParams);
 
     // If agent_id provided, update agent record

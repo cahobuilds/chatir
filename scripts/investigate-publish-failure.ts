@@ -151,7 +151,8 @@ async function investigatePublishFailure() {
   // Try to publish and capture any errors
   console.log('6. Attempting to publish current version...');
   try {
-    await retellClient.agent.publish(retellAgentId);
+    const agentToPublish = await retellClient.agent.retrieve(retellAgentId);
+    await retellClient.agent.publish(retellAgentId, { version: agentToPublish.version });
     console.log('   ✅ Publish request sent (204 expected)');
     
     // Wait and check

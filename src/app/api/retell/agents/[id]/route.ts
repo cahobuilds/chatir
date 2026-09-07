@@ -64,7 +64,7 @@ export async function GET(
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
         { status: 400 }
       );
     }
@@ -150,7 +150,7 @@ export async function PATCH(
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
         { status: 400 }
       );
     }

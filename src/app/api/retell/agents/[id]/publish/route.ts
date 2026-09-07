@@ -53,7 +53,7 @@ export async function POST(
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
         { status: 400 }
       );
     }
@@ -64,9 +64,24 @@ export async function POST(
       maxRetries: 3,
     });
 
+    // Retell now requires an explicit version to publish (unified publish-agent-version
+    // endpoint). Fetch the agent's current draft version first.
+    let versionToPublish: number;
+    try {
+      const currentAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
+      versionToPublish = currentAgent.version;
+    } catch (retrieveError: any) {
+      logRetellError(retrieveError, 'Agent Publish - Retrieve Version');
+      const errorMessage = formatRetellError(retrieveError);
+      return NextResponse.json(
+        { error: `Failed to retrieve agent version before publishing: ${errorMessage}` },
+        { status: 500 }
+      );
+    }
+
     // Publish the agent
     try {
-      await retellClient.agent.publish(agent.retell_agent_id);
+      await retellClient.agent.publish(agent.retell_agent_id, { version: versionToPublish });
     } catch (publishError: any) {
       // Handle JSON parse errors (expected for 204 No Content responses)
       if (publishError.message?.includes('JSON') || 

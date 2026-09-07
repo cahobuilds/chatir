@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
         { status: 400 }
       );
     }
@@ -52,10 +52,15 @@ export async function GET(request: NextRequest) {
       maxRetries: 2, // Default retries for transient failures
     });
 
-    // List agents from Retell AI using reseller's API key
-    const retellAgents = await retellClient.agent.list();
+    // List agents from Retell AI using reseller's API key.
+    // Note: Retell's list response shape is { items, has_more, pagination_key } (not a bare array).
+    const retellAgentsResponse = await retellClient.agent.list();
 
-    return NextResponse.json({ agents: retellAgents });
+    return NextResponse.json({
+      agents: retellAgentsResponse.items || [],
+      has_more: retellAgentsResponse.has_more || false,
+      pagination_key: retellAgentsResponse.pagination_key,
+    });
   } catch (error: any) {
     // Log error with context
     logRetellError(error, 'Agent List');
@@ -119,7 +124,7 @@ export async function POST(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
         { status: 400 }
       );
     }
@@ -169,8 +174,9 @@ export async function POST(request: NextRequest) {
     } else {
       // Default: Fetch available LLMs and use the first one
       try {
-        const llms = await retellClient.llm.list();
-        if (!llms || llms.length === 0) {
+        const llmsResponse = await retellClient.llm.list();
+        const llms = llmsResponse.items || [];
+        if (llms.length === 0) {
           return NextResponse.json(
             { error: 'No LLMs available. Please configure an LLM or provide llm_id/llm_websocket_url.' },
             { status: 400 }
@@ -201,7 +207,7 @@ export async function POST(request: NextRequest) {
     // Retell's publish API publishes the latest version and creates a new draft
     let isPublished = false;
     try {
-      await retellClient.agent.publish(retellAgent.agent_id);
+      await retellClient.agent.publish(retellAgent.agent_id, { version: retellAgent.version });
       
       // Wait a moment for Retell to process
       await new Promise(resolve => setTimeout(resolve, 3000));

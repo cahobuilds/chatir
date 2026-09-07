@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     const retellApiKey = await getResellerRetellConfig(tenant_id);
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller.' },
+        { error: 'Retell AI not connected for this organization.' },
         { status: 400 }
       );
     }
@@ -107,19 +107,22 @@ export async function POST(request: NextRequest) {
       // Fetch only recent calls (limit to 50 for incremental sync)
       const callListResponse = await retellClient.call.list({
         filter_criteria: {
-          agent_id: agentIdsToSync,
-          call_status: ['ended'],
+          agent: agentIdsToSync.map((agent_id) => ({ agent_id: agent_id as string })),
+          call_status: { op: 'in', type: 'enum', value: ['ended'] },
         },
         limit: 50,
         sort_order: 'descending',
       });
 
-      const calls = Array.isArray(callListResponse) ? callListResponse : (callListResponse as any).calls || [];
+      const calls = callListResponse.items || [];
       
       console.log(`[Incremental Sync] Fetched ${calls.length} recent calls, filtering since ${new Date(lastSyncTimestamp).toISOString()}`);
 
-      // Filter to only new calls since last sync
-      const newCallsToSync = calls.filter((call: any) => {
+      // Filter to only new calls since last sync.
+      // Note: list items are a union of V3WebCallResponse | V3PhoneCallResponse; this sync
+      // only handles phone calls (direction/from_number/to_number are phone-call fields), so
+      // we widen to `any` here rather than narrow the union per-field below.
+      const newCallsToSync: any[] = calls.filter((call: any) => {
         const callTimestamp = call.start_timestamp || call.end_timestamp;
         return callTimestamp > lastSyncTimestamp;
       });

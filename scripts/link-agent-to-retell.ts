@@ -114,8 +114,9 @@ async function linkAgentToRetell(agentId: string) {
       // Chat agent - need response_engine AND voice_id (Retell requires voice_id even for chat)
       // Always fetch available LLMs from Retell (config.model might be OpenAI model name, not Retell LLM ID)
       console.log('Fetching available LLMs from Retell...');
-      const llms = await retellClient.llm.list();
-      if (!llms || llms.length === 0) {
+      const llmsResponse = await retellClient.llm.list();
+      const llms = llmsResponse.items || [];
+      if (llms.length === 0) {
         throw new Error('No LLMs available in Retell. Please configure an LLM first.');
       }
       
@@ -199,8 +200,9 @@ async function linkAgentToRetell(agentId: string) {
     // Retell's publish API publishes the latest version and creates a new draft
     console.log('Publishing agent...');
     try {
-      // The publish endpoint returns 204 No Content, which the SDK handles correctly
-      await retellClient.agent.publish(retellAgent.agent_id);
+      // The publish endpoint returns 204 No Content, which the SDK handles correctly.
+      // Retell now requires an explicit version to publish.
+      await retellClient.agent.publish(retellAgent.agent_id, { version: retellAgent.version });
       console.log('✅ Publish request sent successfully');
       
       // Wait for Retell to process the publish

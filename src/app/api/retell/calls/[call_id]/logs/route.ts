@@ -49,7 +49,7 @@ export async function GET(
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller.' },
+        { error: 'Retell AI not connected for this organization.' },
         { status: 400 }
       );
     }

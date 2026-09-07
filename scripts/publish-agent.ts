@@ -95,8 +95,9 @@ async function publishAgent(agentId: string) {
   try {
     console.log(`Publishing agent ${agent.retell_agent_id}...`);
     
-    // Publish the agent
-    await retellClient.agent.publish(agent.retell_agent_id);
+    // Publish the agent -- Retell now requires an explicit version to publish.
+    const agentToPublish = await retellClient.agent.retrieve(agent.retell_agent_id);
+    await retellClient.agent.publish(agent.retell_agent_id, { version: agentToPublish.version });
     
     console.log('✅ Publish request sent successfully');
     console.log('   Waiting for Retell to process...\n');

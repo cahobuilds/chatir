@@ -67,7 +67,7 @@ export async function POST(
     if (!retellApiKey) {
       console.error(`[Web Call API] No Retell API key found for tenant: ${agent.tenant_id}`);
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
         { status: 400 }
       );
     }

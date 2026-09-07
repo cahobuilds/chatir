@@ -47,34 +47,57 @@ export async function getResellerTenantId(organizationTenantId: string): Promise
 }
 
 /**
- * Gets the Retell API key from the reseller tenant for a given organization tenant.
- * Organizations inherit the Retell configuration from their parent reseller.
- * 
+ * Gets the Retell API key to use for a given organization tenant.
+ *
+ * Data isolation model: each client company (organization tenant) should have its OWN
+ * Retell workspace + API key ("one Retell workspace per company"), so that one company's
+ * agents/knowledge bases/filings can never be listed, attached, or leaked into another
+ * company's agent -- Retell enforces that boundary for us at the platform level, since an
+ * API key can only ever see resources inside its own workspace.
+ *
+ * Lookup order:
+ *   1. The organization's OWN `retell_api_key` (its dedicated workspace) -- preferred and
+ *      the only supported path for new tenants. See docs/RETELL_WORKSPACE_ISOLATION.md.
+ *   2. Fallback to the parent reseller's shared key, ONLY if the organization has not been
+ *      provisioned with its own workspace yet. This exists solely for backward compatibility
+ *      with tenants set up before per-tenant workspaces were required, and should be treated
+ *      as a migration debt to close, not a supported steady state for new companies.
+ *
  * @param organizationTenantId - The organization tenant ID
- * @returns The Retell API key from the reseller, or null if not found
+ * @returns The Retell API key to use, or null if neither the tenant nor its reseller has one
  */
 export async function getResellerRetellConfig(organizationTenantId: string): Promise<string | null> {
   const supabase = await createClient();
-  
-  // First, find the reseller tenant ID
+
+  // 1. Prefer the organization's own dedicated Retell workspace key.
+  const { data: ownTenant } = await supabase
+    .from('tenants')
+    .select('retell_api_key, retell_connection_status')
+    .eq('id', organizationTenantId)
+    .single();
+
+  if (ownTenant?.retell_api_key && ownTenant.retell_connection_status !== 'disconnected') {
+    return ownTenant.retell_api_key;
+  }
+
+  // 2. Backward-compatibility fallback: shared reseller key (pre-dates per-tenant workspaces).
   const resellerTenantId = await getResellerTenantId(organizationTenantId);
-  
+
   if (!resellerTenantId) {
     return null;
   }
-  
-  // Get the reseller's Retell API key
+
   const { data: reseller, error } = await supabase
     .from('tenants')
     .select('retell_api_key')
     .eq('id', resellerTenantId)
     .eq('is_reseller', true)
     .single();
-  
+
   if (error || !reseller || !reseller.retell_api_key) {
     return null;
   }
-  
+
   return reseller.retell_api_key;
 }
 

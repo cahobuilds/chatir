@@ -123,9 +123,9 @@ async function updateAgentChannel(agentId: string) {
     console.log(`   Channel: ${updatedData.channel}`);
     console.log('');
 
-    // Now try to publish again
+    // Now try to publish again -- Retell now requires an explicit version to publish.
     console.log('Publishing updated agent...');
-    await retellClient.agent.publish(agent.retell_agent_id);
+    await retellClient.agent.publish(agent.retell_agent_id, { version: updatedAgent.version });
     console.log('✅ Publish request sent');
     
     await new Promise(resolve => setTimeout(resolve, 5000));

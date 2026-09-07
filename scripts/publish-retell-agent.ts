@@ -85,9 +85,11 @@ async function publishAgent(agentId: string) {
   try {
     console.log('Publishing agent in Retell...');
     
-    // Publish agent - this may return empty response (204 No Content)
+    // Publish agent - this may return empty response (204 No Content).
+    // Retell now requires an explicit version to publish.
     try {
-      await retellClient.agent.publish(agent.retell_agent_id);
+      const agentToPublish = await retellClient.agent.retrieve(agent.retell_agent_id);
+      await retellClient.agent.publish(agent.retell_agent_id, { version: agentToPublish.version });
     } catch (publishError: any) {
       // If it's a JSON parse error but status is 204, that's OK
       if (publishError.message?.includes('JSON') || publishError.message?.includes('Unexpected end')) {

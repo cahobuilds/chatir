@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
     if (!retellApiKey) {
       return NextResponse.json(
         { 
-          error: 'Retell AI not configured for this organization\'s reseller. Knowledge bases must be created in Retell to inform agents. Please contact your reseller administrator.' 
+          error: 'Retell AI not connected for this organization. Knowledge bases must be created in Retell to inform agents. Please connect a Retell workspace in Settings.' 
         },
         { status: 400 }
       );

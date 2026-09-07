@@ -75,7 +75,7 @@ export async function POST(
 
         if (!retellApiKey) {
           return NextResponse.json(
-            { error: 'Retell AI not configured for this organization\'s reseller. Please contact your reseller administrator.' },
+            { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
             { status: 400 }
           );
         }
@@ -119,9 +119,9 @@ export async function POST(
       if (!retellApiKey) {
         return NextResponse.json({
           success: true,
-          response: `I heard you say: "${message}". This is a test response. Retell AI is not configured for this organization's reseller.`,
+          response: `I heard you say: "${message}". This is a test response. Retell AI is not connected for this organization.`,
           message: 'Voice test completed (simulated response - Retell not configured)',
-          note: 'Contact your reseller administrator to configure Retell AI for full voice testing capabilities.',
+          note: 'Connect a Retell workspace in Settings to enable full voice testing capabilities.',
         });
       }
 
@@ -161,7 +161,7 @@ export async function POST(
         return NextResponse.json({
           success: true,
           message: 'Chat test completed (Retell not configured)',
-          response: `I received your message: "${message}". Retell AI is not configured for this organization's reseller. Please contact your reseller administrator.`,
+          response: `I received your message: "${message}". Retell AI is not connected for this organization. Please connect a Retell workspace in Settings.`,
           agent_id: agent.id,
         });
       }

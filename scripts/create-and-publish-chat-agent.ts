@@ -73,8 +73,9 @@ async function createAndPublishChatAgent() {
   try {
     // Step 1: Fetch available LLMs
     console.log('Step 1: Fetching available LLMs...');
-    const llms = await retellClient.llm.list();
-    if (!llms || llms.length === 0) {
+    const llmsResponse = await retellClient.llm.list();
+    const llms = llmsResponse.items || [];
+    if (llms.length === 0) {
       throw new Error('No LLMs available in Retell');
     }
     
@@ -148,8 +149,9 @@ async function createAndPublishChatAgent() {
     // Step 7: Publish the agent
     console.log('Step 7: Publishing agent...');
     try {
-      // The publish endpoint returns void, so we need to handle it carefully
-      await retellClient.agent.publish(retellAgent.agent_id);
+      // The publish endpoint returns void, so we need to handle it carefully.
+      // Retell now requires an explicit version to publish.
+      await retellClient.agent.publish(retellAgent.agent_id, { version: retellAgent.version });
       console.log('✅ Publish request sent successfully');
     } catch (publishError: any) {
       // Check if it's just a JSON parse error (empty response is OK)
