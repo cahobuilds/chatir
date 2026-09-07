@@ -111,3 +111,7 @@ temp/
 
 # Knowledge base storage directories
 knowledge-bases/
+
+# Local environment backups (may contain real credentials)
+.env.local.backup
+.env.local.backup-*
