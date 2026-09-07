@@ -3,7 +3,6 @@ import {
   AiIcon,
   UserCircleIcon,
   BoxIcon,
-  PlugInIcon,
   CallIcon,
   ChatIcon,
 } from "../icons";
@@ -235,65 +234,6 @@ export const navigationConfig: NavItem[] = [
     ],
   },
 
-  // Templates - UI examples (collapsed by default)
-  {
-    name: "Templates",
-    icon: <PlugInIcon />,
-    category: "templates",
-    type: "template",
-    defaultOpen: false, // Collapsed by default
-    subItems: [
-      {
-        name: "Monitoring",
-        path: "/monitoring",
-        type: "template",
-        badge: "demo",
-        description: "Live call monitoring template",
-      },
-      {
-        name: "Quality Control",
-        path: "/quality",
-        type: "template",
-        badge: "demo",
-        description: "Quality assurance template",
-      },
-      {
-        name: "Conversation Flows",
-        path: "/flows",
-        type: "template",
-        badge: "demo",
-        description: "Flow builder template",
-      },
-      {
-        name: "Phone Numbers",
-        path: "/numbers",
-        type: "template",
-        badge: "demo",
-        description: "Phone number management template",
-      },
-      {
-        name: "Integrations",
-        path: "/integrations",
-        type: "template",
-        badge: "demo",
-        description: "Integrations template",
-      },
-      {
-        name: "Webhooks",
-        path: "/webhooks",
-        type: "template",
-        badge: "demo",
-        description: "Webhook configuration template",
-      },
-      {
-        name: "API Playground",
-        path: "/api-playground",
-        type: "template",
-        badge: "demo",
-        description: "API testing template",
-      },
-    ],
-  },
 ];
 
 // Helper function to get all navigation items (flattened for search)

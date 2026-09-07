@@ -5,7 +5,6 @@ import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
 import EnhancedBreadcrumb from "@/components/common/EnhancedBreadcrumb";
-import TemplateBanner from "@/components/common/TemplateBanner";
 import React, { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
@@ -78,10 +77,6 @@ export default function AdminLayout({
         {/* Breadcrumbs */}
         <div className="px-4 md:px-6 pt-4">
           <EnhancedBreadcrumb />
-        </div>
-        {/* Template Banner */}
-        <div className="px-4 md:px-6">
-          <TemplateBanner />
         </div>
         {/* Page Content */}
         <div className={getRouteSpecificStyles()}>{children}</div>
