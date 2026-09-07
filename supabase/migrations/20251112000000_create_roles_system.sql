@@ -1,3 +1,7 @@
+-- Ensure uuid_generate_v4() resolves regardless of the executing role's search_path
+-- (uuid-ossp is installed into the "extensions" schema on current Supabase projects).
+SET search_path TO public, extensions;
+
 -- Create roles table for comprehensive role management
 CREATE TABLE roles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

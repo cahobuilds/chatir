@@ -1,6 +1,10 @@
 -- Migration: Create Notion MCP Integration Tables
 -- This migration creates tables for managing Notion resources, Railway services, and agent assignments
 
+-- Ensure uuid_generate_v4() resolves regardless of the executing role's search_path
+-- (uuid-ossp is installed into the "extensions" schema on current Supabase projects).
+SET search_path TO public, extensions;
+
 -- 1. notion_resources table - Stores Notion account/token information per tenant
 CREATE TABLE notion_resources (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

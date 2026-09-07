@@ -1,8 +1,14 @@
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Enable UUID extension (installed into the "extensions" schema on current Supabase
+-- projects; explicitly schema-qualify it below so uuid_generate_v4() resolves
+-- regardless of the executing role's search_path).
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
 
 -- Enable pgcrypto for encryption functions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" SCHEMA extensions;
+
+-- Ensure the extensions schema is resolvable for uuid_generate_v4()/gen_random_uuid()
+-- calls in this and later migrations without further qualification.
+SET search_path TO public, extensions;
 
 -- Tenants table - represents organizations using the platform
 CREATE TABLE tenants (
