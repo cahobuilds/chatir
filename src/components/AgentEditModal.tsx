@@ -48,7 +48,13 @@ interface AgentEditModalProps {
   onSuccess: () => void;
 }
 
-type TabType = "agent" | "llm" | "prompt";
+type TabType = "agent" | "llm" | "prompt" | "knowledge";
+
+interface KnowledgeBaseOption {
+  id: string;
+  name: string;
+  type: string;
+}
 
 export default function AgentEditModal({
   agent,
@@ -87,9 +93,104 @@ export default function AgentEditModal({
   // Prompt State
   const [prompt, setPrompt] = useState("");
 
+  // Knowledge Base State
+  const [availableKnowledgeBases, setAvailableKnowledgeBases] = useState<KnowledgeBaseOption[]>([]);
+  const [selectedKnowledgeBaseIds, setSelectedKnowledgeBaseIds] = useState<string[]>([]);
+  const [kbFilterScore, setKbFilterScore] = useState(0.7);
+  const [kbTopK, setKbTopK] = useState(5);
+  const [kbLoading, setKbLoading] = useState(false);
+  const [kbResponseEngineType, setKbResponseEngineType] = useState<string | null>(null);
+
   // Voice options - will be populated from Retell API
   const [voiceOptions, setVoiceOptions] = useState<Array<{ value: string; label: string; gender: string }>>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
+
+  // Fetch available knowledge bases (for the org) and the agent's currently attached ones
+  useEffect(() => {
+    if (isOpen && currentOrganization?.id && agent?.id) {
+      const fetchKnowledgeBaseData = async () => {
+        setKbLoading(true);
+        try {
+          const [allKbsResponse, agentKbsResponse] = await Promise.all([
+            fetch("/api/knowledge-bases"),
+            agent.retell_agent_id
+              ? fetch(`/api/agents/${agent.id}/knowledge-bases`)
+              : Promise.resolve(null),
+          ]);
+
+          if (allKbsResponse.ok) {
+            const data = await allKbsResponse.json();
+            setAvailableKnowledgeBases(
+              (data.knowledge_bases || []).map((kb: any) => ({
+                id: kb.id,
+                name: kb.name,
+                type: kb.type,
+              }))
+            );
+          }
+
+          if (agentKbsResponse && agentKbsResponse.ok) {
+            const data = await agentKbsResponse.json();
+            setSelectedKnowledgeBaseIds((data.knowledge_bases || []).map((kb: any) => kb.id));
+            setKbResponseEngineType(data.response_engine_type || null);
+            if (data.kb_config?.filter_score !== undefined) {
+              setKbFilterScore(data.kb_config.filter_score);
+            }
+            if (data.kb_config?.top_k !== undefined) {
+              setKbTopK(data.kb_config.top_k);
+            }
+          } else {
+            setSelectedKnowledgeBaseIds([]);
+          }
+        } catch (err) {
+          console.warn("Failed to fetch knowledge base data:", err);
+        } finally {
+          setKbLoading(false);
+        }
+      };
+      fetchKnowledgeBaseData();
+    }
+  }, [isOpen, currentOrganization?.id, agent?.id, agent?.retell_agent_id]);
+
+  const toggleKnowledgeBase = (kbId: string) => {
+    setSelectedKnowledgeBaseIds((prev) =>
+      prev.includes(kbId) ? prev.filter((id) => id !== kbId) : [...prev, kbId]
+    );
+  };
+
+  const handleSaveKnowledgeBases = async () => {
+    if (!agent) return;
+    setError(null);
+    setSuccess(null);
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch(`/api/agents/${agent.id}/knowledge-bases`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          knowledge_base_ids: selectedKnowledgeBaseIds,
+          filter_score: kbFilterScore,
+          top_k: kbTopK,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Failed to update knowledge bases");
+        return;
+      }
+
+      setSuccess(data.message || "Knowledge bases updated successfully!");
+      setTimeout(() => setSuccess(null), 4000);
+    } catch (err: any) {
+      console.error("Failed to update knowledge bases:", err);
+      setError(err.message || "Failed to update knowledge bases");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // Fetch available voices from Retell AI when modal opens
   useEffect(() => {
@@ -571,6 +672,19 @@ export default function AgentEditModal({
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400"></span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab("knowledge")}
+            className={`px-4 py-3 font-medium text-sm transition-colors relative ${
+              activeTab === "knowledge"
+                ? "text-indigo-600 dark:text-indigo-400"
+                : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            Knowledge Base
+            {activeTab === "knowledge" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400"></span>
+            )}
+          </button>
         </div>
 
         {/* Scrollable Content */}
@@ -939,6 +1053,114 @@ export default function AgentEditModal({
                       Define the agent's personality, behavior, and response style. You can review and append to the existing prompt.
                     </p>
                   </div>
+                </div>
+              )}
+
+              {/* Knowledge Base Tab */}
+              {activeTab === "knowledge" && (
+                <div className="space-y-5">
+                  {!agent.retell_agent_id ? (
+                    <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
+                      Link or create this agent in Retell first before attaching knowledge bases.
+                    </div>
+                  ) : kbResponseEngineType === "custom-llm" ? (
+                    <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
+                      This agent uses a custom LLM (websocket). Knowledge bases only attach to
+                      Retell LLMs -- pass knowledge base content to your websocket server directly.
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <Label>Attached Knowledge Bases</Label>
+                        <p className="mt-1 mb-3 text-xs text-gray-500 dark:text-gray-400">
+                          Select which knowledge bases this agent can retrieve from when answering
+                          questions. Only content from these knowledge bases (plus the prompt) will
+                          ground the agent&apos;s responses.
+                        </p>
+                        {kbLoading ? (
+                          <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
+                            Loading knowledge bases...
+                          </div>
+                        ) : availableKnowledgeBases.length === 0 ? (
+                          <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
+                            No knowledge bases found for this organization. Create one under
+                            Knowledge Base first.
+                          </div>
+                        ) : (
+                          <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md p-3">
+                            {availableKnowledgeBases.map((kb) => (
+                              <div key={kb.id} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id={`kb-${kb.id}`}
+                                  checked={selectedKnowledgeBaseIds.includes(kb.id)}
+                                  onChange={() => toggleKnowledgeBase(kb.id)}
+                                  disabled={isSubmitting}
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <Label htmlFor={`kb-${kb.id}`} className="mb-0">
+                                  {kb.name}
+                                  <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">({kb.type})</span>
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <Label htmlFor="kb-filter-score" className="mb-0">
+                            Similarity Threshold
+                          </Label>
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {kbFilterScore.toFixed(2)}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          id="kb-filter-score"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={kbFilterScore}
+                          onChange={(e) => setKbFilterScore(parseFloat(e.target.value))}
+                          disabled={isSubmitting}
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
+                        />
+                        <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                          Minimum relevance score for a knowledge base chunk to be used. Higher
+                          values make the agent more likely to say &quot;I don&apos;t have that
+                          information&quot; instead of guessing from a weak match -- recommended
+                          for investor-facing agents.
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="kb-top-k">Max Chunks Retrieved (top_k)</Label>
+                        <Input
+                          id="kb-top-k"
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={kbTopK}
+                          onChange={(e) => setKbTopK(parseInt(e.target.value, 10) || 5)}
+                          disabled={isSubmitting}
+                        />
+                      </div>
+
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isSubmitting || kbLoading}
+                          onClick={handleSaveKnowledgeBases}
+                        >
+                          {isSubmitting ? "Saving..." : "Save Knowledge Base Settings"}
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </Form>

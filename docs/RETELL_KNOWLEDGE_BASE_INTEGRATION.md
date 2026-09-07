@@ -56,7 +56,7 @@ await retellClient.agent.update(agentId, {
     llm_id: 'llm_xxxxx',
     knowledge_base_ids: ['kb_123', 'kb_456'], // Array of KB IDs
     kb_config: {
-      similarity_threshold: 0.7, // 0-1, how similar chunks must be
+      filter_score: 0.7, // 0-1, minimum similarity score for a retrieved chunk
       top_k: 5, // Max number of chunks to retrieve
     },
   },
@@ -81,7 +81,7 @@ await retellClient.agent.update(agentId, {
     llm_id: currentLLMId,
     knowledge_base_ids: [myKB.knowledge_base_id],
     kb_config: {
-      similarity_threshold: 0.7,
+      filter_score: 0.7,
       top_k: 5,
     },
   },
@@ -118,49 +118,68 @@ await retellClient.agent.update(agentId, {
 
 ## Our Current Implementation
 
-### What We Have
+> **Update**: all of this is now implemented. This section originally described a plan;
+> it's kept below (marked historical) for context, followed by what was actually built.
 
-✅ **Agent Update Endpoint**: `PATCH /api/retell/agents/[id]`
-- Already supports updating `response_engine`
-- Can accept `knowledge_base_ids` in `response_engine`
+### What we have (current, as of the KB<->agent linking work)
 
-### What We Need to Add
+✅ **Knowledge Base Management** (`/api/knowledge-bases`, `/api/knowledge-bases/[id]/sources`,
+`/api/retell/knowledge-bases/sync`) -- create/list/sync knowledge bases and add
+URL/file/text sources, all backed by the real Retell `knowledgeBase` resource.
 
-1. **Knowledge Base Management Endpoints**:
-   - `GET /api/retell/knowledge-bases` - List knowledge bases
-   - `POST /api/retell/knowledge-bases` - Create knowledge base
-   - `GET /api/retell/knowledge-bases/[id]` - Get knowledge base details
-   - `PATCH /api/retell/knowledge-bases/[id]` - Update knowledge base
-   - `DELETE /api/retell/knowledge-bases/[id]` - Delete knowledge base
-   - `POST /api/retell/knowledge-bases/[id]/sources` - Add sources
+✅ **Agent <-> Knowledge Base linking**: `GET`/`PATCH /api/agents/[id]/knowledge-bases`
+(`src/app/api/agents/[id]/knowledge-bases/route.ts`). This is a **dedicated endpoint**,
+not a field tacked onto the agent update endpoint -- it:
+- Resolves local KB row ids to their Retell `knowledge_base_id`.
+- Resolves the agent's `llm_id` from its `response_engine` (working for both the voice
+  `agent` resource and the native `chatAgent` resource -- see
+  `docs/RETELL_CHAT_AGENT_GUIDE.md`).
+- Calls `retellClient.llm.update(llmId, { knowledge_base_ids, kb_config })` directly on
+  the LLM (not through the agent's own update endpoint -- `knowledge_base_ids`/`kb_config`
+  are LLM-level fields, not agent-level fields).
+- Mirrors the link into a local `agent_knowledge_bases` table (migration
+  `20260101000000_create_agent_knowledge_bases.sql`) purely for fast UI display; Retell
+  remains the source of truth for whether retrieval actually happens.
 
-2. **UI Components**:
-   - Knowledge base list/management UI
-   - Link knowledge base to agent in agent configuration
-   - Display linked knowledge bases in agent details
+✅ **UI**: the "Knowledge Base" tab in `AgentEditModal` (multi-select + filter_score/top_k
+sliders), and a "Used by agents" section on the Knowledge Base detail page
+(`src/components/KnowledgeBaseDetail.tsx`) showing which agents currently reference each KB.
 
-## Example: Linking KB to Chat Agent
+### Correction: the field is `filter_score`, not `similarity_threshold`
+
+An earlier draft of this doc (and this project's docs generally) used
+`similarity_threshold` as the KB config field name. **The actual Retell API field is
+`filter_score`** (confirmed against the current `retell-typescript-sdk` source,
+`LlmUpdateParams.KBConfig`). The code in this repo uses `filter_score` correctly; if you
+see `similarity_threshold` anywhere it is a naming error to fix, not an alternate valid
+field.
+
+## Example: Linking KB to an agent (current, correct way)
 
 ```typescript
-// Via our API endpoint
-PATCH /api/retell/agents/{database_agent_id}
+// Via our dedicated endpoint (not the agent update endpoint):
+PATCH /api/agents/{database_agent_id}/knowledge-bases
 {
-  "response_engine": {
-    "type": "retell-llm",
-    "llm_id": "llm_xxxxx",
-    "knowledge_base_ids": ["kb_123456"],
-    "kb_config": {
-      "similarity_threshold": 0.7,
-      "top_k": 5
-    }
-  }
+  "knowledge_base_ids": ["<local-kb-row-id-1>", "<local-kb-row-id-2>"],
+  "filter_score": 0.75,
+  "top_k": 5
 }
 ```
 
+Internally this resolves to a call against the agent's **LLM**, not the agent itself:
+
+```typescript
+await retellClient.llm.update(llmId, {
+  knowledge_base_ids: ["kb_123456"],
+  kb_config: { filter_score: 0.75, top_k: 5 },
+});
+```
+
 This will:
-- ✅ Update the agent's LLM configuration
-- ✅ Link the knowledge base
-- ✅ **Preserve** `channel: "chat"` (if agent is a chat agent)
+- ✅ Update the agent's underlying LLM's knowledge base configuration
+- ✅ Link the knowledge base for retrieval on the next message
+- ✅ Leave the agent's own `channel`/`response_engine.type` untouched (this call never
+  touches the agent resource itself)
 
 ## Knowledge Base Configuration
 
@@ -168,7 +187,7 @@ This will:
 
 ```typescript
 kb_config: {
-  similarity_threshold: number, // 0-1, minimum similarity score
+  filter_score: number, // 0-1, minimum similarity score for a retrieved chunk
   top_k: number, // Max chunks to retrieve per query
 }
 ```

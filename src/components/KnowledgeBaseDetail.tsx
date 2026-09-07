@@ -24,6 +24,15 @@ interface Source {
   created_at: string;
 }
 
+interface LinkedAgent {
+  id: string;
+  name: string;
+  type: 'chat' | 'voice';
+  is_active: boolean;
+  similarity_threshold: number | null;
+  top_k: number | null;
+}
+
 interface KnowledgeBaseDetailProps {
   knowledgeBase: KnowledgeBase | null;
   onEdit: () => void;
@@ -40,6 +49,7 @@ export default function KnowledgeBaseDetail({
   onRefresh,
 }: KnowledgeBaseDetailProps) {
   const [sources, setSources] = useState<Source[]>([]);
+  const [linkedAgents, setLinkedAgents] = useState<LinkedAgent[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const [showAddSource, setShowAddSource] = useState(false);
@@ -53,9 +63,11 @@ export default function KnowledgeBaseDetail({
   useEffect(() => {
     if (knowledgeBase?.id) {
       fetchSources();
+      fetchLinkedAgents();
     } else {
       // Clear sources if no knowledge base selected
       setSources([]);
+      setLinkedAgents([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [knowledgeBase?.id]);
@@ -74,6 +86,20 @@ export default function KnowledgeBaseDetail({
       console.error('Error fetching sources:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLinkedAgents = async () => {
+    if (!knowledgeBase?.id) return;
+
+    try {
+      const response = await fetch(`/api/knowledge-bases/${knowledgeBase.id}/agents`);
+      if (response.ok) {
+        const data = await response.json();
+        setLinkedAgents(data.agents || []);
+      }
+    } catch (error) {
+      console.error('Error fetching linked agents:', error);
     }
   };
 
@@ -311,6 +337,34 @@ export default function KnowledgeBaseDetail({
               <span className="text-green-600 dark:text-green-400">✓</span>
               {knowledgeBase.lastSynced && `Last synced: ${knowledgeBase.lastSynced}`}
             </span>
+          )}
+        </div>
+
+        {/* Used by agents */}
+        <div className="mt-3">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+            Used by agents
+          </p>
+          {linkedAgents.length === 0 ? (
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Not attached to any agent yet. Open an agent&apos;s Knowledge Base tab to attach it.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {linkedAgents.map((agent) => (
+                <span
+                  key={agent.id}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                    agent.type === 'chat'
+                      ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
+                      : 'bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300'
+                  } ${!agent.is_active ? 'opacity-50' : ''}`}
+                  title={`${agent.type === 'chat' ? 'Chat' : 'Voice'} agent${!agent.is_active ? ' (inactive)' : ''}`}
+                >
+                  {agent.name}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       </div>

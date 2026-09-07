@@ -21,6 +21,7 @@ import Alert from "./ui/alert/Alert";
 import { ArrowPathIcon, PencilIcon, TrashIcon, PlayIcon, CodeBracketIcon, ClipboardDocumentIcon, CloudArrowUpIcon } from "@heroicons/react/24/outline";
 import AgentEditModal from "./AgentEditModal";
 import AgentTestModal from "./AgentTestModal";
+import CreateIRAgentModal from "./CreateIRAgentModal";
 
 interface Agent {
   id: string;
@@ -49,6 +50,7 @@ export default function ChatAgentList() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreateIRModalOpen, setIsCreateIRModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [testingAgent, setTestingAgent] = useState<Agent | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -411,10 +413,52 @@ export default function ChatAgentList() {
       const data = await response.json();
       const localAgentId = data.agent.id;
 
-      // Step 2: Skip Retell creation - user should create chat agent in Retell dashboard
-      // API-created agents default to "voice" channel, so we skip automatic creation
-      // User can link manually created chat agent using the "Link Retell Agent" button
-      setSuccess("Agent created locally! Next steps: 1) Create a chat agent in Retell dashboard, 2) Use 'Link Retell Agent' button to connect it");
+      // Step 2: Create the native Retell chat agent and link it automatically.
+      // Retell's dedicated Chat Agent API (chatAgent.create) means we no longer need the
+      // old "create in dashboard, then link manually" workaround -- a chat agent can be
+      // created directly with a fresh Retell LLM (using the chosen model) and linked in
+      // one step.
+      try {
+        const llmResponse = await fetch("/api/retell/llms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenant_id: currentOrganization.id,
+            model: formData.model,
+          }),
+        });
+
+        if (!llmResponse.ok) {
+          const llmError = await llmResponse.json();
+          throw new Error(llmError.error || "Failed to create Retell LLM");
+        }
+
+        const { llm } = await llmResponse.json();
+
+        const chatAgentResponse = await fetch("/api/retell/chat-agents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenant_id: currentOrganization.id,
+            agent_id: localAgentId,
+            agent_name: formData.name.trim(),
+            llm_id: llm.llm_id,
+            language: formData.language,
+          }),
+        });
+
+        if (!chatAgentResponse.ok) {
+          const chatAgentError = await chatAgentResponse.json();
+          throw new Error(chatAgentError.error || "Failed to create Retell chat agent");
+        }
+
+        setSuccess(`Agent "${formData.name.trim()}" created and connected to Retell! Publish it when ready to go live.`);
+      } catch (retellError: any) {
+        console.error("Failed to create Retell chat agent:", retellError);
+        setSuccess(
+          `Agent created locally, but connecting it to Retell failed: ${retellError.message}. You can retry with "Link Retell Agent" once a Retell chat agent exists.`
+        );
+      }
       setTimeout(() => setSuccess(null), 10000);
 
       setIsCreateModalOpen(false);
@@ -557,6 +601,15 @@ export default function ChatAgentList() {
             </Button>
             <Button onClick={handleCreate} size="sm">
               Create Agent
+            </Button>
+            <Button
+              onClick={() => setIsCreateIRModalOpen(true)}
+              size="sm"
+              variant="outline"
+              className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
+              title="Create a chat + voice agent pair pre-configured for investor relations"
+            >
+              Create Investor Relations Agent
             </Button>
           </div>
         </div>
@@ -834,6 +887,15 @@ export default function ChatAgentList() {
         }}
       />
 
+      {/* Create Investor Relations Agent Modal */}
+      <CreateIRAgentModal
+        isOpen={isCreateIRModalOpen}
+        onClose={() => setIsCreateIRModalOpen(false)}
+        onSuccess={() => {
+          fetchAgents();
+        }}
+      />
+
       {/* Embed Code Modal */}
       <Modal
         isOpen={isEmbedModalOpen}
@@ -1074,11 +1136,17 @@ export default function ChatAgentList() {
               <h4 className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
                 Instructions
               </h4>
+              <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
+                Use this only if a chat agent already exists in Retell (e.g. created via the
+                Retell dashboard) and you want to link it to this local agent record.
+                New agents created with the &quot;Create Agent&quot; button above are already
+                connected to Retell automatically.
+              </p>
               <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-decimal list-inside">
-                <li>Create a <strong>chat agent</strong> in the Retell dashboard</li>
-                <li>Copy the Retell Agent ID (starts with <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">agent_</code>)</li>
-                <li>Paste it below and click "Link Agent"</li>
-                <li>Publish the agent in Retell dashboard when ready</li>
+                <li>Find the chat agent in your Retell dashboard</li>
+                <li>Copy its Retell Agent ID (starts with <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">agent_</code>)</li>
+                <li>Paste it below and click &quot;Link Agent&quot;</li>
+                <li>Publish the agent when ready</li>
               </ol>
             </div>
 
