@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { hasPlatformPermission, resolveRoleId, CANONICAL_ROLE_NAMES } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/users - Get all users (system_admin only)
@@ -13,16 +14,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin or super_admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant || !['system_admin', 'super_admin'].includes(userTenant.role)) {
-      return NextResponse.json({ error: 'Forbidden: System admin or super admin access required' }, { status: 403 });
+    if (!(await hasPlatformPermission(user.id, 'platform_users.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: Platform access required' }, { status: 403 });
     }
 
     // Get all users with their tenant relationships
@@ -85,16 +78,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin or super_admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant || !['system_admin', 'super_admin'].includes(userTenant.role)) {
-      return NextResponse.json({ error: 'Forbidden: System admin or super admin access required' }, { status: 403 });
+    if (!(await hasPlatformPermission(user.id, 'platform_users.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: Platform access required' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -109,8 +94,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate role
+    // The role dropdown is populated from the active `roles` rows (the 6 canonical roles),
+    // so those must be accepted; the legacy names are kept for existing API callers.
     // Support both tenant_admin (legacy) and organization_admin (new) - they map to the same role
-    const validRoles = ['system_admin', 'super_admin', 'tenant_admin', 'organization_admin', 'subtenant_admin', 'workspace_admin', 'agent', 'viewer'];
+    const validRoles = [...CANONICAL_ROLE_NAMES, 'system_admin', 'super_admin', 'tenant_admin', 'organization_admin', 'subtenant_admin', 'workspace_admin', 'agent', 'viewer'];
     if (!validRoles.includes(role)) {
       return NextResponse.json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` }, { status: 400 });
     }
@@ -118,6 +105,16 @@ export async function POST(request: NextRequest) {
     // Normalize role names: organization_admin -> tenant_admin (database uses tenant_admin)
     const normalizedRole = role === 'organization_admin' ? 'tenant_admin' : 
                           role === 'workspace_admin' ? 'subtenant_admin' : role;
+
+    // Resolve the canonical role_id before creating anything: permission checks read
+    // user_tenants.role_id, so a membership row without it grants zero access.
+    const roleId = await resolveRoleId(normalizedRole, adminSupabase);
+    if (!roleId) {
+      return NextResponse.json(
+        { error: `Role '${role}' does not map to an active role. User was not created.` },
+        { status: 400 }
+      );
+    }
 
     // Step 1: Create auth user
     const { data: authData, error: createError } = await adminSupabase.auth.admin.createUser({
@@ -155,7 +152,8 @@ export async function POST(request: NextRequest) {
     const userTenantInserts = tenant_ids.map((tenantId: string) => ({
       user_id: authData.user.id,
       tenant_id: tenantId,
-      role: normalizedRole, // Use normalized role for database
+      role: normalizedRole, // Legacy text column, still read during the migration transition
+      role_id: roleId, // Canonical role: this is what every permission check reads
       status: 'active',
     }));
 

@@ -5,6 +5,7 @@
 // applied; every membership row has role_id). No legacy `role`-text fallback remains.
 
 import { createClient } from '@/lib/supabase/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface Permission {
   id: string;
@@ -224,4 +225,77 @@ export async function hasAnyRole(
   const role = await resolveTenantRole(userId, tenantId);
   if (!role) return false;
   return roles.includes(role.role_name);
+}
+
+// ---------------------------------------------------------------------------
+// Write-path helpers: resolving a role name to the canonical roles.id
+// ---------------------------------------------------------------------------
+
+/** The 6 canonical roles seeded by 20260908000000_platform_roles_cleanup.sql. */
+export const CANONICAL_ROLE_NAMES = [
+  'platform_admin',
+  'platform_operator',
+  'platform_billing',
+  'company_admin',
+  'company_editor',
+  'company_viewer',
+] as const;
+
+export type CanonicalRoleName = (typeof CANONICAL_ROLE_NAMES)[number];
+
+// Legacy `user_tenants.role` text -> canonical role. Mirrors the DB backfill in
+// 20260908000001_fix_role_backfill.sql, including the later correction in
+// 20260908000002_fix_super_admin_scope.sql: `super_admin` was tenant-scoped (a single
+// company's top admin), so it lands on company_admin, NOT platform_admin.
+// organization_admin/workspace_admin are UI aliases of tenant_admin/subtenant_admin.
+const LEGACY_ROLE_TO_CANONICAL: Record<string, CanonicalRoleName> = {
+  system_admin: 'platform_admin',
+  super_admin: 'company_admin',
+  tenant_admin: 'company_admin',
+  organization_admin: 'company_admin',
+  subtenant_admin: 'company_editor',
+  workspace_admin: 'company_editor',
+  agent: 'company_editor',
+  manager: 'company_editor',
+  call_manager: 'company_editor',
+  analyst: 'company_viewer',
+  user: 'company_viewer',
+  viewer: 'company_viewer',
+};
+
+/**
+ * Map a legacy or canonical role name onto one of the 6 canonical roles.
+ * Canonical names pass through unchanged; unrecognized names return null.
+ */
+export function toCanonicalRoleName(role: string | null | undefined): CanonicalRoleName | null {
+  if (!role) return null;
+  const name = role.trim();
+  if ((CANONICAL_ROLE_NAMES as readonly string[]).includes(name)) return name as CanonicalRoleName;
+  return LEGACY_ROLE_TO_CANONICAL[name] ?? null;
+}
+
+/**
+ * Resolve a legacy or canonical role name to the active `roles.id` it maps to,
+ * or null if it maps to nothing. Every permission check reads `user_tenants.role_id`,
+ * so any code writing a membership row must set it via this helper.
+ *
+ * Pass `client` (e.g. the service-role admin client) when the caller is acting on
+ * behalf of another user; otherwise the request-scoped RLS client is used.
+ */
+export async function resolveRoleId(
+  role: string | null | undefined,
+  client?: SupabaseClient
+): Promise<string | null> {
+  const canonical = toCanonicalRoleName(role);
+  if (!canonical) return null;
+
+  const supabase = client ?? (await createClient());
+  const { data } = await supabase
+    .from('roles')
+    .select('id')
+    .eq('name', canonical)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  return data?.id ?? null;
 }

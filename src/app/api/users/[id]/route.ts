@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { hasPlatformPermission, resolveRoleId } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/users/[id] - Get user details with tenant relationships
@@ -17,16 +18,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin or super_admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant || !['system_admin', 'super_admin'].includes(userTenant.role)) {
-      return NextResponse.json({ error: 'Forbidden: System admin or super admin access required' }, { status: 403 });
+    if (!(await hasPlatformPermission(user.id, 'platform_users.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: Platform access required' }, { status: 403 });
     }
 
     // Get user details
@@ -86,20 +79,33 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin or super_admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant || !['system_admin', 'super_admin'].includes(userTenant.role)) {
-      return NextResponse.json({ error: 'Forbidden: System admin or super admin access required' }, { status: 403 });
+    if (!(await hasPlatformPermission(user.id, 'platform_users.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: Platform access required' }, { status: 403 });
     }
 
     const body = await request.json();
     const { name, email, tenant_assignments } = body;
+
+    // Resolve every requested role to its canonical role_id up front, before any write:
+    // permission checks read user_tenants.role_id, so a membership row written without it
+    // silently strips the user of all access. Failing here keeps the update all-or-nothing.
+    const resolvedAssignments = new Map<string, { role: string; roleId: string }>();
+    if (tenant_assignments && Array.isArray(tenant_assignments)) {
+      for (const assignment of tenant_assignments) {
+        const requestedRole = assignment.role || 'viewer';
+        // organization_admin/workspace_admin are UI aliases of the legacy database names.
+        const normalizedRole = requestedRole === 'organization_admin' ? 'tenant_admin' :
+                               requestedRole === 'workspace_admin' ? 'subtenant_admin' : requestedRole;
+        const roleId = await resolveRoleId(normalizedRole, adminSupabase);
+        if (!roleId) {
+          return NextResponse.json(
+            { error: `Role '${requestedRole}' does not map to an active role. No changes were made.` },
+            { status: 400 }
+          );
+        }
+        resolvedAssignments.set(assignment.tenant_id, { role: normalizedRole, roleId });
+      }
+    }
 
     // Update user metadata if name is provided
     if (name !== undefined) {
@@ -132,16 +138,11 @@ export async function PATCH(
       const existingTenantIds = new Set(existingTenants?.map(et => et.tenant_id) || []);
       const newTenantIds = new Set(tenant_assignments.map((ta: any) => ta.tenant_id));
 
-      // Normalize role names
-      const normalizeRole = (role: string) => {
-        return role === 'organization_admin' ? 'tenant_admin' : 
-               role === 'workspace_admin' ? 'subtenant_admin' : role;
-      };
-
       // Update existing relationships
       for (const assignment of tenant_assignments) {
-        const normalizedRole = normalizeRole(assignment.role || 'viewer');
-        
+        // Always present: the map was populated from this same array above.
+        const resolved = resolvedAssignments.get(assignment.tenant_id)!;
+
         if (existingTenantIds.has(assignment.tenant_id)) {
           // Update existing relationship
           const existing = existingTenants?.find(et => et.tenant_id === assignment.tenant_id);
@@ -149,7 +150,8 @@ export async function PATCH(
             await adminSupabase
               .from('user_tenants')
               .update({
-                role: normalizedRole,
+                role: resolved.role,
+                role_id: resolved.roleId,
                 status: assignment.status || 'active',
               })
               .eq('id', existing.id);
@@ -161,7 +163,8 @@ export async function PATCH(
             .insert({
               user_id: id,
               tenant_id: assignment.tenant_id,
-              role: normalizedRole,
+              role: resolved.role,
+              role_id: resolved.roleId,
               status: assignment.status || 'active',
             });
         }
@@ -227,16 +230,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'system_admin')
-      .single();
-
-    if (!userTenant) {
-      return NextResponse.json({ error: 'Forbidden: System admin access required' }, { status: 403 });
+    if (!(await hasPlatformPermission(user.id, 'platform_users.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: Platform access required' }, { status: 403 });
     }
 
     // Prevent deleting yourself
