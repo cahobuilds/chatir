@@ -9,10 +9,6 @@ import {
   PhotoIcon,
   XMarkIcon,
   CheckIcon,
-  ArrowPathIcon,
-  KeyIcon,
-  EyeIcon,
-  EyeSlashIcon,
   ClipboardDocumentIcon
 } from "@heroicons/react/24/outline";
 import { createClient } from "@/lib/supabase/client";
@@ -41,10 +37,6 @@ export default function TenantConfiguration() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [wordmarkPreview, setWordmarkPreview] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
-  const [retellApiKey, setRetellApiKey] = useState("");
-  const [showRetellApiKey, setShowRetellApiKey] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [isResellerTenant, setIsResellerTenant] = useState(false);
   const [copiedTenantId, setCopiedTenantId] = useState(false);
 
   const supabase = createClient();
@@ -65,51 +57,59 @@ export default function TenantConfiguration() {
         return;
       }
 
-      // Get user's tenants
-      const { data: userTenants } = await supabase
+      // Resolve only the current tenant_id from the membership row -- no tenant columns are
+      // read directly from the client (that goes through the sanitized API below instead).
+      const { data: userTenant } = await supabase
         .from('user_tenants')
-        .select('tenant_id, role, tenants(*)')
+        .select('tenant_id')
         .eq('user_id', user.id)
         .eq('status', 'active')
-        .single();
+        .limit(1)
+        .maybeSingle();
 
-      if (!userTenants || !userTenants.tenants) {
+      if (!userTenant?.tenant_id) {
         setError("No organization found. Please ensure you are associated with an organization.");
         setLoading(false);
         setIsAdmin(false);
         return;
       }
 
-      const userTenant = userTenants as any;
-      const tenantData = userTenant.tenants as Tenant;
-      
-      // Check if user is admin (including system_admin, organization_admin, super_admin)
-      const admin = ['system_admin', 'organization_admin', 'tenant_admin', 'super_admin'].includes(userTenant.role);
+      // Fetch the sanitized tenant (never includes retell_api_key -- see sanitizeTenant() in
+      // src/app/api/tenants/[id]/route.ts) and this user's role through the API layer, instead
+      // of querying `tenants` directly from client-side JS.
+      const [tenantRes, permsRes] = await Promise.all([
+        fetch(`/api/tenants/${userTenant.tenant_id}`),
+        fetch(`/api/permissions/check?tenant_id=${userTenant.tenant_id}`),
+      ]);
+
+      if (!tenantRes.ok) {
+        const errData = await tenantRes.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to load organization");
+      }
+      const { tenant: tenantData } = (await tenantRes.json()) as { tenant: Tenant };
+
+      const permsData = permsRes.ok ? await permsRes.json() : { role_info: null };
+      const roleName: string | undefined = permsData.role_info?.role;
+      const roleScope: string | undefined = permsData.role_info?.scope;
+      const admin = roleName === 'company_admin' || roleScope === 'platform';
       setIsAdmin(admin);
 
       if (!admin) {
-        setError(`Admin access required. Your current role is: ${userTenant.role}. You need 'organization_admin' or 'super_admin' role to modify organization settings.`);
+        setError(`Admin access required. Your current role is: ${roleName || 'unknown'}. You need the Company Admin role to modify organization settings.`);
         setLoading(false);
         return;
       }
 
-      // Check if this tenant is a reseller (only resellers can see/configure Retell settings)
-      const tenantIsReseller = (tenantData as any).is_reseller === true;
-      setIsResellerTenant(tenantIsReseller);
+      // Retell/voice-provider key management is platform-only (see
+      // docs/ROLE_PERMISSION_CLEANUP_PLAN.md, Locked Decision #2) -- it is never fetched,
+      // shown, or editable from this company-facing settings screen. Platform staff manage it
+      // via RetellIntegrationManagement instead.
 
       setTenant(tenantData);
       setTenantName(tenantData.name);
       setLogoPreview((tenantData.branding as any)?.logo_url || null);
       setWordmarkPreview((tenantData.branding as any)?.wordmark_url || null);
-      
-      // Only show Retell API key if this tenant is a reseller
-      // Organizations should NOT see Retell settings
-      if (tenantIsReseller) {
-        setRetellApiKey((tenantData as any).retell_api_key || "");
-      } else {
-        setRetellApiKey(""); // Hide from organizations
-      }
-      
+
       // Initialize config state
       setConfig({
         branding: {
@@ -346,85 +346,6 @@ export default function TenantConfiguration() {
     }
   };
 
-  const handleSaveApiKey = async () => {
-    if (!tenant) {
-      setError("No organization found");
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError(null);
-      setSuccess(null);
-
-      const response = await fetch(`/api/tenants/${tenant.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ retell_api_key: retellApiKey.trim() }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Update failed');
-      }
-
-      const data = await response.json();
-      setTenant(data.tenant);
-      setSuccess("API key saved successfully!");
-    } catch (err: any) {
-      console.error("Update error:", err);
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSyncAgents = async () => {
-    if (!tenant) {
-      setError("No organization found");
-      return;
-    }
-
-    if (!retellApiKey.trim()) {
-      setError("Please configure your API key first");
-      return;
-    }
-
-    try {
-      setSyncing(true);
-      setError(null);
-      setSuccess(null);
-
-      const response = await fetch('/api/retell/agents/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ tenant_id: tenant.id }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Sync failed');
-      }
-
-      const data = await response.json();
-      setSuccess(`Successfully synced ${data.synced} agent(s)!${data.errors > 0 ? ` (${data.errors} error(s))` : ''}`);
-      
-      // Refresh the page or refetch agents after a short delay
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    } catch (err: any) {
-      console.error("Sync error:", err);
-      setError(err.message);
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   // Use config state, fallback to computed if not set
   const currentConfig = config || (tenant ? {
     branding: {
@@ -512,7 +433,7 @@ export default function TenantConfiguration() {
             Admin Access Required
           </h3>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            You need 'organization_admin' or 'super_admin' role to modify organization settings.
+            You need the Company Admin role to modify organization settings.
           </p>
           {error && (
             <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-left">
@@ -806,68 +727,6 @@ export default function TenantConfiguration() {
             </div>
           </div>
         </div>
-
-        {/* AI Provider Integration - Only visible to resellers */}
-        {isResellerTenant && (
-          <div>
-            <div className="flex items-center space-x-2 mb-4">
-              <KeyIcon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-              <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                AI Provider Integration
-              </h4>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  API Key
-                </label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type={showRetellApiKey ? "text" : "password"}
-                    value={retellApiKey}
-                    onChange={(e) => setRetellApiKey(e.target.value)}
-                    placeholder="Enter your API key"
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowRetellApiKey(!showRetellApiKey)}
-                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-                    title={showRetellApiKey ? "Hide API key" : "Show API key"}
-                  >
-                    {showRetellApiKey ? (
-                      <EyeSlashIcon className="w-5 h-5" />
-                    ) : (
-                      <EyeIcon className="w-5 h-5" />
-                    )}
-                  </button>
-                  <button
-                    onClick={handleSaveApiKey}
-                    disabled={saving || retellApiKey === ((tenant as any)?.retell_api_key || "")}
-                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {saving ? "Saving..." : "Save Key"}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <button
-                  onClick={handleSyncAgents}
-                  disabled={syncing || !retellApiKey.trim()}
-                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                  {syncing ? "Syncing..." : "Sync Agents"}
-                </button>
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  Import all agents from your account. Existing agents will be updated, new ones will be created.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Feature Toggles */}
         <div>
