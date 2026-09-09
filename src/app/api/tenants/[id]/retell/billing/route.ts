@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { formatRetellError, logRetellError } from '@/lib/retell-errors';
+import { decrypt, isEncrypted } from '@/lib/encryption';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/tenants/[id]/retell/billing - Sync billing data from Retell
@@ -53,6 +54,11 @@ export async function GET(
       );
     }
 
+    // API keys are encrypted at rest; resolve to plaintext before calling the provider.
+    const retellApiKey = isEncrypted(tenant.retell_api_key)
+      ? decrypt(tenant.retell_api_key)
+      : tenant.retell_api_key;
+
     // Update sync status
     await adminSupabase
       .from('tenants')
@@ -65,7 +71,7 @@ export async function GET(
     try {
       // Create Retell client with enhanced configuration for billing sync
       // Longer timeout (45s) and more retries (3) for billing operations
-      const retellClient = createRetellClient(tenant.retell_api_key, {
+      const retellClient = createRetellClient(retellApiKey, {
         timeout: 45 * 1000, // 45 seconds for billing operations
         maxRetries: 3, // More retries for critical billing sync
       });
