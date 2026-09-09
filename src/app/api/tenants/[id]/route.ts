@@ -1,6 +1,14 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { isReseller } from '@/lib/reseller';
+import { hasPlatformPermission, canAccessTenant } from '@/lib/permissions-server';
+import { encrypt } from '@/lib/encryption';
 import { NextRequest, NextResponse } from 'next/server';
+
+// Never expose the voice-provider API key to any client (including tenant members).
+function sanitizeTenant(t: any): any {
+  if (!t) return t;
+  const { retell_api_key, ...rest } = t;
+  return rest;
+}
 
 // GET /api/tenants/[id] - Get tenant by ID
 export async function GET(
@@ -16,16 +24,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin (can access any tenant)
-    // Don't use .single() as user might have multiple tenant relationships
-    const { data: systemAdminCheck, error: systemAdminError } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .limit(1);
-
-    const isSystemAdmin = systemAdminCheck && systemAdminCheck.length > 0;
+    // Platform staff can access any tenant.
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
 
     // Verify user has access to this tenant and get their role
     let userTenantRole: string | null = null;
@@ -57,7 +57,7 @@ export async function GET(
 
     // Use admin client if user is system admin or has admin role for this tenant
     // This bypasses RLS and ensures the query succeeds after we've verified access
-    const adminRoles = ['system_admin', 'organization_admin', 'tenant_admin', 'super_admin'];
+    const adminRoles = ['platform_admin', 'company_admin'];
     const isAdminRole = isSystemAdmin || (userTenantRole && adminRoles.includes(userTenantRole));
     const clientToUse = isAdminRole ? createAdminClient() : supabase;
 
@@ -145,7 +145,7 @@ export async function GET(
       return NextResponse.json({ error: 'Organization not found or access denied' }, { status: 404 });
     }
 
-    return NextResponse.json({ tenant });
+    return NextResponse.json({ tenant: sanitizeTenant(tenant) });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -165,40 +165,23 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin (can update any tenant)
-    // Don't use .single() as user might have multiple tenant relationships
-    const { data: systemAdminCheck, error: systemAdminError } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .limit(1);
-
-    const isSystemAdmin = systemAdminCheck && systemAdminCheck.length > 0;
-
-    // If not system_admin, verify user is organization_admin, tenant_admin, or super_admin for this specific tenant
+    // Platform staff or this tenant's admin can update it.
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
     let userTenantRole: string | null = null;
-    if (!isSystemAdmin) {
-      const { data: userTenants, error: userTenantError } = await supabase
+    if (isSystemAdmin) {
+      userTenantRole = 'platform_admin';
+    } else {
+      if (!(await canAccessTenant(user.id, id, 'users.manage'))) {
+        return NextResponse.json({ error: 'Forbidden: Admin access required to update organization settings.' }, { status: 403 });
+      }
+      const { data: ut } = await supabase
         .from('user_tenants')
         .select('role')
         .eq('user_id', user.id)
         .eq('tenant_id', id)
-        .in('role', ['organization_admin', 'tenant_admin', 'super_admin'])
-        .limit(1);
-
-      if (userTenantError || !userTenants || userTenants.length === 0) {
-        console.error('PATCH access denied:', {
-          userId: user.id,
-          tenantId: id,
-          error: userTenantError
-        });
-        return NextResponse.json({ error: 'Forbidden: Admin access required. You need system_admin, organization_admin, or super_admin role to update organization settings.' }, { status: 403 });
-      }
-      
-      userTenantRole = userTenants[0]?.role || null;
-    } else {
-      userTenantRole = 'system_admin';
+        .eq('status', 'active')
+        .maybeSingle();
+      userTenantRole = ut?.role || 'tenant_admin';
     }
 
     const body = await request.json();
@@ -213,19 +196,9 @@ export async function PATCH(
       );
     }
 
-    // Check if this tenant is a reseller (only resellers can update retell_api_key)
-    const tenantIsReseller = await isReseller(id);
-    
-    // If trying to update retell_api_key:
-    // - System admins can update it for any tenant (to configure resellers)
-    // - Regular admins can only update it if tenant is already a reseller
-    if (retell_api_key !== undefined) {
-      if (!isSystemAdmin && !tenantIsReseller) {
-        return NextResponse.json(
-          { error: 'Only resellers can configure Retell API keys. Organizations inherit Retell configuration from their reseller.' },
-          { status: 403 }
-        );
-      }
+    // Only platform staff with `retell_key.manage` can set the voice-provider API key.
+    if (retell_api_key !== undefined && !(await hasPlatformPermission(user.id, 'retell_key.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: Platform access required to configure the voice provider key.' }, { status: 403 });
     }
 
     const updateData: any = {};
@@ -242,21 +215,19 @@ export async function PATCH(
     if (settings !== undefined) updateData.settings = settings;
     if (branding !== undefined) updateData.branding = branding;
     
-    // System admin can update reseller settings
+    // System admin can update reseller settings (is_reseller/parent_id removed in Phase 1b).
     if (isSystemAdmin) {
       if (is_reseller !== undefined) updateData.is_reseller = is_reseller;
       if (parent_id !== undefined) updateData.parent_id = parent_id || null;
-      if (retell_api_key !== undefined) updateData.retell_api_key = retell_api_key;
-    } else {
-      // Regular admins can only update retell_api_key if tenant is already a reseller
-      if (retell_api_key !== undefined && tenantIsReseller) {
-        updateData.retell_api_key = retell_api_key;
-      }
+    }
+    // retell_api_key was already gated above (`retell_key.manage`); encrypt at rest.
+    if (retell_api_key !== undefined) {
+      updateData.retell_api_key = encrypt(retell_api_key);
     }
 
     // Use admin client for system admin and other admin roles to bypass RLS
     // This ensures the update succeeds after we've verified access
-    const adminRoles = ['system_admin', 'organization_admin', 'tenant_admin', 'super_admin'];
+    const adminRoles = ['platform_admin', 'company_admin'];
     const isAdminRole = isSystemAdmin || (userTenantRole && adminRoles.includes(userTenantRole));
     const clientToUse = isAdminRole ? createAdminClient() : supabase;
     
@@ -284,7 +255,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Organization not found or access denied' }, { status: 404 });
     }
 
-    return NextResponse.json({ tenant });
+    return NextResponse.json({ tenant: sanitizeTenant(tenant) });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -304,17 +275,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user is super_admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', id)
-      .eq('role', 'super_admin')
-      .single();
-
-    if (!userTenant) {
-      return NextResponse.json({ error: 'Forbidden: Super admin access required' }, { status: 403 });
+    // Only platform staff can delete an organization.
+    if (!(await hasPlatformPermission(user.id, 'orgs.delete'))) {
+      return NextResponse.json({ error: 'Forbidden: Platform access required' }, { status: 403 });
     }
 
     const { error: deleteError } = await supabase
