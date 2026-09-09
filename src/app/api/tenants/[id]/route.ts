@@ -1,5 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { hasPlatformPermission, canAccessTenant } from '@/lib/permissions-server';
+import { hasPlatformPermission, canAccessTenant, nestedRoleName } from '@/lib/permissions-server';
 import { encrypt } from '@/lib/encryption';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -8,6 +8,15 @@ function sanitizeTenant(t: any): any {
   if (!t) return t;
   const { retell_api_key, ...rest } = t;
   return rest;
+}
+
+// The canonical role name for a membership row, from `role_id -> roles.name`.
+// Falls back to the legacy `user_tenants.role` text column, which is null for rows
+// written by paths that only set role_id (e.g. self-serve signup) and stale for rows
+// that predate the role_id backfill.
+function membershipRole(row: { role?: string | null; roles?: unknown } | null | undefined): string | null {
+  if (!row) return null;
+  return nestedRoleName(row.roles) || row.role || null;
 }
 
 // GET /api/tenants/[id] - Get tenant by ID
@@ -37,9 +46,10 @@ export async function GET(
     } else {
       const { data: userTenants, error: userTenantError } = await supabase
         .from('user_tenants')
-        .select('tenant_id, role')
+        .select('tenant_id, role, role_id, roles (name)')
         .eq('user_id', user.id)
         .eq('tenant_id', id)
+        .eq('status', 'active')
         .limit(1);
 
       if (userTenantError || !userTenants || userTenants.length === 0) {
@@ -51,7 +61,7 @@ export async function GET(
         return NextResponse.json({ error: 'Forbidden: You do not have access to this organization' }, { status: 403 });
       }
       
-      userTenantRole = userTenants[0]?.role || null;
+      userTenantRole = membershipRole(userTenants[0]);
       hasVerifiedAccess = true;
     }
 
@@ -176,12 +186,12 @@ export async function PATCH(
       }
       const { data: ut } = await supabase
         .from('user_tenants')
-        .select('role')
+        .select('role, role_id, roles (name)')
         .eq('user_id', user.id)
         .eq('tenant_id', id)
         .eq('status', 'active')
         .maybeSingle();
-      userTenantRole = ut?.role || 'tenant_admin';
+      userTenantRole = membershipRole(ut) || 'tenant_admin';
     }
 
     const body = await request.json();
