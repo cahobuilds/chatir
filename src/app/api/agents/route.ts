@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { hasPlatformPermission, canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/agents - Get agents for current user's tenant(s)
@@ -25,15 +26,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin (can access all agents)
-    const { data: systemAdminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .single();
-
-    const isSystemAdmin = !!systemAdminCheck;
+    // Platform staff can access all agents.
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
 
     // Get query parameters for filtering
     const { searchParams } = new URL(request.url);
@@ -63,10 +57,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ agents: agents || [] });
     }
 
-    // For regular users, get their tenant IDs and check roles
+    // For regular users, get their tenant IDs and check roles.
+    // Select both the canonical role name (via role_id -> roles.name) and the legacy `role`
+    // text column, since not every row is guaranteed to be backfilled yet (Phase 1b pending).
     const { data: userTenants } = await supabase
       .from('user_tenants')
-      .select('tenant_id, role')
+      .select('tenant_id, role, role_id, roles(name)')
       .eq('user_id', user.id)
       .eq('status', 'active');
 
@@ -76,14 +72,22 @@ export async function GET(request: NextRequest) {
     }
 
     const tenantIds = userTenants.map(ut => ut.tenant_id);
-    const userRoles = userTenants.map(ut => ut.role);
-    
+    const userRoles = userTenants.map((ut: any) => {
+      const nested = Array.isArray(ut.roles) ? ut.roles[0] : ut.roles;
+      return nested?.name ?? ut.role;
+    });
+
     console.log(`[Agents API] User ${user.id} has access to tenants:`, tenantIds, 'with roles:', userRoles);
-    
-    // Check if user is admin (tenant_admin, super_admin, organization_admin, manager)
-    const isAdmin = userRoles.some(role => 
-      ['tenant_admin', 'super_admin', 'organization_admin', 'manager'].includes(role)
-    );
+
+    // Admin = holds a role with agents.manage in the canonical model (company_admin/editor) or a
+    // platform role, OR (transition period only) an un-backfilled legacy admin-equivalent role.
+    const ADMIN_ROLE_NAMES = [
+      'company_admin', 'company_editor',
+      'platform_admin', 'platform_operator',
+      // Legacy text values -- only matter for rows not yet backfilled to role_id:
+      'tenant_admin', 'super_admin', 'organization_admin', 'manager',
+    ];
+    const isAdmin = userRoles.some(role => role && ADMIN_ROLE_NAMES.includes(role));
 
     let agentsQuery = supabase
       .from('agents')
@@ -156,33 +160,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'type must be "chat" or "voice"' }, { status: 400 });
     }
 
-    // Check if user is system_admin (can create agents for any tenant)
-    const { data: systemAdminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .single();
-
-    const isSystemAdmin = !!systemAdminCheck;
-
-    // If not system_admin, verify user has access to this tenant
-    if (!isSystemAdmin) {
-      const { data: userTenant } = await supabase
-        .from('user_tenants')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('tenant_id', tenant_id)
-        .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'manager', 'agent'])
-        .single();
-
-      if (!userTenant) {
-        return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
-      }
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, tenant_id, 'agents.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
     }
 
-    // Use admin client for system admin to bypass RLS, regular client for others
-    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+    // Use admin client for the write (access verified above).
+    const clientToUse = createAdminClient();
 
     // Create agent
     const { data: agent, error: agentError } = await clientToUse
