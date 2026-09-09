@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   CogIcon,
   ShieldCheckIcon,
@@ -40,16 +40,32 @@ export default function TenantConfiguration() {
   const [config, setConfig] = useState<any>(null);
   const [copiedTenantId, setCopiedTenantId] = useState(false);
 
+  // Tracks the org id whose data we last fetched (or started fetching), so a same-id
+  // `orgLoading` flip (e.g. INITIAL_SESSION -> TOKEN_REFRESHED from OrganizationProvider's
+  // auth listener) is a no-op instead of re-triggering a full refetch that would discard
+  // any unsaved in-progress edits.
+  const lastFetchedOrgId = useRef<string | null>(null);
+
   useEffect(() => {
     // Wait for the org context to settle so a still-loading context is not mistaken
     // for a user with no organization.
     if (orgLoading) return;
-    fetchTenantData();
+    if (lastFetchedOrgId.current === (currentOrganization?.id ?? null)) return;
+    lastFetchedOrgId.current = currentOrganization?.id ?? null;
+
+    // Guard against out-of-order responses when the org switches again before this
+    // fetch resolves (e.g. rapid A -> B -> A switching).
+    let cancelled = false;
+    fetchTenantData(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [currentOrganization?.id, orgLoading]);
 
-  const fetchTenantData = async () => {
+  const fetchTenantData = async (isCancelled?: () => boolean) => {
     try {
       setLoading(true);
+      setError(null);
 
       // The current organization comes from the shared org switcher context, so this
       // component always reads and writes the same tenant as the rest of the page.
@@ -68,6 +84,10 @@ export default function TenantConfiguration() {
         fetch(`/api/permissions/check?tenant_id=${currentOrganization.id}`),
       ]);
 
+      // A newer fetch may have already started (e.g. the org changed again while this
+      // request was in flight) -- bail out before touching state with a stale response.
+      if (isCancelled?.()) return;
+
       if (!tenantRes.ok) {
         const errData = await tenantRes.json().catch(() => ({}));
         throw new Error(errData.error || "Failed to load organization");
@@ -78,6 +98,11 @@ export default function TenantConfiguration() {
       const roleName: string | undefined = permsData.role_info?.role;
       const roleScope: string | undefined = permsData.role_info?.scope;
       const admin = roleName === 'company_admin' || roleScope === 'platform';
+
+      // Re-check after the additional json() parsing awaits above, right before we start
+      // writing state based on this response.
+      if (isCancelled?.()) return;
+
       setIsAdmin(admin);
 
       if (!admin) {
@@ -131,6 +156,7 @@ export default function TenantConfiguration() {
       
       setLoading(false);
     } catch (err: any) {
+      if (isCancelled?.()) return;
       console.error("Error fetching tenant:", err);
       setError(err.message);
       setLoading(false);
