@@ -1,7 +1,28 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { isModelAllowed } from '@/lib/models';
 import { NextRequest, NextResponse } from 'next/server';
+
+// Pulls the LLM model out of an incoming agent `configuration` payload, which may arrive as a
+// JSON string and may nest the LLM settings under either `llm_config` or `llm` - the same
+// lookup the Retell sync below uses when it builds the LLM update payload.
+function configuredModel(configuration: unknown): string | undefined {
+  let parsed = configuration;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return undefined;
+    }
+  }
+  if (typeof parsed !== 'object' || parsed === null) return undefined;
+  const { llm_config, llm } = parsed as {
+    llm_config?: { model?: string };
+    llm?: { model?: string };
+  };
+  return (llm_config || llm || {}).model;
+}
 
 // GET /api/agents/[id] - Get agent by ID
 export async function GET(
@@ -91,6 +112,17 @@ export async function PATCH(
 
     const body = await request.json();
     const { name, type, description, configuration, retell_agent_id, retell_phone_number_id, is_active } = body;
+
+    // Only curated models are allowed to be used (when the platform allowlist is set).
+    // Checked before any local or Retell-side write so an already-linked agent can't be
+    // switched to an unapproved model.
+    const requestedModel = configuredModel(configuration);
+    if (!isModelAllowed(requestedModel)) {
+      return NextResponse.json(
+        { error: `Model '${requestedModel}' is not approved for use. Please contact support.` },
+        { status: 400 }
+      );
+    }
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;

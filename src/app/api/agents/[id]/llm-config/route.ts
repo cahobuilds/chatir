@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { isModelAllowed } from '@/lib/models';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET endpoint to fetch Retell LLM configuration
@@ -128,6 +129,16 @@ export async function PATCH(
 
     const body = await request.json();
     const { model, model_temperature, tool_call_strict_mode, general_prompt, default_dynamic_variables } = body;
+
+    // Only curated models are allowed to be used (when the platform allowlist is set).
+    // Checked before any local or Retell-side write so an already-linked agent can't be
+    // switched to an unapproved model.
+    if (!isModelAllowed(model)) {
+      return NextResponse.json(
+        { error: `Model '${model}' is not approved for use. Please contact support.` },
+        { status: 400 }
+      );
+    }
 
     // Update local configuration
     const currentConfig = typeof agent.configuration === 'string' 
