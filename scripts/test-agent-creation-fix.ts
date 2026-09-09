@@ -8,7 +8,13 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const apiKey = process.env.RETELL_API_KEY || 'key_2111b0be36b992beec8fd18b689b';
+const apiKey = process.env.RETELL_API_KEY;
+if (!apiKey) {
+  console.error('❌ RETELL_API_KEY is not set in your environment/.env.local.');
+  console.error('   (A hardcoded fallback key was removed here on 2026-09-09 for security reasons.');
+  console.error('   If that key was ever used, rotate it in the Retell dashboard.)');
+  process.exit(1);
+}
 
 const client = new Retell({
   apiKey,
