@@ -11,7 +11,7 @@ import {
   CheckIcon,
   ClipboardDocumentIcon
 } from "@heroicons/react/24/outline";
-import { createClient } from "@/lib/supabase/client";
+import { useOrganization } from "@/context/OrganizationContext";
 
 interface Tenant {
   id: string;
@@ -26,6 +26,7 @@ interface Tenant {
 }
 
 export default function TenantConfiguration() {
+  const { currentOrganization, loading: orgLoading } = useOrganization();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -39,35 +40,20 @@ export default function TenantConfiguration() {
   const [config, setConfig] = useState<any>(null);
   const [copiedTenantId, setCopiedTenantId] = useState(false);
 
-  const supabase = createClient();
-
   useEffect(() => {
+    // Wait for the org context to settle so a still-loading context is not mistaken
+    // for a user with no organization.
+    if (orgLoading) return;
     fetchTenantData();
-  }, []);
+  }, [currentOrganization?.id, orgLoading]);
 
   const fetchTenantData = async () => {
     try {
       setLoading(true);
-      
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setError("Not authenticated");
-        setLoading(false);
-        return;
-      }
 
-      // Resolve only the current tenant_id from the membership row -- no tenant columns are
-      // read directly from the client (that goes through the sanitized API below instead).
-      const { data: userTenant } = await supabase
-        .from('user_tenants')
-        .select('tenant_id')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .limit(1)
-        .maybeSingle();
-
-      if (!userTenant?.tenant_id) {
+      // The current organization comes from the shared org switcher context, so this
+      // component always reads and writes the same tenant as the rest of the page.
+      if (!currentOrganization?.id) {
         setError("No organization found. Please ensure you are associated with an organization.");
         setLoading(false);
         setIsAdmin(false);
@@ -78,8 +64,8 @@ export default function TenantConfiguration() {
       // src/app/api/tenants/[id]/route.ts) and this user's role through the API layer, instead
       // of querying `tenants` directly from client-side JS.
       const [tenantRes, permsRes] = await Promise.all([
-        fetch(`/api/tenants/${userTenant.tenant_id}`),
-        fetch(`/api/permissions/check?tenant_id=${userTenant.tenant_id}`),
+        fetch(`/api/tenants/${currentOrganization.id}`),
+        fetch(`/api/permissions/check?tenant_id=${currentOrganization.id}`),
       ]);
 
       if (!tenantRes.ok) {
