@@ -44,7 +44,7 @@ export default function TenantConfiguration() {
   // `orgLoading` flip (e.g. INITIAL_SESSION -> TOKEN_REFRESHED from OrganizationProvider's
   // auth listener) is a no-op instead of re-triggering a full refetch that would discard
   // any unsaved in-progress edits.
-  const lastFetchedOrgId = useRef<string | null>(null);
+  const lastFetchedOrgId = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     // Wait for the org context to settle so a still-loading context is not mistaken
