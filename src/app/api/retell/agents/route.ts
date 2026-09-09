@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/retell/agents - List agents from Retell AI
@@ -22,25 +23,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
     }
 
-    // Verify user has access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'system_admin', 'organization_admin', 'manager'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
     }
 
-    // Get reseller's Retell API key (organizations inherit from reseller)
+    // Get tenant's voice-provider key (organizations use their own workspace).
     const retellApiKey = await getResellerRetellConfig(tenant_id);
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }
@@ -106,25 +99,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify user has access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
     }
 
-    // Get reseller's Retell API key (organizations inherit from reseller)
+    // Verify the local agent row actually belongs to tenant_id before touching it or Retell.
+    // Without this, a caller with agents.manage on their own tenant could pass their own
+    // tenant_id (which passes the check above) together with an agent_id belonging to a
+    // DIFFERENT tenant, and overwrite that tenant's agent row (cross-tenant IDOR).
+    const { data: localAgent, error: localAgentError } = await supabase
+      .from('agents')
+      .select('id, tenant_id')
+      .eq('id', agent_id)
+      .maybeSingle();
+
+    if (localAgentError || !localAgent) {
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
+    }
+    if (localAgent.tenant_id !== tenant_id) {
+      return NextResponse.json(
+        { error: 'Forbidden: agent_id does not belong to tenant_id' },
+        { status: 403 }
+      );
+    }
+
+    // Get tenant's voice-provider key (organizations use their own workspace).
     const retellApiKey = await getResellerRetellConfig(tenant_id);
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }
@@ -247,6 +252,7 @@ export async function POST(request: NextRequest) {
         },
       })
       .eq('id', agent_id)
+      .eq('tenant_id', tenant_id)
       .select()
       .single();
 
