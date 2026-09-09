@@ -203,7 +203,7 @@ export default function AgentTestModal({
         try {
           retellClientRef.current.stopCall();
         } catch (error) {
-          console.error("Error stopping Retell call on cleanup:", error);
+          console.error("Error stopping the call on cleanup:", error);
         }
         retellClientRef.current = null;
         retellCallIdRef.current = null;
@@ -239,7 +239,7 @@ export default function AgentTestModal({
         try {
           retellClientRef.current.stopCall();
         } catch (error) {
-          console.error("Error stopping Retell call on close:", error);
+          console.error("Error stopping the call on close:", error);
         }
         retellClientRef.current = null;
         retellCallIdRef.current = null;
@@ -296,15 +296,15 @@ export default function AgentTestModal({
 
           // Set up event handlers
           retellClient.on("call_started", () => {
-            console.log("Retell call started - waiting for engine to be ready...");
+            console.log("AI call started - waiting for the engine to be ready...");
             setIsRecording(true);
             setIsListening(true);
             // Don't show success yet - wait for call_ready
           });
 
           retellClient.on("call_ready", () => {
-            console.log("Retell call ready - engine connected and audio active");
-            setSuccess("Connected to Retell AI - audio is now active!");
+            console.log("AI call ready - engine connected and audio active");
+            setSuccess("Connected to AI Assistant - audio is now active!");
             
             // CRITICAL: Now that engine is ready, unmute the microphone
             // This ensures tracks are only published when the engine can accept them
@@ -329,9 +329,9 @@ export default function AgentTestModal({
           });
 
           retellClient.on("call_ended", () => {
-            console.log("Retell call ended");
+            console.log("AI call ended");
             console.warn("⚠️ Call ended before call_ready - this may indicate:");
-            console.warn("  1. Agent not properly configured in Retell");
+            console.warn("  1. Agent not properly configured");
             console.warn("  2. Agent LLM not configured or invalid");
             console.warn("  3. Access token issue");
             console.warn("  4. Network/connection problem");
@@ -342,7 +342,7 @@ export default function AgentTestModal({
             // Show error to user if call ended before ready
             if (!retellCallIdRef.current) {
               // Call ended immediately - likely a configuration issue
-              setError("Call ended immediately. Please check agent configuration in Retell AI dashboard.");
+              setError("Call ended immediately. Please check agent configuration in AI Assistant dashboard.");
             }
             
             // Clear refs after a short delay to allow for potential reconnection attempts
@@ -353,7 +353,7 @@ export default function AgentTestModal({
           });
 
           retellClient.on("error", (error: any) => {
-            console.error("Retell error:", error);
+            console.error("Call error:", error);
             console.error("Error details:", JSON.stringify(error, null, 2));
             
             // Don't fail on PublishTrackError if it's just a timing issue
@@ -369,7 +369,7 @@ export default function AgentTestModal({
             
             // For other errors, show to user
             const errorMessage = error?.message || error?.error || "Unknown error";
-            setError(`Retell error: ${errorMessage}. Check agent configuration in Retell AI.`);
+            setError(`Call error: ${errorMessage}. Check agent configuration in AI Assistant.`);
             setIsRecording(false);
             setIsListening(false);
             
@@ -386,7 +386,7 @@ export default function AgentTestModal({
           retellClient.on("update", (data: any) => {
             // Handle real-time updates from Retell
             // The update event contains conversation state updates
-            console.log("Retell update event:", data);
+            console.log("Call update event:", data);
             
             // Handle transcript updates - Retell sends updates with transcript and response fields
             if (data.transcript) {
@@ -506,9 +506,9 @@ export default function AgentTestModal({
           
           return; // Exit early, Retell handles everything
         } catch (retellError: any) {
-          console.error("Retell setup error:", retellError);
+          console.error("Setup error:", retellError);
           // Fall back to browser-based testing
-          setError(`Retell audio unavailable: ${retellError.message}. Falling back to browser TTS.`);
+          setError(`Voice provider audio unavailable: ${retellError.message}. Falling back to browser TTS.`);
           setUseRetellAudio(false);
           // Continue with browser-based approach below
         }
@@ -560,7 +560,7 @@ export default function AgentTestModal({
       try {
         retellClientRef.current.stopCall();
       } catch (error) {
-        console.error("Error stopping Retell call:", error);
+        console.error("Error stopping the call:", error);
       }
       retellClientRef.current = null;
       retellCallIdRef.current = null;
@@ -841,7 +841,7 @@ export default function AgentTestModal({
           if (data.requires_publish) {
             setError(`${errorMsg}\n\nPlease publish the agent using the publish button in the agent list.`);
           } else if (data.requires_chat_channel) {
-            setError(`${errorMsg}\n\nPlease ensure the agent is configured as a chat agent in Retell dashboard.`);
+            setError(`${errorMsg}\n\nPlease ensure the agent is configured as a chat agent in the voice provider dashboard.`);
           }
         }
       }

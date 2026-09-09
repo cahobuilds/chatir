@@ -368,7 +368,7 @@ export default function AgentInteractionModal({
         }));
       }
     } catch (error) {
-      console.error("Failed to fetch Retell agent prompt:", error);
+      console.error("Failed to fetch the agent prompt:", error);
     }
   };
 
@@ -458,7 +458,7 @@ export default function AgentInteractionModal({
         try {
           retellClientRef.current.stopCall();
         } catch (error) {
-          console.error("Error stopping Retell call:", error);
+          console.error("Error stopping the call:", error);
         }
         retellClientRef.current = null;
         retellCallIdRef.current = null;
@@ -482,7 +482,7 @@ export default function AgentInteractionModal({
         try {
           retellClientRef.current.stopCall();
         } catch (error) {
-          console.error("Error stopping Retell call on unmount:", error);
+          console.error("Error stopping the call on unmount:", error);
         }
         retellClientRef.current = null;
         retellCallIdRef.current = null;
@@ -583,7 +583,7 @@ export default function AgentInteractionModal({
             setIsListening(false);
             
             if (wasInitializing) {
-              setError(`Call ended during initialization after ${duration}s. Check Retell dashboard for call ${retellCallIdRef.current}`);
+              setError(`Call ended during initialization after ${duration}s. Check the voice provider dashboard for call ${retellCallIdRef.current}`);
             }
             
             setTimeout(() => {
@@ -598,7 +598,7 @@ export default function AgentInteractionModal({
             if (error?.message?.includes("authentication") || 
                 error?.message?.includes("unauthorized") ||
                 error?.message?.includes("invalid")) {
-              setError(`Retell error: ${error?.message || 'Unknown error'}`);
+              setError(`Call error: ${error?.message || 'Unknown error'}`);
               setIsRecording(false);
               setIsListening(false);
               setIsInitializing(false);
@@ -668,7 +668,7 @@ export default function AgentInteractionModal({
           });
 
           // Start the call - NO MUTING, let SDK handle everything (matches test page exactly)
-          console.log("Starting Retell call...");
+          console.log("Starting the call...");
           await retellClient.startCall({
             accessToken: access_token,
           });
@@ -677,8 +677,8 @@ export default function AgentInteractionModal({
 
           return;
         } catch (retellError: any) {
-          console.error("Retell setup error:", retellError);
-          setError(`Retell unavailable: ${retellError.message}. Using browser TTS.`);
+          console.error("Setup error:", retellError);
+          setError(`Voice provider unavailable: ${retellError.message}. Using browser TTS.`);
         }
       }
 
@@ -718,7 +718,7 @@ export default function AgentInteractionModal({
       try {
         retellClientRef.current.stopCall();
       } catch (error) {
-        console.error("Error stopping Retell call:", error);
+        console.error("Error stopping the call:", error);
       }
       retellClientRef.current = null;
       retellCallIdRef.current = null;

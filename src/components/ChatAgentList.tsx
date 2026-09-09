@@ -140,7 +140,7 @@ export default function ChatAgentList() {
 
   const handlePublishAgent = async (agent: Agent) => {
     if (!agent.retell_agent_id) {
-      setError("Agent is not linked to Retell AI. Please sync agents first.");
+      setError("Agent is not linked to AI Assistant. Please sync agents first.");
       return;
     }
 
@@ -194,7 +194,7 @@ export default function ChatAgentList() {
           setSuccess(`Found agent: ${data.agents[0].name} (Type: ${data.agents[0].type})`);
           await fetchAgents();
         } else {
-          setError(`Agent ${retellAgentId} not found in database. Try syncing agents from Retell.`);
+          setError(`Agent ${retellAgentId} not found in database. Try syncing agents from the voice provider.`);
         }
       }
     } catch (err: any) {
@@ -430,7 +430,7 @@ export default function ChatAgentList() {
 
         if (!llmResponse.ok) {
           const llmError = await llmResponse.json();
-          throw new Error(llmError.error || "Failed to create Retell LLM");
+          throw new Error(llmError.error || "Failed to create the LLM");
         }
 
         const { llm } = await llmResponse.json();
@@ -449,14 +449,14 @@ export default function ChatAgentList() {
 
         if (!chatAgentResponse.ok) {
           const chatAgentError = await chatAgentResponse.json();
-          throw new Error(chatAgentError.error || "Failed to create Retell chat agent");
+          throw new Error(chatAgentError.error || "Failed to create the chat agent");
         }
 
-        setSuccess(`Agent "${formData.name.trim()}" created and connected to Retell! Publish it when ready to go live.`);
+        setSuccess(`Agent "${formData.name.trim()}" created and connected to the voice provider! Publish it when ready to go live.`);
       } catch (retellError: any) {
-        console.error("Failed to create Retell chat agent:", retellError);
+        console.error("Failed to create the chat agent:", retellError);
         setSuccess(
-          `Agent created locally, but connecting it to Retell failed: ${retellError.message}. You can retry with "Link Retell Agent" once a Retell chat agent exists.`
+          `Agent created locally, but connecting it to the voice provider failed: ${retellError.message}. You can retry with "Link AI Agent" once a chat agent exists in the voice provider.`
         );
       }
       setTimeout(() => setSuccess(null), 10000);
@@ -824,10 +824,10 @@ export default function ChatAgentList() {
                             size="sm"
                             variant="outline"
                             onClick={() => handleOpenLinkModal(agent)}
-                            title="Link to Retell Agent"
+                            title="Link to AI Agent"
                             className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
                           >
-                            Link Retell Agent
+                            Link AI Agent
                           </Button>
                         )}
                         <Button
@@ -1106,7 +1106,7 @@ export default function ChatAgentList() {
         </div>
       </Modal>
 
-      {/* Link Retell Agent Modal */}
+      {/* Link AI Agent Modal */}
       <Modal
         isOpen={isLinkModalOpen}
         onClose={() => {
@@ -1116,7 +1116,7 @@ export default function ChatAgentList() {
           setError(null);
           setSuccess(null);
         }}
-        title="Link Retell Agent"
+        title="Link AI Agent"
       >
         {linkingAgent && (
           <div className="space-y-4 px-6 py-4">
@@ -1137,21 +1137,21 @@ export default function ChatAgentList() {
                 Instructions
               </h4>
               <p className="text-sm text-blue-800 dark:text-blue-300 mb-2">
-                Use this only if a chat agent already exists in Retell (e.g. created via the
-                Retell dashboard) and you want to link it to this local agent record.
-                New agents created with the &quot;Create Agent&quot; button above are already
-                connected to Retell automatically.
+                Use this only if a chat agent already exists in your voice provider (e.g. created
+                via the voice provider dashboard) and you want to link it to this local agent
+                record. New agents created with the &quot;Create Agent&quot; button above are
+                already connected to the voice provider automatically.
               </p>
               <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-decimal list-inside">
-                <li>Find the chat agent in your Retell dashboard</li>
-                <li>Copy its Retell Agent ID (starts with <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">agent_</code>)</li>
+                <li>Find the chat agent in your voice provider dashboard</li>
+                <li>Copy its AI Agent ID (starts with <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">agent_</code>)</li>
                 <li>Paste it below and click &quot;Link Agent&quot;</li>
                 <li>Publish the agent when ready</li>
               </ol>
             </div>
 
             <div>
-              <Label htmlFor="retell-agent-id">Retell Agent ID</Label>
+              <Label htmlFor="retell-agent-id">AI Agent ID</Label>
               <Input
                 type="text"
                 id="retell-agent-id"
@@ -1181,7 +1181,7 @@ export default function ChatAgentList() {
               <Button
                 onClick={() => {
                   if (!retellAgentIdInput.trim()) {
-                    setError("Please enter a Retell Agent ID");
+                    setError("Please enter an AI Agent ID");
                     return;
                   }
                   handleLinkRetellAgent(linkingAgent.id, retellAgentIdInput.trim());

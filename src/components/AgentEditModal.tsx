@@ -192,7 +192,7 @@ export default function AgentEditModal({
     }
   };
 
-  // Fetch available voices from Retell AI when modal opens
+  // Fetch available voices from AI Assistant when modal opens
   useEffect(() => {
     if (isOpen && currentOrganization?.id) {
       const fetchVoices = async () => {
@@ -213,12 +213,12 @@ export default function AgentEditModal({
               setVoiceOptions(options);
             }
           } else {
-            console.warn('Failed to fetch voices from Retell:', await response.json());
+            console.warn('Failed to fetch voices:', await response.json());
             // Fallback to empty array - ensureVoiceOption will add voices as needed
             setVoiceOptions([]);
           }
         } catch (error: any) {
-          console.warn('Error fetching voices from Retell:', error);
+          console.warn('Error fetching voices:', error);
           // Fallback to empty array - ensureVoiceOption will add voices as needed
           setVoiceOptions([]);
         } finally {
@@ -264,7 +264,7 @@ export default function AgentEditModal({
     });
   };
 
-  // Retell AI supported models (from LlmUpdateParams)
+  // AI Assistant supported models (from LlmUpdateParams)
   const retellModels = [
     { value: "gpt-5", label: "GPT-5" },
     { value: "gpt-5-mini", label: "GPT-5 Mini" },
@@ -438,11 +438,11 @@ export default function AgentEditModal({
                     }
                   }
                 } else {
-                  console.warn("Failed to fetch Retell agent config:", await retellAgentResponse.json());
+                  console.warn("Failed to fetch the agent config:", await retellAgentResponse.json());
                 }
               } catch (retellError: any) {
                 // Non-critical error - use local config as fallback
-                console.warn("Error fetching Retell agent config:", retellError);
+                console.warn("Error fetching the agent config:", retellError);
               }
 
               // Fetch LLM config from Retell API (if agent uses Retell LLM)
@@ -466,11 +466,11 @@ export default function AgentEditModal({
                   }
                 } else {
                   // Agent might not use Retell LLM, or error fetching - use local config
-                  console.warn("Failed to fetch Retell LLM config:", await llmConfigResponse.json());
+                  console.warn("Failed to fetch the LLM config:", await llmConfigResponse.json());
                 }
               } catch (llmError: any) {
                 // Non-critical error - use local config as fallback
-                console.warn("Error fetching Retell LLM config:", llmError);
+                console.warn("Error fetching the LLM config:", llmError);
               }
             }
           } else {
@@ -579,7 +579,7 @@ export default function AgentEditModal({
           } else {
             const llmErrorData = await llmConfigResponse.json();
             // Show warning but don't fail - agent was updated successfully
-            setSuccess(`Agent updated successfully. ${llmErrorData.warning || llmErrorData.error || 'LLM config may not have synced to Retell.'}`);
+            setSuccess(`Agent updated successfully. ${llmErrorData.warning || llmErrorData.error || 'LLM config may not have synced to the voice provider.'}`);
           }
         } catch (llmError: any) {
           console.error("Failed to update LLM config:", llmError);
@@ -775,11 +775,11 @@ export default function AgentEditModal({
                       <Label htmlFor="voice-id">Voice Selection</Label>
                       {voicesLoading ? (
                         <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
-                          Loading voices from Retell AI...
+                          Loading voices from AI Assistant...
                         </div>
                       ) : voiceOptions.length === 0 ? (
                         <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
-                          No voices available. Please ensure Retell AI is configured.
+                          No voices available. Please ensure AI Assistant is configured.
                         </div>
                       ) : (
                         <Select
@@ -1061,12 +1061,14 @@ export default function AgentEditModal({
                 <div className="space-y-5">
                   {!agent.retell_agent_id ? (
                     <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
-                      Link or create this agent in Retell first before attaching knowledge bases.
+                      Link or create this agent with the voice provider first before attaching
+                      knowledge bases.
                     </div>
                   ) : kbResponseEngineType === "custom-llm" ? (
                     <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
                       This agent uses a custom LLM (websocket). Knowledge bases only attach to
-                      Retell LLMs -- pass knowledge base content to your websocket server directly.
+                      voice provider LLMs -- pass knowledge base content to your websocket server
+                      directly.
                     </div>
                   ) : (
                     <>

@@ -1052,7 +1052,7 @@ export default function TenantManagement() {
             setCreateError(null);
             setCreateSuccess(null);
           }}
-          title={`Voice Provider (Retell AI): ${selectedTenant.name}`}
+          title={`Voice Provider: ${selectedTenant.name}`}
           className="max-w-2xl mx-4"
         >
           <div className="px-6 py-6">
