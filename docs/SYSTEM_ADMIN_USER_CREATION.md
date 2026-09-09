@@ -1,5 +1,11 @@
 # System Admin User Creation Guide
 
+> ⚠️ **Local development only.** The credentials and scripts below create an account with a
+> publicly documented password. They now refuse to run against anything that isn't a local
+> Supabase instance (`127.0.0.1`/`localhost`) unless `ALLOW_REMOTE_SYSTEM_ADMIN_SEED=true` is
+> explicitly set — see `scripts/create-system-admin.ts`. Never run them against a shared,
+> staging, or production project without immediately changing the password afterward.
+
 ## Overview
 
 The system admin user (`systemadmin@tin.info`) now has full platform access (100/100 permissions) and can create users and assign them to one or many organizations (tenants).

@@ -19,6 +19,18 @@ if (!supabaseUrl || !supabaseServiceKey) {
   process.exit(1);
 }
 
+// This script creates a privileged system_admin account using a password documented in
+// docs/LOCAL_CREDENTIALS.md. It must never run against a hosted/production project by accident.
+const isLocalSupabase = supabaseUrl.includes('127.0.0.1') || supabaseUrl.includes('localhost');
+if (!isLocalSupabase && process.env.ALLOW_REMOTE_SYSTEM_ADMIN_SEED !== 'true') {
+  console.error('❌ Refusing to run: NEXT_PUBLIC_SUPABASE_URL does not look like a local Supabase instance.');
+  console.error(`   URL: ${supabaseUrl}`);
+  console.error('   This script creates a system_admin account with a publicly documented default password.');
+  console.error('   If you really need to seed a remote/staging project, set ALLOW_REMOTE_SYSTEM_ADMIN_SEED=true');
+  console.error('   and change the password immediately after creation.');
+  process.exit(1);
+}
+
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: false,
