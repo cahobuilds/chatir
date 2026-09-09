@@ -323,7 +323,7 @@ export default function AgentEditModal({
             // Voice Configuration
             // Read from both top-level (from sync) and nested (legacy) locations for backward compatibility
             const voiceConfig = config.voice || {};
-            const voiceIdFromConfig = config.voice_id || voiceConfig.voice_id || "sarah-neural";
+            const voiceIdFromConfig = config.voice_id || voiceConfig.voice_id || "";
             // Ensure the voice option exists in the dropdown
             ensureVoiceOption(voiceIdFromConfig);
             setVoiceId(voiceIdFromConfig);

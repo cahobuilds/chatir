@@ -36,6 +36,17 @@ interface Agent {
   updated_at: string;
 }
 
+interface AvailableVoice {
+  voice_id: string;
+  voice_name?: string;
+  gender?: string;
+}
+
+interface VoiceOption {
+  value: string;
+  label: string;
+}
+
 type SortField = "name" | "status" | "created_at";
 type SortDirection = "asc" | "desc";
 type StatusFilter = "all" | "active" | "inactive";
@@ -57,6 +68,8 @@ export default function VoiceAgentList() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [voiceOptions, setVoiceOptions] = useState<VoiceOption[]>([]);
+  const [voicesLoading, setVoicesLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     type: "voice" as "voice" | "chat",
@@ -69,6 +82,45 @@ export default function VoiceAgentList() {
     if (currentOrganization?.id) {
       fetchAgents();
     }
+  }, [currentOrganization?.id]);
+
+  // Load the curated voice list for this organization (see /api/retell/voices)
+  useEffect(() => {
+    if (!currentOrganization?.id) {
+      setVoiceOptions([]);
+      return;
+    }
+
+    const fetchVoices = async () => {
+      setVoicesLoading(true);
+      try {
+        const response = await fetch(
+          `/api/retell/voices?tenant_id=${currentOrganization.id}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setVoiceOptions(
+            (data.voices || []).map((voice: AvailableVoice) => ({
+              value: voice.voice_id,
+              label:
+                voice.gender && voice.gender !== "Unknown"
+                  ? `${voice.voice_name || voice.voice_id} (${voice.gender})`
+                  : voice.voice_name || voice.voice_id,
+            }))
+          );
+        } else {
+          console.warn("Failed to fetch voices:", response.status);
+          setVoiceOptions([]);
+        }
+      } catch (err) {
+        console.warn("Error fetching voices:", err);
+        setVoiceOptions([]);
+      } finally {
+        setVoicesLoading(false);
+      }
+    };
+
+    fetchVoices();
   }, [currentOrganization?.id]);
 
   const handleSyncAgents = async () => {
@@ -337,15 +389,6 @@ export default function VoiceAgentList() {
       setSortDirection("asc");
     }
   };
-
-  const voiceOptions = [
-    { value: "alloy", label: "Alloy" },
-    { value: "echo", label: "Echo" },
-    { value: "fable", label: "Fable" },
-    { value: "onyx", label: "Onyx" },
-    { value: "nova", label: "Nova" },
-    { value: "shimmer", label: "Shimmer" },
-  ];
 
   const languageOptions = [
     { value: "en-US", label: "English (US)" },
@@ -685,15 +728,26 @@ export default function VoiceAgentList() {
 
               <div>
                 <Label htmlFor="voice_id">Voice</Label>
-                <Select
-                  options={voiceOptions}
-                  placeholder="Select a voice"
-                  defaultValue={formData.voice_id}
-                  onChange={(value) =>
-                    setFormData({ ...formData, voice_id: value })
-                  }
-                  disabled={isSubmitting}
-                />
+                {voicesLoading ? (
+                  <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
+                    Loading voices...
+                  </div>
+                ) : voiceOptions.length === 0 ? (
+                  <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
+                    No voices available. Please ensure AI Assistant is connected.
+                  </div>
+                ) : (
+                  <Select
+                    id="voice_id"
+                    options={voiceOptions}
+                    placeholder="Select a voice"
+                    value={formData.voice_id}
+                    onChange={(value) =>
+                      setFormData({ ...formData, voice_id: value })
+                    }
+                    disabled={isSubmitting}
+                  />
+                )}
               </div>
 
               <div>

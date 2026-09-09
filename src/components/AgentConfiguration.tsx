@@ -1,10 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useOrganization } from "@/context/OrganizationContext";
+
+interface AvailableVoice {
+  voice_id: string;
+  voice_name?: string;
+  gender?: string;
+}
+
+interface VoiceOption {
+  value: string;
+  label: string;
+  gender: string;
+}
 
 export default function AgentConfiguration() {
+  const { currentOrganization } = useOrganization();
   const [agentName, setAgentName] = useState("AI Agent Alpha");
-  const [selectedVoice, setSelectedVoice] = useState("sarah-neural");
+  const [selectedVoice, setSelectedVoice] = useState("");
   const [voiceTemperature, setVoiceTemperature] = useState(0.7);
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
   const [volume, setVolume] = useState(80);
@@ -12,12 +26,45 @@ export default function AgentConfiguration() {
   const [interruptionSensitivity, setInterruptionSensitivity] = useState(0.5);
   const [language, setLanguage] = useState("en-US");
 
-  const voiceOptions = [
-    { value: "sarah-neural", label: "Sarah (Neural)", gender: "Female" },
-    { value: "marcus-neural", label: "Marcus (Neural)", gender: "Male" },
-    { value: "elena-neural", label: "Elena (Neural)", gender: "Female" },
-    { value: "david-standard", label: "David (Standard)", gender: "Male" }
-  ];
+  const [voiceOptions, setVoiceOptions] = useState<VoiceOption[]>([]);
+  const [voicesLoading, setVoicesLoading] = useState(false);
+
+  // Load the curated voice list for this organization (see /api/retell/voices)
+  useEffect(() => {
+    if (!currentOrganization?.id) {
+      setVoiceOptions([]);
+      return;
+    }
+
+    const fetchVoices = async () => {
+      setVoicesLoading(true);
+      try {
+        const response = await fetch(
+          `/api/retell/voices?tenant_id=${currentOrganization.id}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setVoiceOptions(
+            (data.voices || []).map((voice: AvailableVoice) => ({
+              value: voice.voice_id,
+              label: voice.voice_name || voice.voice_id,
+              gender: voice.gender || "Unknown",
+            }))
+          );
+        } else {
+          console.warn("Failed to fetch voices:", response.status);
+          setVoiceOptions([]);
+        }
+      } catch (err) {
+        console.warn("Error fetching voices:", err);
+        setVoiceOptions([]);
+      } finally {
+        setVoicesLoading(false);
+      }
+    };
+
+    fetchVoices();
+  }, [currentOrganization?.id]);
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
@@ -44,17 +91,30 @@ export default function AgentConfiguration() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Voice Selection
           </label>
-          <select
-            value={selectedVoice}
-            onChange={(e) => setSelectedVoice(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-          >
-            {voiceOptions.map((voice) => (
-              <option key={voice.value} value={voice.value}>
-                {voice.label} ({voice.gender})
+          {voicesLoading ? (
+            <div className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">
+              Loading voices...
+            </div>
+          ) : voiceOptions.length === 0 ? (
+            <div className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">
+              No voices available. Please ensure AI Assistant is connected.
+            </div>
+          ) : (
+            <select
+              value={selectedVoice}
+              onChange={(e) => setSelectedVoice(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="" disabled>
+                Select a voice
               </option>
-            ))}
-          </select>
+              {voiceOptions.map((voice) => (
+                <option key={voice.value} value={voice.value}>
+                  {voice.label} ({voice.gender})
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Voice Temperature */}
