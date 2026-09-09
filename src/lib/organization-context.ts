@@ -1,7 +1,16 @@
 import { createClient } from '@/lib/supabase/server';
+import { hasPlatformPermission, nestedRoleName } from '@/lib/permissions-server';
 import { cookies } from 'next/headers';
 
 const CURRENT_ORG_COOKIE = 'current_organization_id';
+
+// The canonical role name for a membership row, from `role_id -> roles.name`.
+// Falls back to the legacy `user_tenants.role` text column, which is null for rows
+// written by paths that only set role_id (e.g. self-serve signup) and stale for rows
+// that predate the role_id backfill.
+function membershipRole(row: { role?: string | null; roles?: unknown }): string | null {
+  return nestedRoleName(row.roles) || row.role || null;
+}
 
 /**
  * Get the current organization context from cookie
@@ -36,6 +45,7 @@ export async function getCurrentOrganizationContext() {
     .select(`
       tenant_id,
       role,
+      roles (name),
       status,
       tenants (*)
     `)
@@ -47,33 +57,23 @@ export async function getCurrentOrganizationContext() {
   if (userTenant) {
     return {
       id: userTenant.tenant_id,
-      role: userTenant.role,
+      role: membershipRole(userTenant),
       ...userTenant.tenants,
     };
   }
 
-  // Check if user is superadmin/system_admin - they can access any organization
-  const { data: adminCheck } = await supabase
-    .from('user_tenants')
-    .select('role')
-    .eq('user_id', user.id)
-    .in('role', ['system_admin', 'super_admin'])
-    .eq('status', 'active')
-    .limit(1)
-    .maybeSingle();
-
-  if (adminCheck) {
-    // Superadmin can access any organization - verify it exists
+  // Platform staff can access any organization.
+  if (await hasPlatformPermission(user.id, 'orgs.view')) {
     const { data: tenant } = await supabase
       .from('tenants')
       .select('*')
       .eq('id', currentOrgId)
-      .single();
+      .maybeSingle();
 
     if (tenant) {
       return {
         id: tenant.id,
-        role: adminCheck.role,
+        role: 'platform_admin',
         ...tenant,
       };
     }
@@ -97,36 +97,30 @@ export async function verifyOrganizationAccess(organizationId: string): Promise<
   // Check if user has direct access
   const { data: userTenant } = await supabase
     .from('user_tenants')
-    .select('role')
+    .select('role, roles (name)')
     .eq('user_id', user.id)
     .eq('tenant_id', organizationId)
     .eq('status', 'active')
     .single();
 
-  if (userTenant) {
-    return { role: userTenant.role };
+  // A membership row whose role resolves to nothing (neither role_id nor legacy text)
+  // grants no permissions anywhere else in the system, so it falls through to the
+  // platform-staff check rather than reporting access with a null role.
+  const memberRole = userTenant ? membershipRole(userTenant) : null;
+  if (memberRole) {
+    return { role: memberRole };
   }
 
-  // Check if user is superadmin/system_admin
-  const { data: adminCheck } = await supabase
-    .from('user_tenants')
-    .select('role')
-    .eq('user_id', user.id)
-    .in('role', ['system_admin', 'super_admin'])
-    .eq('status', 'active')
-    .limit(1)
-    .maybeSingle();
-
-  if (adminCheck) {
-    // Verify organization exists
+  // Platform staff can access any organization.
+  if (await hasPlatformPermission(user.id, 'orgs.view')) {
     const { data: tenant } = await supabase
       .from('tenants')
       .select('id')
       .eq('id', organizationId)
-      .single();
+      .maybeSingle();
 
     if (tenant) {
-      return { role: adminCheck.role };
+      return { role: 'platform_admin' };
     }
   }
 

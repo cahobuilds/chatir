@@ -1,7 +1,16 @@
 import { createClient } from '@/lib/supabase/server';
+import { hasPlatformPermission, nestedRoleName } from '@/lib/permissions-server';
 import { cookies } from 'next/headers';
 
 const CURRENT_ORG_COOKIE = 'current_organization_id';
+
+// The canonical role name for a membership row, from `role_id -> roles.name`.
+// Falls back to the legacy `user_tenants.role` text column, which is null for rows
+// written by paths that only set role_id (e.g. self-serve signup) and stale for rows
+// that predate the role_id backfill.
+function membershipRole(row: { role?: string | null; roles?: unknown }): string | null {
+  return nestedRoleName(row.roles) || row.role || null;
+}
 
 export async function getCurrentTenant() {
   const supabase = await createClient();
@@ -22,6 +31,7 @@ export async function getCurrentTenant() {
       .select(`
         tenant_id,
         role,
+        roles (name),
         tenants (*)
       `)
       .eq('user_id', user.id)
@@ -32,33 +42,23 @@ export async function getCurrentTenant() {
     if (userTenant) {
       return {
         id: userTenant.tenant_id,
-        role: userTenant.role,
+        role: membershipRole(userTenant),
         ...userTenant.tenants,
       };
     }
 
-    // If user doesn't have access to the cookie's org, check if they're superadmin
-    const { data: adminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .limit(1)
-      .maybeSingle();
-
-    if (adminCheck) {
-      // Superadmin can access any organization - verify it exists
+    // If user doesn't have access via membership, platform staff can access any org.
+    if (await hasPlatformPermission(user.id, 'orgs.view')) {
       const { data: tenant } = await supabase
         .from('tenants')
         .select('*')
         .eq('id', currentOrgId)
-        .single();
+        .maybeSingle();
 
       if (tenant) {
         return {
           id: tenant.id,
-          role: adminCheck.role,
+          role: 'platform_admin',
           ...tenant,
         };
       }
@@ -71,6 +71,7 @@ export async function getCurrentTenant() {
     .select(`
       tenant_id,
       role,
+      roles (name),
       tenants (*)
     `)
     .eq('user_id', user.id)
@@ -93,7 +94,7 @@ export async function getCurrentTenant() {
 
   return {
     id: userTenant.tenant_id,
-    role: userTenant.role,
+    role: membershipRole(userTenant),
     ...userTenant.tenants,
   };
 }
@@ -106,18 +107,8 @@ export async function getUserTenants() {
     return [];
   }
 
-  // Check if user is superadmin/system_admin - they can see all organizations
-  const { data: adminCheck } = await supabase
-    .from('user_tenants')
-    .select('role')
-    .eq('user_id', user.id)
-    .in('role', ['system_admin', 'super_admin'])
-    .eq('status', 'active')
-    .limit(1)
-    .maybeSingle();
-
-  if (adminCheck) {
-    // Superadmin can see all organizations
+  // Platform staff can see all organizations.
+  if (await hasPlatformPermission(user.id, 'orgs.view')) {
     const { data: allTenants } = await supabase
       .from('tenants')
       .select('*')
@@ -129,20 +120,21 @@ export async function getUserTenants() {
       .select(`
         tenant_id,
         role,
+        roles (name),
         status,
         tenants (*)
       `)
       .eq('user_id', user.id)
       .eq('status', 'active');
 
-    // Merge: use actual role if user is a member, otherwise use admin role
+    // Merge: use actual role if user is a member, otherwise use the platform role
     const tenantMap = new Map(
-      (userTenants || []).map((ut: any) => [ut.tenant_id, ut.role])
+      (userTenants || []).map((ut: any) => [ut.tenant_id, membershipRole(ut)])
     );
 
     return (allTenants || []).map((tenant: any) => ({
       tenant_id: tenant.id,
-      role: tenantMap.get(tenant.id) || adminCheck.role,
+      role: tenantMap.get(tenant.id) || 'platform_admin',
       status: 'active',
       tenants: tenant,
     }));
@@ -154,12 +146,20 @@ export async function getUserTenants() {
     .select(`
       tenant_id,
       role,
+      roles (name),
       status,
       tenants (*)
     `)
     .eq('user_id', user.id)
     .eq('status', 'active');
 
-  return userTenants || [];
+  // Re-projected rather than returned raw so the `roles` embed used to resolve the
+  // canonical name does not leak into the row shape callers already depend on.
+  return (userTenants || []).map((ut) => ({
+    tenant_id: ut.tenant_id,
+    role: membershipRole(ut),
+    status: ut.status,
+    tenants: ut.tenants,
+  }));
 }
 

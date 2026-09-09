@@ -28,7 +28,7 @@ interface TenantRole {
 }
 
 // postgREST types a many-to-one embed as an array; normalize to a single name.
-function nestedRoleName(roles: unknown): string | undefined {
+export function nestedRoleName(roles: unknown): string | undefined {
   if (Array.isArray(roles)) return (roles[0] as { name?: string } | undefined)?.name;
   return (roles as { name?: string } | undefined)?.name;
 }
