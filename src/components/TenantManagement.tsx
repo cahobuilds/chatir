@@ -31,6 +31,7 @@ interface Tenant {
   is_reseller?: boolean | null;
   parent_id?: string | null;
   retell_api_key?: string | null;
+  retell_connection_status?: 'disconnected' | 'connected' | 'error' | 'syncing' | null;
 }
 
 interface TenantUser {
@@ -91,7 +92,7 @@ export default function TenantManagement() {
 
   // Fetch resellers list for parent_id dropdown (system admin only)
   useEffect(() => {
-    if (currentUserRole === 'system_admin') {
+    if (isPlatformStaff) {
       fetchResellers();
     }
   }, [currentUserRole]);
@@ -130,10 +131,11 @@ export default function TenantManagement() {
       const data = await response.json();
       const tenantList = data.tenants || [];
 
-      // Get current user's role (check if they're system_admin or super_admin in any tenant)
-      // System admins can have multiple tenant relationships, check all of them
+      // Determine whether the current user is platform staff (platform_admin/operator/billing,
+      // or legacy system_admin/super_admin text) -- only platform staff see this whole page's
+      // organization-management controls.
       const adminRole = tenantList.find((item: any) => 
-        item.role === 'system_admin' || item.role === 'super_admin'
+        ['platform_admin', 'platform_operator', 'platform_billing', 'system_admin', 'super_admin'].includes(item.role)
       )?.role || null;
       setCurrentUserRole(adminRole);
 
@@ -275,26 +277,26 @@ export default function TenantManagement() {
       setCreateError(null);
       setCreateSuccess(null);
 
-      const response = await fetch(`/api/tenants/${selectedTenant.id}`, {
-        method: 'PATCH',
+      // Connect the voice provider through the real connect flow (validates the key against
+      // the provider and marks the connection as "connected"). The raw tenant PATCH path no
+      // longer sets connection status, so use the dedicated endpoint.
+      const response = await fetch(`/api/tenants/${selectedTenant.id}/retell/connect`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          is_reseller: editFormData.is_reseller,
-          parent_id: editFormData.parent_id || null,
           retell_api_key: editFormData.retell_api_key || null,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update reseller configuration');
+        throw new Error(errorData.error || 'Failed to connect the voice provider');
       }
 
-      setCreateSuccess('Reseller configuration updated successfully!');
+      setCreateSuccess('Voice provider connected successfully!');
       await fetchTenants();
-      await fetchResellers();
       
       setTimeout(() => {
         setIsEditModalOpen(false);
@@ -303,7 +305,7 @@ export default function TenantManagement() {
         setCreateSuccess(null);
       }, 2000);
     } catch (error: any) {
-      setCreateError(error.message || 'Failed to update reseller configuration');
+      setCreateError(error.message || 'Failed to connect the voice provider');
     } finally {
       setIsSaving(false);
     }
@@ -382,7 +384,8 @@ export default function TenantManagement() {
     }
   };
 
-  const canCreateOrganization = currentUserRole === 'system_admin' || currentUserRole === 'super_admin';
+  const isPlatformStaff = ['platform_admin', 'platform_operator', 'platform_billing', 'system_admin', 'super_admin'].includes(currentUserRole || '');
+  const canCreateOrganization = isPlatformStaff;
 
   if (loading) {
     return (
@@ -488,15 +491,10 @@ export default function TenantManagement() {
                   <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                     Agents
                   </TableCell>
-                  {currentUserRole === 'system_admin' && (
-                    <>
-                      <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                        Reseller
-                      </TableCell>
-                      <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                        Parent Reseller
-                      </TableCell>
-                    </>
+                  {isPlatformStaff && (
+                    <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                      Voice Provider
+                    </TableCell>
                   )}
                   <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                     Your Role
@@ -512,7 +510,7 @@ export default function TenantManagement() {
               <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                 {tenants.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={currentUserRole === 'system_admin' ? 9 : 7} className="px-5 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <TableCell colSpan={isPlatformStaff ? 8 : 7} className="px-5 py-8 text-center text-gray-500 dark:text-gray-400">
                       No organizations found. Create your first organization to get started.
                     </TableCell>
                   </TableRow>
@@ -553,27 +551,18 @@ export default function TenantManagement() {
                       <TableCell className="px-5 py-4 text-start text-gray-600 dark:text-gray-400">
                         {tenant.agentCount || 0}
                       </TableCell>
-                      {currentUserRole === 'system_admin' && (
-                        <>
-                          <TableCell className="px-5 py-4 text-start">
-                            {tenant.is_reseller ? (
-                              <Badge size="sm" color="info" variant="light">
-                                Reseller
-                              </Badge>
-                            ) : (
-                              <Badge size="sm" color="light" variant="light">
-                                Organization
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="px-5 py-4 text-start text-gray-600 dark:text-gray-400">
-                            {tenant.parent_id ? (
-                              tenants.find(t => t.id === tenant.parent_id)?.name || 'Unknown'
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </TableCell>
-                        </>
+                      {isPlatformStaff && (
+                        <TableCell className="px-5 py-4 text-start">
+                          {tenant.retell_connection_status === 'connected' ? (
+                            <Badge size="sm" color="success" variant="light">
+                              Connected
+                            </Badge>
+                          ) : (
+                            <Badge size="sm" color="error" variant="light">
+                              Not connected
+                            </Badge>
+                          )}
+                        </TableCell>
                       )}
                       <TableCell className="px-5 py-4 text-start">
                         {tenant.role && (
@@ -598,7 +587,7 @@ export default function TenantManagement() {
                           >
                             View Details
                           </Button>
-                          {currentUserRole === 'system_admin' && (
+                          {isPlatformStaff && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -945,47 +934,21 @@ export default function TenantManagement() {
                       </p>
                 </div>
               )}
-              {currentUserRole === 'system_admin' && (
-                <>
-                  <div>
-                    <Label>Reseller Status</Label>
-                    <div className="mt-1.5">
-                      {selectedTenant.is_reseller ? (
-                        <Badge size="sm" color="info" variant="light">
-                          Reseller / White Label Client
-                        </Badge>
-                      ) : (
-                        <Badge size="sm" color="light" variant="light">
-                          Organization
-                        </Badge>
-                      )}
-                    </div>
+              {isPlatformStaff && (
+                <div>
+                  <Label>Voice Provider</Label>
+                  <div className="mt-1.5">
+                    {selectedTenant.retell_connection_status === 'connected' ? (
+                      <Badge size="sm" color="success" variant="light">
+                        Connected
+                      </Badge>
+                    ) : (
+                      <Badge size="sm" color="error" variant="light">
+                        Not connected
+                      </Badge>
+                    )}
                   </div>
-                  {selectedTenant.parent_id && (
-                    <div>
-                      <Label>Parent Reseller</Label>
-                      <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
-                        {tenants.find(t => t.id === selectedTenant.parent_id)?.name || 'Unknown'}
-                      </p>
-                    </div>
-                  )}
-                  {selectedTenant.is_reseller && (
-                    <div>
-                      <Label>API Key Configured</Label>
-                      <p className="mt-1.5 text-sm text-gray-800 dark:text-white/90 font-medium">
-                        {selectedTenant.retell_api_key ? (
-                          <Badge size="sm" color="success" variant="light">
-                            Yes
-                          </Badge>
-                        ) : (
-                          <Badge size="sm" color="error" variant="light">
-                            No
-                          </Badge>
-                        )}
-                      </p>
-                    </div>
-                  )}
-                </>
+                </div>
               )}
               <div>
                     <Label>Created</Label>
@@ -1078,8 +1041,8 @@ export default function TenantManagement() {
         </Modal>
       )}
 
-      {/* Reseller Configuration Edit Modal (System Admin Only) */}
-      {selectedTenant && isEditModalOpen && editFormData && currentUserRole === 'system_admin' && (
+      {/* Voice Provider Connect Modal (Platform Staff Only) */}
+      {selectedTenant && isEditModalOpen && editFormData && isPlatformStaff && (
         <Modal
           isOpen={isEditModalOpen}
           onClose={() => {
@@ -1089,7 +1052,7 @@ export default function TenantManagement() {
             setCreateError(null);
             setCreateSuccess(null);
           }}
-          title={`Reseller Configuration: ${selectedTenant.name}`}
+          title={`Voice Provider (Retell AI): ${selectedTenant.name}`}
           className="max-w-2xl mx-4"
         >
           <div className="px-6 py-6">
@@ -1114,102 +1077,45 @@ export default function TenantManagement() {
             )}
 
             <div className="space-y-6">
-              {/* Reseller Status */}
+              {/* Voice Provider API Key - every organization uses its own dedicated key */}
               <div>
-                <Label htmlFor="is_reseller" className="flex items-center gap-2">
-                  <input
-                    id="is_reseller"
-                    type="checkbox"
-                    checked={editFormData.is_reseller}
+                <Label htmlFor="retell_api_key">API Key</Label>
+                <div className="mt-1.5 relative">
+                  <Input
+                    id="retell_api_key"
+                    type={editFormData.showRetellApiKey ? "text" : "password"}
+                    value={editFormData.retell_api_key}
                     onChange={(e) => setEditFormData({
                       ...editFormData,
-                      is_reseller: e.target.checked,
-                      // If unchecking reseller, clear parent_id
-                      parent_id: e.target.checked ? editFormData.parent_id : null,
+                      retell_api_key: e.target.value,
                     })}
-                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    placeholder="Paste the workspace API key"
+                    className="pr-10"
                   />
-                  <span>Mark as Reseller / White Label Client</span>
-                </Label>
+                  <button
+                    type="button"
+                    onClick={() => setEditFormData({
+                      ...editFormData,
+                      showRetellApiKey: !editFormData.showRetellApiKey,
+                    })}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    {editFormData.showRetellApiKey ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.736m0 0L21 21" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Resellers can configure API keys and have organizations assigned to them.
+                  Each organization uses its own dedicated workspace API key. The key is validated and encrypted when you save it.
                 </p>
               </div>
-
-              {/* Parent Reseller (only show if NOT a reseller) */}
-              {!editFormData.is_reseller && (
-                <div>
-                  <Label htmlFor="parent_id">Parent Reseller</Label>
-                  <div className="relative mt-1.5">
-                    <select
-                      id="parent_id"
-                      value={editFormData.parent_id || ''}
-                      onChange={(e) => setEditFormData({
-                        ...editFormData,
-                        parent_id: e.target.value || null,
-                      })}
-                      className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 pr-11 text-sm shadow-theme-xs text-gray-800 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:focus:border-brand-800"
-                    >
-                      <option value="">— No Parent (Standalone Organization) —</option>
-                      {resellers.map((reseller) => (
-                        <option key={reseller.id} value={reseller.id}>
-                          {reseller.name}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="absolute text-gray-500 -translate-y-1/2 pointer-events-none right-3 top-1/2 dark:text-gray-400">
-                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Assign this organization to a reseller. Organizations inherit API configuration from their parent reseller.
-                  </p>
-                </div>
-              )}
-
-              {/* API Key (only show if IS a reseller) */}
-              {editFormData.is_reseller && (
-                <div>
-                  <Label htmlFor="retell_api_key">API Key</Label>
-                  <div className="mt-1.5 relative">
-                    <Input
-                      id="retell_api_key"
-                      type={editFormData.showRetellApiKey ? "text" : "password"}
-                      value={editFormData.retell_api_key}
-                      onChange={(e) => setEditFormData({
-                        ...editFormData,
-                        retell_api_key: e.target.value,
-                      })}
-                      placeholder="Enter API key"
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setEditFormData({
-                        ...editFormData,
-                        showRetellApiKey: !editFormData.showRetellApiKey,
-                      })}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                    >
-                      {editFormData.showRetellApiKey ? (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.736m0 0L21 21" />
-                        </svg>
-                      ) : (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Organizations under this reseller will inherit this API key configuration.
-                  </p>
-                </div>
-              )}
 
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
