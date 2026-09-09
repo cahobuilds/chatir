@@ -249,7 +249,7 @@ A full pass was made comparing every checklist item's claimed status against the
 | 7 | High #6 — `role: null` in `tenant.ts` + `organization-context.ts` | Done | `a17dfc5` — added `membershipRole()` helper preferring `role_id -> roles.name`, falling back to legacy `role` text; `nestedRoleName` exported from `permissions-server.ts` for reuse |
 | 8 | High #8 — LLM allowlist not enforced on agent-update paths (`agents/[id]/llm-config/route.ts`, `agents/[id]/route.ts` PATCH) | Done | `69f95ba` — `isModelAllowed()` check added before any local/Retell write in both PATCH handlers; verified self-consistent in an isolated worktree (independent of other in-progress uncommitted files) |
 | 9 | High #9 — missing decrypt in `retell/billing/route.ts` | Done | `0a0e7c0` — resolves `tenant.retell_api_key` via the same `isEncrypted()?decrypt():value` idiom already used in `webhooks/retell/route.ts`/`widget/chat/message/route.ts`/`lib/reseller.ts` |
-| 10 | High #10 — hardcoded voice list in `VoiceAgentList.tsx` (plus `AgentEditModal.tsx`, `AgentConfiguration.tsx`) | Pending | — |
+| 10 | High #10 — hardcoded voice list in `VoiceAgentList.tsx` (plus `AgentEditModal.tsx`, `AgentConfiguration.tsx`) | Done | `89b1265` — all 3 now source voices from `GET /api/retell/voices`; `AgentEditModal.tsx`'s `"sarah-neural"` fallback removed. Note: `AgentConfiguration.tsx` is imported by `agents/voice/page.tsx` but never actually rendered there (pre-existing dead code, out of scope to fix here) |
 | 11 | High #11 — legacy-role logic in `tenants/[id]/route.ts` GET | Pending | — |
 | 12 | High #12 — white-label sweep (`ChatAgentList.tsx`, `AgentTestModal.tsx`, `AgentInteractionModal.tsx`, `AgentEditModal.tsx`, `TenantManagement.tsx`) | Pending | — |
 
