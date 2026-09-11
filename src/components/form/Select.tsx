@@ -1,4 +1,4 @@
-import { ChevronDownIcon } from "@/icons";
+import { ChevronDownIcon } from "@heroicons/react/24/outline";
 import React, { useState } from "react";
 
 interface Option {

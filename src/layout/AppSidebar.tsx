@@ -8,8 +8,8 @@ import { useOrganization } from "../context/OrganizationContext";
 import { useAuth } from "@/hooks/useAuth";
 import {
   ChevronDownIcon,
-  HorizontaLDots,
-} from "../icons";
+  EllipsisHorizontalIcon,
+} from "@heroicons/react/24/outline";
 import SidebarWidget from "./SidebarWidget";
 import {
   navigationConfig,
@@ -490,7 +490,7 @@ const AppSidebar: React.FC = () => {
                   {isExpanded || isHovered || isMobileOpen ? (
                     categoryLabels.dashboard
                   ) : (
-                    <HorizontaLDots />
+                    <EllipsisHorizontalIcon className="w-5 h-5" />
                   )}
                 </h2>
                 {renderMenuItems(navigationByCategory.dashboard, "dashboard")}
@@ -510,7 +510,7 @@ const AppSidebar: React.FC = () => {
                   {isExpanded || isHovered || isMobileOpen ? (
                     categoryLabels.admin
                   ) : (
-                    <HorizontaLDots />
+                    <EllipsisHorizontalIcon className="w-5 h-5" />
                   )}
                 </h2>
                 {renderMenuItems(navigationByCategory.admin, "admin")}
@@ -530,7 +530,7 @@ const AppSidebar: React.FC = () => {
                   {isExpanded || isHovered || isMobileOpen ? (
                     categoryLabels.analytics
                   ) : (
-                    <HorizontaLDots />
+                    <EllipsisHorizontalIcon className="w-5 h-5" />
                   )}
                 </h2>
                 {renderMenuItems(navigationByCategory.analytics, "analytics")}
@@ -550,7 +550,7 @@ const AppSidebar: React.FC = () => {
                   {isExpanded || isHovered || isMobileOpen ? (
                     categoryLabels.settings
                   ) : (
-                    <HorizontaLDots />
+                    <EllipsisHorizontalIcon className="w-5 h-5" />
                   )}
                 </h2>
                 {renderMenuItems(navigationByCategory.settings, "settings")}
@@ -575,7 +575,7 @@ const AppSidebar: React.FC = () => {
                       </Badge>
                     </>
                   ) : (
-                    <HorizontaLDots />
+                    <EllipsisHorizontalIcon className="w-5 h-5" />
                   )}
                 </h2>
                 {renderMenuItems(navigationByCategory.templates, "templates")}

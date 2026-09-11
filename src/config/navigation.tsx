@@ -1,12 +1,16 @@
 import React from "react";
 import {
-  AiIcon,
-  UserCircleIcon,
-  BoxIcon,
-  CallIcon,
-  ChatIcon,
-} from "../icons";
-import { DocumentTextIcon, ClockIcon, CreditCardIcon, ChartBarIcon, UserGroupIcon, CloudIcon } from "@heroicons/react/24/outline";
+  Squares2X2Icon,
+  PhoneIcon,
+  ChatBubbleLeftRightIcon,
+  BuildingOfficeIcon,
+  CogIcon,
+  DocumentTextIcon,
+  ClockIcon,
+  CreditCardIcon,
+  ChartBarIcon,
+  CloudIcon,
+} from "@heroicons/react/24/outline";
 
 export type PageType = "functional" | "template";
 export type NavCategory = "dashboard" | "admin" | "settings" | "analytics" | "templates";
@@ -39,7 +43,7 @@ export const navigationConfig: NavItem[] = [
   // Dashboard - Multiple items
   {
     name: "Dashboard",
-    icon: <AiIcon />,
+    icon: <Squares2X2Icon className="w-5 h-5" />,
     category: "dashboard",
     path: "/dashboard",
     type: "functional",
@@ -47,7 +51,7 @@ export const navigationConfig: NavItem[] = [
   },
   {
     name: "Voice Agents",
-    icon: <CallIcon />,
+    icon: <PhoneIcon className="w-5 h-5" />,
     category: "dashboard",
     path: "/agents/voice",
     type: "functional",
@@ -56,7 +60,7 @@ export const navigationConfig: NavItem[] = [
   },
   {
     name: "Chat Agents",
-    icon: <ChatIcon />,
+    icon: <ChatBubbleLeftRightIcon className="w-5 h-5" />,
     category: "dashboard",
     path: "/agents/chat",
     type: "functional",
@@ -74,7 +78,7 @@ export const navigationConfig: NavItem[] = [
   },
   {
     name: "Chat History",
-    icon: <ChatIcon />,
+    icon: <ChatBubbleLeftRightIcon className="w-5 h-5" />,
     category: "dashboard",
     path: "/chats/history",
     type: "functional",
@@ -95,7 +99,7 @@ export const navigationConfig: NavItem[] = [
   // A company admin never sees this section, regardless of how "admin" they are within their own org.
   {
     name: "Platform",
-    icon: <BoxIcon />,
+    icon: <BuildingOfficeIcon className="w-5 h-5" />,
     category: "admin",
     type: "functional",
     defaultOpen: true,
@@ -192,7 +196,7 @@ export const navigationConfig: NavItem[] = [
   // Settings - Configuration pages
   {
     name: "Settings",
-    icon: <UserCircleIcon />,
+    icon: <CogIcon className="w-5 h-5" />,
     category: "settings",
     type: "functional",
     defaultOpen: false,
@@ -340,4 +344,3 @@ export function getBreadcrumbPath(pathname: string): Array<{ name: string; path:
 
   return breadcrumbs;
 }
-
