@@ -217,18 +217,18 @@ export const navigationConfig: NavItem[] = [
         badge: "new",
         description: "General application settings",
       },
+      {
+        name: "Billing",
+        path: "/settings/billing",
+        type: "functional",
+        description: "Manage your plan, payment method, and invoices",
+      },
       // Future settings items
       // {
       //   name: "API Keys",
       //   path: "/settings/api-keys",
       //   type: "functional",
       //   description: "Manage API keys",
-      // },
-      // {
-      //   name: "Billing",
-      //   path: "/settings/billing",
-      //   type: "functional",
-      //   description: "Billing and subscription",
       // },
     ],
   },

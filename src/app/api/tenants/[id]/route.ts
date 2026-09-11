@@ -195,7 +195,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, subdomain, tier, settings, branding, retell_api_key, is_reseller, parent_id } = body;
+    const { name, subdomain, tier, settings, branding, retell_api_key, is_reseller, parent_id, plan_tier } = body;
 
     // System admins can update is_reseller and parent_id
     // Regular admins cannot
@@ -224,6 +224,16 @@ export async function PATCH(
     if (tier !== undefined) updateData.tier = tier;
     if (settings !== undefined) updateData.settings = settings;
     if (branding !== undefined) updateData.branding = branding;
+    if (plan_tier !== undefined) {
+      const allowedTiers = ['starter', 'pro', 'enterprise'];
+      if (!allowedTiers.includes(plan_tier)) {
+        return NextResponse.json({ error: `plan_tier must be one of: ${allowedTiers.join(', ')}` }, { status: 400 });
+      }
+      if (!isSystemAdmin && !(await canAccessTenant(user.id, id, 'billing.manage'))) {
+        return NextResponse.json({ error: 'Forbidden: billing.manage permission required to change the plan.' }, { status: 403 });
+      }
+      updateData.plan_tier = plan_tier;
+    }
     
     // System admin can update reseller settings (is_reseller/parent_id removed in Phase 1b).
     if (isSystemAdmin) {
