@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 
@@ -68,17 +69,8 @@ export async function POST(
       );
     }
 
-    // Check if user has admin access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', agent.tenant_id)
-      .in('role', ['tenant_admin', 'organization_admin', 'super_admin', 'system_admin'])
-      .eq('status', 'active')
-      .single();
-
-    if (!userTenant) {
+    // Check if user has access to this tenant (agent management).
+    if (!(await canAccessTenant(user.id, agent.tenant_id, 'agents.manage'))) {
       return NextResponse.json(
         { error: 'Forbidden: Admin access required for this tenant' },
         { status: 403 }
@@ -196,28 +188,9 @@ export async function GET(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // Check access
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .single();
-
-    const isSystemAdmin = !!userTenant;
-
-    if (!isSystemAdmin) {
-      const { data: userTenants } = await supabase
-        .from('user_tenants')
-        .select('tenant_id')
-        .eq('user_id', user.id)
-        .eq('status', 'active');
-
-      const hasAccess = userTenants?.some((ut) => ut.tenant_id === agent.tenant_id);
-      if (!hasAccess) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // Platform staff or tenant agent-managers can update service access.
+    if (!(await canAccessTenant(user.id, agent.tenant_id, 'agents.manage'))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Get assignments

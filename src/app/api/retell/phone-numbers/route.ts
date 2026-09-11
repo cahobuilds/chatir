@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/retell/phone-numbers - Get available phone numbers
@@ -21,15 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify user has access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -83,15 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify user is admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 

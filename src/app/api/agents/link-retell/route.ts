@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/agents/link-retell - Link a manually created Retell agent to a database agent
@@ -36,15 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify user is admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', agent.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, agent.tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 

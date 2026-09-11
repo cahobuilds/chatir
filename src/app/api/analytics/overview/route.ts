@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { hasPlatformPermission } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/analytics/overview - Get analytics overview for user's tenants
@@ -18,15 +19,8 @@ export async function GET(request: NextRequest) {
     const end_date = searchParams.get('end_date'); // ISO date string
     const days = searchParams.get('days'); // Number of days to look back (default: 30)
 
-    // Check if user is system_admin (can access all analytics)
-    const { data: systemAdminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .single();
-
-    const isSystemAdmin = !!systemAdminCheck;
+    // Platform staff can access all analytics.
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'analytics.view');
 
     // Get user's tenant IDs
     const { data: userTenants } = await supabase

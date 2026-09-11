@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // PATCH /api/retell/phone-numbers/[id] - Bind/rebind an agent to an existing phone number.
@@ -31,15 +32,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'tenant_id and agent_id are required' }, { status: 400 });
     }
 
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 

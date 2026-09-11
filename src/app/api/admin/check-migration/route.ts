@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { canAccessTenant, hasPlatformPermission } from '@/lib/permissions-server';
 
 /**
  * GET /api/admin/check-migration
@@ -19,15 +20,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin
-    const { data: adminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin', 'organization_admin'])
-      .single();
-
-    if (!adminCheck) {
+    if (!(await hasPlatformPermission(user.id, 'orgs.view'))) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 

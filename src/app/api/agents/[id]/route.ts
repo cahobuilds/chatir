@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { hasPlatformPermission, canAccessTenant } from '@/lib/permissions-server';
 import { isModelAllowed } from '@/lib/models';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -38,15 +39,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin (can access any agent)
-    const { data: systemAdminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .single();
-
-    const isSystemAdmin = !!systemAdminCheck;
+    // Platform staff can access any agent.
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
 
     // Use admin client for system admin to bypass RLS, regular client for others
     const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
@@ -97,16 +91,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // Verify user has access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', agent.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'agent'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, agent.tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: No access to this agent' }, { status: 403 });
     }
 
@@ -329,16 +315,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // Verify user is tenant_admin or super_admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', agent.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, agent.tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 

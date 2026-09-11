@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/retell/chat-agents/[id]/publish - Publish a native Retell chat agent's draft version
@@ -30,19 +31,12 @@ export async function POST(
 
     if (!agent.retell_agent_id) {
       return NextResponse.json({
-        error: 'Agent not linked to Retell AI. Please create or link the chat agent first.',
+        error: 'Agent not linked to the voice provider. Please create or link the chat agent first.',
       }, { status: 400 });
     }
 
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', agent.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, agent.tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
@@ -50,7 +44,7 @@ export async function POST(
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not configured for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }

@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { canAccessTenant, hasPlatformPermission } from '@/lib/permissions-server';
 
 // GET /api/folders/[id] - Get folder by ID
 export async function GET(
@@ -74,15 +75,7 @@ export async function PATCH(
     }
 
     // Verify user is admin for this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', folder.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'system_admin', 'manager'])
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, folder.tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
@@ -137,15 +130,7 @@ export async function DELETE(
     }
 
     // Verify user is admin for this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', folder.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'system_admin', 'manager'])
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, folder.tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 

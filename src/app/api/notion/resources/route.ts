@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { canAccessTenant, hasPlatformPermission } from '@/lib/permissions-server';
 import { encrypt } from '@/lib/encryption';
 import { logger } from '@/lib/logger';
 
@@ -28,16 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user has admin access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'organization_admin', 'super_admin', 'system_admin'])
-      .eq('status', 'active')
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, tenant_id, 'knowledge.manage'))) {
       return NextResponse.json(
         { error: 'Forbidden: Admin access required for this tenant' },
         { status: 403 }
@@ -114,16 +106,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const tenantId = searchParams.get('tenant_id');
 
-    // Check if user is system admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .single();
-
-    const isSystemAdmin = !!userTenant;
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
 
     let query = supabase.from('notion_resources').select(`
       id,

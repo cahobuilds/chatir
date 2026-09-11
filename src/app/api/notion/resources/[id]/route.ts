@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { canAccessTenant, hasPlatformPermission } from '@/lib/permissions-server';
 import { encrypt, decrypt } from '@/lib/encryption';
 import { logger } from '@/lib/logger';
 
@@ -36,28 +37,8 @@ export async function GET(
       return NextResponse.json({ error: 'Resource not found' }, { status: 404 });
     }
 
-    // Check access
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .single();
-
-    const isSystemAdmin = !!userTenant;
-
-    if (!isSystemAdmin) {
-      const { data: userTenants } = await supabase
-        .from('user_tenants')
-        .select('tenant_id')
-        .eq('user_id', user.id)
-        .eq('status', 'active');
-
-      const hasAccess = userTenants?.some((ut) => ut.tenant_id === resource.tenant_id);
-      if (!hasAccess) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    if (!(await canAccessTenant(user.id, resource.tenant_id, 'knowledge.manage'))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Don't return encrypted token
@@ -102,16 +83,7 @@ export async function PATCH(
     }
 
     // Check if user has admin access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', resource.tenant_id)
-      .in('role', ['tenant_admin', 'organization_admin', 'super_admin', 'system_admin'])
-      .eq('status', 'active')
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, resource.tenant_id, 'knowledge.manage'))) {
       return NextResponse.json(
         { error: 'Forbidden: Admin access required for this tenant' },
         { status: 403 }
@@ -214,16 +186,7 @@ export async function DELETE(
     }
 
     // Check if user has admin access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', resource.tenant_id)
-      .in('role', ['tenant_admin', 'organization_admin', 'super_admin', 'system_admin'])
-      .eq('status', 'active')
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, resource.tenant_id, 'knowledge.manage'))) {
       return NextResponse.json(
         { error: 'Forbidden: Admin access required for this tenant' },
         { status: 403 }

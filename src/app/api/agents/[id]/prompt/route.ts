@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
-import { createRetellClient } from '@/lib/retell';
+import { createRetellClient, retrieveAgent } from '@/lib/retell';
 import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // PATCH /api/agents/[id]/prompt - Update agent prompt and sync to Retell
@@ -21,7 +22,7 @@ export async function PATCH(
     // Get agent and verify access
     const { data: agent } = await supabase
       .from('agents')
-      .select('tenant_id, retell_agent_id, configuration')
+      .select('tenant_id, retell_agent_id, configuration, type')
       .eq('id', id)
       .single();
 
@@ -29,18 +30,10 @@ export async function PATCH(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // Verify user is admin (organization_admin, tenant_admin, or super_admin)
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', agent.tenant_id)
-      .in('role', ['organization_admin', 'tenant_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, agent.tenant_id, 'agents.manage'))) {
       return NextResponse.json({ 
-        error: 'Forbidden: Admin access required. You need organization_admin, tenant_admin, or super_admin role to update prompts.' 
+        error: 'Forbidden: You need agent management access to update prompts.' 
       }, { status: 403 });
     }
 
@@ -110,7 +103,7 @@ export async function PATCH(
         });
 
         // Get current Retell agent details to check LLM type
-        const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
+        const retellAgent = await retrieveAgent(retellClient, agent.retell_agent_id, agent.type);
         const retellAgentData = retellAgent as any;
 
         // If agent uses Retell LLM, update the LLM prompt

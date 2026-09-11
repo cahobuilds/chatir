@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { hasPlatformPermission } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/analytics/realtime - Get real-time analytics for user's tenants
@@ -16,14 +17,7 @@ export async function GET(request: NextRequest) {
     const tenant_id = searchParams.get('tenant_id');
 
     // Check if user is system_admin
-    const { data: systemAdminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .single();
-
-    const isSystemAdmin = !!systemAdminCheck;
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'analytics.view');
 
     // Get user's tenant IDs
     const { data: userTenants } = await supabase

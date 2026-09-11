@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/retell/agents/sync - Sync agents from Retell AI to local database
@@ -28,16 +29,8 @@ export async function POST(request: NextRequest) {
     // Validate published_only if provided
     const filterPublished = published_only === true || published_only === 'true';
 
-    // Verify user has access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'system_admin', 'organization_admin', 'manager'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
     }
 
@@ -46,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }

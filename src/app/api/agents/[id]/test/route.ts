@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { hasPlatformPermission, canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/agents/[id]/test - Test an agent (voice or chat)
@@ -31,28 +32,9 @@ export async function POST(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // Check if user is system_admin (can test any agent)
-    const { data: systemAdminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .single();
-
-    const isSystemAdmin = !!systemAdminCheck;
-
-    // If not system_admin, verify user has access to this tenant
-    if (!isSystemAdmin) {
-      const { data: userTenant } = await supabase
-        .from('user_tenants')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('tenant_id', agent.tenant_id)
-        .single();
-
-      if (!userTenant) {
-        return NextResponse.json({ error: 'Forbidden: No access to this agent' }, { status: 403 });
-      }
+    // Platform staff can test any agent; otherwise require agent-management access in the tenant.
+    if (!(await canAccessTenant(user.id, agent.tenant_id, 'agents.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: No access to this agent' }, { status: 403 });
     }
 
     // Handle voice agent testing

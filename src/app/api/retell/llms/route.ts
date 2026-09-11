@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { canAccessTenant } from '@/lib/permissions-server';
+import { isModelAllowed } from '@/lib/models';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/retell/llms - List Retell LLM Response Engines for an organization
@@ -43,9 +45,10 @@ export async function GET(request: NextRequest) {
 
     const retellClient = createRetellClient(retellApiKey);
     const llmsResponse = await retellClient.llm.list();
+    const llms = (llmsResponse.items || []).filter((llm: any) => isModelAllowed(llm.model));
 
     return NextResponse.json({
-      llms: llmsResponse.items || [],
+      llms,
       has_more: llmsResponse.has_more || false,
       pagination_key: llmsResponse.pagination_key,
     });
@@ -76,23 +79,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
     }
 
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
+    }
+
+    // Only curated models are allowed to be used (when the platform allowlist is set).
+    if (!isModelAllowed(llmConfig.model)) {
+      return NextResponse.json(
+        { error: `Model '${llmConfig.model}' is not approved for use. Please contact support.` },
+        { status: 400 }
+      );
     }
 
     const retellApiKey = await getResellerRetellConfig(tenant_id);
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }

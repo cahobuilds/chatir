@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { hasPlatformPermission } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/agents/search - Search for agents by Retell agent ID
@@ -19,15 +20,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'retell_agent_id parameter is required' }, { status: 400 });
     }
 
-    // Check if user is system_admin (can search all agents)
-    const { data: systemAdminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .single();
-
-    const isSystemAdmin = !!systemAdminCheck;
+    // Platform staff can search all agents.
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
 
     // Use admin client for system admin to bypass RLS, regular client for others
     const clientToUse = isSystemAdmin ? adminSupabase : supabase;

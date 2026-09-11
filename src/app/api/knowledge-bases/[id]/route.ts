@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { hasPlatformPermission, canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/knowledge-bases/[id] - Get knowledge base by ID
@@ -15,15 +16,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin (can access any knowledge base)
-    const { data: systemAdminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .single();
-
-    const isSystemAdmin = !!systemAdminCheck;
+    // Platform staff can access any knowledge base.
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
 
     // Use admin client for system admin to bypass RLS, regular client for others
     const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
@@ -85,15 +79,7 @@ export async function PATCH(
     }
 
     // Verify user has access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', knowledgeBase.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'agent'])
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, knowledgeBase.tenant_id, 'knowledge.manage'))) {
       return NextResponse.json({ error: 'Forbidden: No access to this knowledge base' }, { status: 403 });
     }
 
@@ -153,15 +139,7 @@ export async function DELETE(
     }
 
     // Verify user is tenant_admin or super_admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', knowledgeBase.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, knowledgeBase.tenant_id, 'knowledge.manage'))) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 

@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { canAccessTenant, hasPlatformPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
 
 /**
@@ -33,16 +34,7 @@ export async function PATCH(
     }
 
     // Check if user has admin access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', assignment.tenant_id)
-      .in('role', ['tenant_admin', 'organization_admin', 'super_admin', 'system_admin'])
-      .eq('status', 'active')
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, assignment.tenant_id, 'agents.manage'))) {
       return NextResponse.json(
         { error: 'Forbidden: Admin access required for this tenant' },
         { status: 403 }
@@ -111,16 +103,7 @@ export async function DELETE(
     }
 
     // Check if user has admin access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', assignment.tenant_id)
-      .in('role', ['tenant_admin', 'organization_admin', 'super_admin', 'system_admin'])
-      .eq('status', 'active')
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, assignment.tenant_id, 'agents.manage'))) {
       return NextResponse.json(
         { error: 'Forbidden: Admin access required for this tenant' },
         { status: 403 }

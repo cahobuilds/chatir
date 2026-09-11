@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { hasPlatformPermission, canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -15,15 +16,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin (can access all knowledge bases)
-    const { data: systemAdminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .single();
-
-    const isSystemAdmin = !!systemAdminCheck;
+    // Platform staff can access all knowledge bases.
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
 
     // Get query parameters for filtering
     const { searchParams } = new URL(request.url);
@@ -124,38 +118,18 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Check if user is system_admin (can create knowledge bases for any tenant)
-    const { data: systemAdminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .single();
-
-    const isSystemAdmin = !!systemAdminCheck;
-
-    // If not system_admin, verify user has access to this tenant
-    if (!isSystemAdmin) {
-      const { data: userTenant } = await supabase
-        .from('user_tenants')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('tenant_id', tenant_id)
-        .in('role', ['tenant_admin', 'super_admin', 'agent'])
-        .single();
-
-      if (!userTenant) {
-        return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
-      }
+    // Verify user can manage this tenant's knowledge base (or is platform staff).
+    if (!(await canAccessTenant(user.id, tenant_id, 'knowledge.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
     }
 
-    // Get Retell API key - REQUIRED for knowledge base creation
+    // Get voice-provider key - REQUIRED for knowledge base creation
     const retellApiKey = await getResellerRetellConfig(tenant_id);
 
     if (!retellApiKey) {
       return NextResponse.json(
         { 
-          error: 'Retell AI not connected for this organization. Knowledge bases must be created in Retell to inform agents. Please connect a Retell workspace in Settings.' 
+          error: 'Voice provider not connected for this organization. Knowledge bases must be created there to inform agents. Please connect it in Settings.' 
         },
         { status: 400 }
       );
@@ -179,14 +153,14 @@ export async function POST(request: NextRequest) {
       const errorMessage = retellError?.message || retellError?.toString() || 'Unknown error';
       return NextResponse.json(
         { 
-          error: `Failed to create knowledge base in Retell AI: ${errorMessage}. Knowledge bases must be created in Retell to inform agents.` 
+          error: `Failed to create knowledge base in the voice provider: ${errorMessage}. Knowledge bases must be created there to inform agents.` 
         },
         { status: 500 }
       );
     }
 
-    // Use admin client for system admin to bypass RLS, regular client for others
-    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+    // Access verified via canAccessTenant above; use the admin client for the write.
+    const clientToUse = createAdminClient();
 
     // Create knowledge base locally - only after successful Retell creation
     const kbConfig = {

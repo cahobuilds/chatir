@@ -76,3 +76,16 @@ export interface CreateRetellAgentParams {
   metadata?: Record<string, any>;
 }
 
+/**
+ * Retrieve a voice or chat agent from the correct Retell resource. Native chat agents live
+ * under `chatAgent`, voice agents under `agent`; calling the wrong one 404s.
+ */
+export async function retrieveAgent(
+  retellClient: any,
+  agentId: string,
+  type?: string | null
+): Promise<any> {
+  if (type === 'chat') return retellClient.chatAgent.retrieve(agentId);
+  return retellClient.agent.retrieve(agentId);
+}
+

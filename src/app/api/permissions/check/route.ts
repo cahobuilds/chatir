@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user.id)
       .eq('tenant_id', tenant_id)
       .eq('status', 'active')
-      .single();
+      .maybeSingle();
 
     if (!userTenant) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
       .eq('user_id', user.id)
       .eq('tenant_id', tenantId)
       .eq('status', 'active')
-      .single();
+      .maybeSingle();
 
     if (!userTenant) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

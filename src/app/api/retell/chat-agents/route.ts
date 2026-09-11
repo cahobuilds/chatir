@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/retell/chat-agents - List chat agents from Retell AI (native Chat Agent API)
@@ -21,15 +22,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
     }
 
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'system_admin', 'organization_admin', 'manager'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
     }
 
@@ -37,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not configured for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }
@@ -113,15 +107,8 @@ export async function POST(request: NextRequest) {
     }
     delete chatAgentConfig.response_engine;
 
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
     }
 
@@ -129,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not configured for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }

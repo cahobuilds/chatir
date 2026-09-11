@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { canAccessTenant, hasPlatformPermission } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/retell/llms/[id] - Get Retell LLM details including prompt
@@ -34,14 +35,7 @@ export async function GET(
       }
 
       // Verify user has access
-      const { data: userTenant } = await supabase
-        .from('user_tenants')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('tenant_id', agent.tenant_id)
-        .single();
-
-      if (!userTenant) {
+      if (!(await canAccessTenant(user.id, agent.tenant_id, 'agents.manage'))) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
@@ -61,21 +55,27 @@ export async function GET(
 
       return NextResponse.json({ llm });
     } else {
-      // If no agent_id provided, still try to get LLM (for system admin)
-      // Check if user is system_admin
-      const { data: systemAdminCheck } = await supabase
-        .from('user_tenants')
-        .select('tenant_id')
-        .eq('user_id', user.id)
-        .in('role', ['system_admin'])
-        .limit(1);
+      // No agent_id provided: only platform staff can fetch a raw LLM.
+      // Check if user is platform staff
+      const isPlatform = await hasPlatformPermission(user.id, 'orgs.view');
 
-      if (!systemAdminCheck || systemAdminCheck.length === 0) {
+      if (!isPlatform) {
         return NextResponse.json({ error: 'Agent ID required for non-admin users' }, { status: 400 });
       }
 
-      // For system admin, use first tenant's API key
-      const retellApiKey = await getResellerRetellConfig(systemAdminCheck[0].tenant_id);
+      // For platform staff, use the user's first active tenant's key.
+      const { data: firstTenant } = await supabase
+        .from('user_tenants')
+        .select('tenant_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+      const tenantId = firstTenant?.tenant_id;
+      if (!tenantId) {
+        return NextResponse.json({ error: 'No tenant available' }, { status: 400 });
+      }
+      const retellApiKey = await getResellerRetellConfig(tenantId);
 
       if (!retellApiKey) {
         return NextResponse.json(

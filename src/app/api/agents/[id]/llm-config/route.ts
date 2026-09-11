@@ -1,8 +1,9 @@
 // GET /api/agents/[id]/llm-config - Get Retell LLM configuration for an agent
 // PATCH /api/agents/[id]/llm-config - Update LLM configuration and sync to Retell
 import { createClient } from '@/lib/supabase/server';
-import { createRetellClient } from '@/lib/retell';
+import { createRetellClient, retrieveAgent } from '@/lib/retell';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { isModelAllowed } from '@/lib/models';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -23,7 +24,7 @@ export async function GET(
     // Get agent and verify access
     const { data: agent, error: agentError } = await supabase
       .from('agents')
-      .select('tenant_id, retell_agent_id, configuration')
+      .select('tenant_id, retell_agent_id, configuration, type')
       .eq('id', id)
       .single();
 
@@ -31,16 +32,8 @@ export async function GET(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // Verify user has access
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', agent.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'system_admin', 'manager'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, agent.tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -61,7 +54,7 @@ export async function GET(
       maxRetries: 3,
     });
 
-    const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
+    const retellAgent = await retrieveAgent(retellClient, agent.retell_agent_id, agent.type);
     const retellAgentData = retellAgent as any;
 
     if (retellAgentData.response_engine?.type === 'retell-llm' && 'llm_id' in retellAgentData.response_engine) {
@@ -106,7 +99,7 @@ export async function PATCH(
     // Get agent
     const { data: agent, error: agentError } = await supabase
       .from('agents')
-      .select('id, tenant_id, retell_agent_id, configuration')
+      .select('id, tenant_id, retell_agent_id, configuration, type')
       .eq('id', id)
       .single();
 
@@ -114,16 +107,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // Verify user has access
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', agent.tenant_id)
-      .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'system_admin', 'manager'])
-      .single();
-
-    if (!userTenant) {
+    // Verify user can manage this tenant's agents (or is platform staff).
+    if (!(await canAccessTenant(user.id, agent.tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -182,7 +167,7 @@ export async function PATCH(
           });
 
           // Get current Retell agent to check LLM type
-          const retellAgent = await retellClient.agent.retrieve(agent.retell_agent_id);
+          const retellAgent = await retrieveAgent(retellClient, agent.retell_agent_id, agent.type);
           const retellAgentData = retellAgent as any;
 
           // If agent uses Retell LLM, update the LLM configuration
