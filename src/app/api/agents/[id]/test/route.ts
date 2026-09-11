@@ -89,9 +89,9 @@ export async function POST(
       if (!agent.retell_agent_id) {
         return NextResponse.json({
           success: true,
-          response: `I heard you say: "${message}". This is a test response. To get real agent responses, ensure the agent is linked to Retell AI and use phone-based testing.`,
+          response: `I heard you say: "${message}". This is a test response. To get real agent responses, ensure the agent is linked to the voice provider and use phone-based testing.`,
           message: 'Voice test completed (simulated response - agent not linked to the voice provider)',
-          note: 'For full voice testing with real-time responses, use phone-based testing or ensure the agent is configured with Retell AI.',
+          note: 'For full voice testing with real-time responses, use phone-based testing or ensure the agent is configured with the voice provider.',
         });
       }
 
@@ -101,9 +101,9 @@ export async function POST(
       if (!retellApiKey) {
         return NextResponse.json({
           success: true,
-          response: `I heard you say: "${message}". This is a test response. Retell AI is not connected for this organization.`,
+          response: `I heard you say: "${message}". This is a test response. The voice provider is not connected for this organization.`,
           message: 'Voice test completed (simulated response - voice provider not configured)',
-          note: 'Connect a Retell workspace in Settings to enable full voice testing capabilities.',
+          note: 'Connect it in Settings to enable full voice testing capabilities.',
         });
       }
 
@@ -112,9 +112,9 @@ export async function POST(
       // The frontend handles the speech synthesis of this response
       return NextResponse.json({
         success: true,
-        response: `I heard you say: "${message}". This is a simulated response for browser testing. For real-time voice interactions, the agent uses Retell AI's real-time API during actual phone calls.`,
+        response: `I heard you say: "${message}". This is a simulated response for browser testing. For real-time voice interactions, the agent uses the voice provider's real-time API during actual phone calls.`,
         message: 'Voice test completed (simulated response)',
-        note: 'Browser-based testing provides transcription and simulated responses. For full voice testing with real-time Retell AI responses, use phone-based testing.',
+        note: 'Browser-based testing provides transcription and simulated responses. For full voice testing with real-time responses from the voice provider, use phone-based testing.',
       });
     }
 
@@ -188,7 +188,7 @@ export async function POST(
           return NextResponse.json({
             success: false,
             message: 'Agent is not a chat agent',
-            response: `Cannot start a chat session: Agent "${agent.name}" is configured as a "${channel}" agent in Retell AI, not a chat agent. Please create or convert the agent to a chat agent in the Retell dashboard.`,
+            response: `Cannot start a chat session: Agent "${agent.name}" is configured as a "${channel}" agent with the voice provider, not a chat agent. Please create or convert the agent to a chat agent in the voice provider dashboard.`,
             agent_id: agent.id,
             retell_agent_id: agent.retell_agent_id,
             channel: channel,
@@ -204,7 +204,7 @@ export async function POST(
           return NextResponse.json({
             success: false,
             message: 'Agent is not published',
-            response: `Cannot start a chat session: Agent "${agent.name}" is not published in Retell AI. Please publish the agent first using the publish button.`,
+            response: `Cannot start a chat session: Agent "${agent.name}" is not published with the voice provider. Please publish the agent first using the publish button.`,
             agent_id: agent.id,
             retell_agent_id: agent.retell_agent_id,
             channel: channel,
@@ -278,7 +278,7 @@ export async function POST(
         const statusCode = retellError?.response?.status || retellError?.status || 500;
         const errorMessage = retellError?.response?.data?.message || 
                            retellError?.message || 
-                           'Failed to get response from Retell AI';
+                           'Failed to get response from the voice provider';
         
         // If 422, provide specific guidance about publishing
         if (statusCode === 422 || errorMessage.includes('Cannot start a chat session')) {
