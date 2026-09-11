@@ -269,7 +269,11 @@ export default function DashboardOverview() {
         {metricCards.map((metric, index) => (
           <div
             key={index}
-            className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800 border border-gray-200 dark:border-white/[0.05]"
+            className={
+              index === 0
+                ? "rounded-lg bg-stone-900 text-white p-6 shadow-sm border border-stone-800"
+                : "rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800 border border-gray-200 dark:border-white/[0.05]"
+            }
           >
             <div className="flex items-center justify-between mb-4">
               <div className={`rounded-lg p-3 ${metric.color}`}>
@@ -277,13 +281,13 @@ export default function DashboardOverview() {
               </div>
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              <p className={index === 0 ? "text-2xl font-bold text-white" : "text-2xl font-bold text-gray-900 dark:text-white"}>
                 {metric.value}
               </p>
-              <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
+              <p className={index === 0 ? "text-sm font-medium text-white mt-1" : "text-sm font-medium text-gray-900 dark:text-white mt-1"}>
                 {metric.title}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <p className={index === 0 ? "text-xs text-gray-300 mt-1" : "text-xs text-gray-500 dark:text-gray-400 mt-1"}>
                 {metric.description}
               </p>
             </div>
