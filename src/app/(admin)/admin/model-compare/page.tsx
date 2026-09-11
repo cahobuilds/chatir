@@ -3,7 +3,7 @@ import React from "react";
 import ModelCompare from "@/components/admin/ModelCompare";
 
 export const metadata: Metadata = {
-  title: "Model Comparison | Multi-Tenant AI SaaS Platform",
+  title: "Model Comparison | Chat IR",
   description: "Compare candidate voice-provider models on an IR question",
 };
 

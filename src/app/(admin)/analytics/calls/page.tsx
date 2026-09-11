@@ -6,7 +6,7 @@ import PerformanceMetrics from "@/components/PerformanceMetrics";
 import QualityMetrics from "@/components/QualityMetrics";
 
 export const metadata: Metadata = {
-  title: "Call Analytics | Analytics - TinAdmin",
+  title: "Call Analytics | Chat IR",
   description: "Advanced call analytics, outcomes, and quality metrics",
 };
 

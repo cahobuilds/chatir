@@ -3,7 +3,7 @@ import React from "react";
 import TenantBilling from "@/components/TenantBilling";
 
 export const metadata: Metadata = {
-  title: "Billing & Usage | AI Customer Care",
+  title: "Billing & Usage | Chat IR",
   description: "Manage billing, subscription plans, and usage for your organization",
 };
 

@@ -20,7 +20,7 @@ export default function KnowledgeBasePage() {
 
   // Set page title
   useEffect(() => {
-    document.title = "Knowledge Base Management | AI Customer Care - TinAdmin";
+    document.title = "Knowledge Base Management | Chat IR";
   }, []);
 
 

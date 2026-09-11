@@ -9,8 +9,7 @@ import QualityMetrics from "@/components/QualityMetrics";
 import CustomerExperienceMetrics from "@/components/CustomerExperienceMetrics";
 
 export const metadata: Metadata = {
-  title:
-    "Analytics & Reporting | AI Customer Care - TinAdmin",
+  title: "Analytics & Reporting | Chat IR",
   description: "Comprehensive performance analytics and business intelligence for AI customer care operations",
 };
 

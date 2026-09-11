@@ -7,8 +7,7 @@ import TenantSecurity from "@/components/TenantSecurity";
 import TenantAnalytics from "@/components/TenantAnalytics";
 
 export const metadata: Metadata = {
-  title:
-    "Organization Management | AI Knowledge Bots",
+  title: "Organization Management | Chat IR",
   description: "Manage organizations, workspaces, and multi-organization configurations for AI knowledge bot operations.",
 };
 

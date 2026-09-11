@@ -3,7 +3,7 @@ import React from "react";
 import CustomerExperienceMetrics from "@/components/CustomerExperienceMetrics";
 
 export const metadata: Metadata = {
-  title: "Customer Experience | Analytics - TinAdmin",
+  title: "Customer Experience | Chat IR",
   description: "Customer satisfaction trends, sentiment analysis, and experience metrics",
 };
 

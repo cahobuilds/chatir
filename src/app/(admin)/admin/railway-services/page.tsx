@@ -3,7 +3,7 @@ import React from "react";
 import RailwayServicesManagement from "@/components/RailwayServicesManagement";
 
 export const metadata: Metadata = {
-  title: "Railway Services | Multi-Tenant AI SaaS Platform",
+  title: "Railway Services | Chat IR",
   description: "Manage Railway services for Notion MCP integration",
 };
 

@@ -12,7 +12,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "AI Knowledge Bots | Intelligent Knowledge Management",
+  title: "Chat IR",
   description: "Build and manage AI-powered knowledge bots for your organization. Multi-tenant SaaS platform for intelligent knowledge management.",
 };
 

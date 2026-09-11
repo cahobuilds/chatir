@@ -3,8 +3,7 @@ import React from "react";
 import VoiceAgentList from "@/components/VoiceAgentList";
 
 export const metadata: Metadata = {
-  title:
-    "Voice Agent Management | AI Customer Care - TinAdmin",
+  title: "Voice Agent Management | Chat IR",
   description: "Create, configure, and manage AI voice agents with advanced LLM settings and voice customization",
 };
 

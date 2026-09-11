@@ -119,7 +119,7 @@ function AuthForm() {
       {/* Left side - Branding & Info */}
       <div className="hidden lg:flex lg:flex-1 bg-gradient-to-br from-blue-600 to-indigo-700 p-12 flex-col justify-between text-white">
         <div>
-          <h1 className="text-4xl font-bold mb-4">AI Knowledge Bots</h1>
+          <h1 className="text-4xl font-bold mb-4">Chat IR</h1>
           <p className="text-xl text-blue-100 mb-8">
             Intelligent AI-powered knowledge management for your organization
           </p>
@@ -169,7 +169,7 @@ function AuthForm() {
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
           {/* Logo/Brand for mobile */}
           <div className="lg:hidden text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">AI Knowledge Bots</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Chat IR</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">Intelligent knowledge management</p>
           </div>
 
@@ -212,7 +212,7 @@ function AuthForm() {
             <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-6">
               {isSignup
                 ? 'Start building your AI knowledge bots today'
-                : 'Sign in to access your AI Knowledge Bots dashboard'}
+                : 'Sign in to access your Chat IR dashboard'}
             </p>
 
             <form className="space-y-5" onSubmit={handleSubmit} suppressHydrationWarning>

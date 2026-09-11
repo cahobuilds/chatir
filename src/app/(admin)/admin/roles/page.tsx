@@ -3,7 +3,7 @@ import React from "react";
 import RolesManagement from "@/components/admin/RolesManagement";
 
 export const metadata: Metadata = {
-  title: "Roles Management | Multi-Tenant AI SaaS Platform",
+  title: "Roles Management | Chat IR",
   description: "Manage system roles and permissions",
 };
 

@@ -3,7 +3,7 @@ import React from "react";
 import DashboardOverview from "@/components/DashboardOverview";
 
 export const metadata: Metadata = {
-  title: "Dashboard | Multi-Tenant AI SaaS Platform",
+  title: "Dashboard | Chat IR",
   description: "Overview of tenants, agents, and platform activity",
 };
 

@@ -3,7 +3,7 @@ import React from "react";
 import AgentPerformanceDetail from "@/components/AgentPerformanceDetail";
 
 export const metadata: Metadata = {
-  title: "Agent Performance Details | Analytics - TinAdmin",
+  title: "Agent Performance Details | Chat IR",
   description: "Detailed performance metrics for individual agent",
 };
 
