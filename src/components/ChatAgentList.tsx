@@ -11,17 +11,16 @@ import {
 import Badge from "./ui/badge/Badge";
 import Button from "./ui/button/Button";
 import { Modal } from "./ui/modal";
-import Form from "./form/Form";
 import Input from "./form/input/InputField";
 import Label from "./form/Label";
 import Select from "./form/Select";
-import TextArea from "./form/input/TextArea";
 import { useOrganization } from "@/context/OrganizationContext";
 import Alert from "./ui/alert/Alert";
 import { ArrowPathIcon, PencilIcon, TrashIcon, PlayIcon, CodeBracketIcon, ClipboardDocumentIcon, CloudArrowUpIcon } from "@heroicons/react/24/outline";
 import AgentEditModal from "./AgentEditModal";
 import AgentTestModal from "./AgentTestModal";
 import CreateIRAgentModal from "./CreateIRAgentModal";
+import AgentTemplatePicker, { TemplateId } from "./AgentTemplatePicker";
 
 interface Agent {
   id: string;
@@ -49,8 +48,8 @@ export default function ChatAgentList() {
   const { currentOrganization } = useOrganization();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isCreateIRModalOpen, setIsCreateIRModalOpen] = useState(false);
+  const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<TemplateId | null>(null);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [testingAgent, setTestingAgent] = useState<Agent | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -61,7 +60,6 @@ export default function ChatAgentList() {
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [linkingAgent, setLinkingAgent] = useState<Agent | null>(null);
   const [retellAgentIdInput, setRetellAgentIdInput] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -71,14 +69,6 @@ export default function ChatAgentList() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    type: "chat" as "voice" | "chat",
-    is_active: true,
-    model: "gpt-4",
-    language: "en-US",
-  });
 
   useEffect(() => {
     fetchAgents();
@@ -305,19 +295,6 @@ export default function ChatAgentList() {
     }
   };
 
-  const handleCreate = () => {
-    setEditingAgent(null);
-    setFormData({
-      name: "",
-      description: "",
-      type: "chat",
-      is_active: true,
-      model: "gpt-4",
-      language: "en-US",
-    });
-    setIsCreateModalOpen(true);
-  };
-
   const handleEdit = (agent: Agent) => {
     setEditingAgent(agent);
     setIsEditModalOpen(true);
@@ -366,121 +343,6 @@ export default function ChatAgentList() {
       }
     } catch (error) {
       console.error("Failed to delete agent:", error);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    if (!currentOrganization?.id) {
-      setError("No organization selected. Please select an organization first.");
-      return;
-    }
-
-    if (!formData.name.trim()) {
-      setError("Agent name is required");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      // Step 1: Create agent locally
-      const response = await fetch("/api/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenant_id: currentOrganization.id,
-          name: formData.name.trim(),
-          description: formData.description.trim() || null,
-          type: formData.type,
-          is_active: formData.is_active,
-          configuration: {
-            model: formData.model,
-            language: formData.language,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        setError(errorData.error || "Failed to save agent");
-        return;
-      }
-
-      const data = await response.json();
-      const localAgentId = data.agent.id;
-
-      // Step 2: Create the native Retell chat agent and link it automatically.
-      // Retell's dedicated Chat Agent API (chatAgent.create) means we no longer need the
-      // old "create in dashboard, then link manually" workaround -- a chat agent can be
-      // created directly with a fresh Retell LLM (using the chosen model) and linked in
-      // one step.
-      try {
-        const llmResponse = await fetch("/api/retell/llms", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tenant_id: currentOrganization.id,
-            model: formData.model,
-          }),
-        });
-
-        if (!llmResponse.ok) {
-          const llmError = await llmResponse.json();
-          throw new Error(llmError.error || "Failed to create the LLM");
-        }
-
-        const { llm } = await llmResponse.json();
-
-        const chatAgentResponse = await fetch("/api/retell/chat-agents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tenant_id: currentOrganization.id,
-            agent_id: localAgentId,
-            agent_name: formData.name.trim(),
-            llm_id: llm.llm_id,
-            language: formData.language,
-          }),
-        });
-
-        if (!chatAgentResponse.ok) {
-          const chatAgentError = await chatAgentResponse.json();
-          throw new Error(chatAgentError.error || "Failed to create the chat agent");
-        }
-
-        setSuccess(`Agent "${formData.name.trim()}" created and connected to the voice provider! Publish it when ready to go live.`);
-      } catch (retellError: any) {
-        console.error("Failed to create the chat agent:", retellError);
-        setSuccess(
-          `Agent created locally, but connecting it to the voice provider failed: ${retellError.message}. You can retry with "Link AI Agent" once a chat agent exists in the voice provider.`
-        );
-      }
-      setTimeout(() => setSuccess(null), 10000);
-
-      setIsCreateModalOpen(false);
-      await fetchAgents();
-      
-      // Reset form
-      setFormData({
-        name: "",
-        description: "",
-        type: "chat",
-        is_active: true,
-        model: "gpt-4",
-        language: "en-US",
-      });
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (error: any) {
-      console.error("Failed to save agent:", error);
-      setError(error.message || "Failed to save agent");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -549,21 +411,6 @@ export default function ChatAgentList() {
     }
   };
 
-  const modelOptions = [
-    { value: "gpt-4", label: "GPT-4" },
-    { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
-    { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
-  ];
-
-  const languageOptions = [
-    { value: "en-US", label: "English (US)" },
-    { value: "en-GB", label: "English (UK)" },
-    { value: "es-ES", label: "Spanish" },
-    { value: "fr-FR", label: "French" },
-    { value: "de-DE", label: "German" },
-    { value: "it-IT", label: "Italian" },
-  ];
-
   if (loading) {
     return (
       <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
@@ -599,17 +446,8 @@ export default function ChatAgentList() {
               <ArrowPathIcon className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
               {syncing ? "Syncing..." : "Sync Agents"}
             </Button>
-            <Button onClick={handleCreate} size="sm">
+            <Button onClick={() => setIsTemplatePickerOpen(true)} size="sm">
               Create Agent
-            </Button>
-            <Button
-              onClick={() => setIsCreateIRModalOpen(true)}
-              size="sm"
-              variant="outline"
-              className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
-              title="Create a chat + voice agent pair pre-configured for investor relations"
-            >
-              Create Investor Relations Agent
             </Button>
           </div>
         </div>
@@ -724,7 +562,7 @@ export default function ChatAgentList() {
                           {syncing ? "Syncing..." : "Sync Agents"}
                         </Button>
                         <span className="text-gray-400 dark:text-gray-500">or</span>
-                        <Button onClick={handleCreate} size="sm">
+                        <Button onClick={() => setIsTemplatePickerOpen(true)} size="sm">
                           Create New Agent
                         </Button>
                       </div>
@@ -887,13 +725,26 @@ export default function ChatAgentList() {
         }}
       />
 
-      {/* Create Investor Relations Agent Modal */}
+      {/* Step 1: Template Picker */}
+      <AgentTemplatePicker
+        isOpen={isTemplatePickerOpen}
+        onClose={() => setIsTemplatePickerOpen(false)}
+        onSelect={(templateId: TemplateId) => {
+          setSelectedTemplateId(templateId);
+          setIsTemplatePickerOpen(false);
+        }}
+      />
+
+      {/* Step 2: Investor Relations template form (chat-first: this page defaults to
+          creating a chat agent, but the user can add a linked voice agent too) */}
       <CreateIRAgentModal
-        isOpen={isCreateIRModalOpen}
-        onClose={() => setIsCreateIRModalOpen(false)}
+        isOpen={selectedTemplateId === "investor-relations"}
+        onClose={() => setSelectedTemplateId(null)}
         onSuccess={() => {
+          setSelectedTemplateId(null);
           fetchAgents();
         }}
+        defaultChannel="chat"
       />
 
       {/* Embed Code Modal */}
@@ -961,150 +812,6 @@ export default function ChatAgentList() {
             </div>
           </div>
         )}
-      </Modal>
-
-      {/* Create Agent Modal */}
-      <Modal 
-        isOpen={isCreateModalOpen} 
-        onClose={() => {
-          setIsCreateModalOpen(false);
-          setError(null);
-          setSuccess(null);
-        }}
-        title="Create Chat Agent"
-      >
-        <div className="px-6 py-4">
-          {error && (
-            <div className="mb-4">
-              <Alert
-                variant="error"
-                title="Error"
-                message={error}
-              />
-            </div>
-          )}
-
-          {success && (
-            <div className="mb-4">
-              <Alert
-                variant="success"
-                title="Success"
-                message={success}
-              />
-            </div>
-          )}
-
-          <Form onSubmit={handleSubmit}>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="name">Agent Name</Label>
-                <Input
-                  type="text"
-                  id="name"
-                  name="name"
-                  placeholder="Enter agent name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <TextArea
-                  placeholder="Enter agent description"
-                  rows={3}
-                  value={formData.description}
-                  onChange={(value: string) =>
-                    setFormData({ ...formData, description: value })
-                  }
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="model">Model</Label>
-                <Select
-                  options={modelOptions}
-                  placeholder="Select a model"
-                  defaultValue={formData.model}
-                  onChange={(value) =>
-                    setFormData({ ...formData, model: value })
-                  }
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="language">Language</Label>
-                <Select
-                  options={languageOptions}
-                  placeholder="Select a language"
-                  defaultValue={formData.language}
-                  onChange={(value) =>
-                    setFormData({ ...formData, language: value })
-                  }
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="is_active">Status</Label>
-                <Select
-                  options={[
-                    { value: "true", label: "Active" },
-                    { value: "false", label: "Inactive" },
-                  ]}
-                  placeholder="Select status"
-                  defaultValue={formData.is_active ? "true" : "false"}
-                  onChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      is_active: value === "true",
-                    })
-                  }
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setIsCreateModalOpen(false);
-                    setError(null);
-                    setSuccess(null);
-                    setFormData({
-                      name: "",
-                      description: "",
-                      type: "chat",
-                      is_active: true,
-                      model: "gpt-4",
-                      language: "en-US",
-                    });
-                  }}
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  size="sm"
-                  disabled={isSubmitting || !formData.name.trim()}
-                >
-                  {isSubmitting 
-                    ? "Creating..." 
-                    : "Create"
-                  }
-                </Button>
-              </div>
-            </div>
-          </Form>
-        </div>
       </Modal>
 
       {/* Link AI Agent Modal */}
