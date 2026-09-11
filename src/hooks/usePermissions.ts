@@ -67,8 +67,10 @@ export function usePermissions(tenantId: string | null): UsePermissionsResult {
     fetchPermissions();
   }, [tenantId]);
 
+  // Callers pass a permission name ("billing.manage"). The API returns rows from the
+  // permissions table, whose `id` is a UUID, so match on `name` as well as `id`.
   const hasPermission = (permissionId: string): boolean => {
-    return permissions.some(p => p.id === permissionId);
+    return permissions.some(p => p.name === permissionId || p.id === permissionId);
   };
 
   return {
