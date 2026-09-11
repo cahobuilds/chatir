@@ -1062,3 +1062,251 @@ Open each of `/tenant-settings` (`TenantManagement`), `/users` (`UserManagement`
 - [ ] **Step 10: Final commit (only if Steps 4-9 required any fix-up changes)**
 
 If everything passed with no fix-ups needed, no commit is needed for this task — it's verification-only. If any fix was required, commit it with a message describing exactly what broke and why, following the same commit-message style used in Tasks 1-7.
+
+---
+
+## Task 9: Fix knowledge-base creation lifecycle (Bug 4, found during Task 8)
+
+**Model:** `claude-sonnet-5-thinking-high` | **Tool:** `generalPurpose` subagent | **Justification:** Multi-file (4 routes), changes a create/delete lifecycle contract, needs judgment on request shape. Tier 2.
+
+**Depends on:** nothing new — independent of all other tasks; added after Task 8 discovered KB creation has been completely broken since commit `212543e` (2025-11-27, pre-dating this plan). Zero knowledge bases exist anywhere in the live project as a result.
+
+**Previous Phase Context Review:** `POST /api/knowledge-bases` (`src/app/api/knowledge-bases/route.ts`) calls `retellClient.knowledgeBase.create({ knowledge_base_name, enable_auto_refresh: false })` with **no sources**, which the provider rejects with `400 no knowledge base sources provided` — so the local row is never inserted and creation always fails. `POST /api/knowledge-bases/[id]/sources` (`.../[id]/sources/route.ts`) already builds a fully-formed `addSourcesParams` object (`knowledge_base_urls`/`knowledge_base_texts`/`knowledge_base_files`) from the request, but currently *requires* `configuration.retell_knowledge_base_id` to already exist (returns 400 "Please sync from the voice provider first" otherwise) — it never creates the provider KB itself. `DELETE /api/knowledge-bases/[id]` only deletes the local row, never calls the provider's delete, so removed KBs silently orphan provider-side and reappear on the next Sync. Confirmed during investigation: `create-ir-template`'s KB lookup (`.filter(Boolean)` on `retell_knowledge_base_id`) and `PATCH /api/agents/[id]/knowledge-bases`'s local-KB-id resolution both already gracefully exclude/reject a KB with no `retell_knowledge_base_id` — **no changes needed in either of those two files**, they already handle a "pending" KB correctly. The Sync route (`/api/retell/knowledge-bases/sync/route.ts`) only pulls FROM the provider into local rows by name-match — a local pending row with no provider counterpart is simply never touched by it, which is correct, so **no change needed there either**.
+
+**Files:**
+- Modify: `src/app/api/knowledge-bases/route.ts` (POST)
+- Modify: `src/app/api/knowledge-bases/[id]/sources/route.ts` (POST)
+- Modify: `src/app/api/knowledge-bases/[id]/route.ts` (DELETE)
+
+**Interfaces:**
+- `knowledge_bases.status` has a DB `CHECK` constraint allowing only `'synced' | 'syncing' | 'error'` (`supabase/migrations/20251119000000_create_knowledge_bases.sql:13`) — no migration in this task; use the existing `'syncing'` value for the new "created locally, not yet in the provider" state (semantically: not yet synced).
+
+- [ ] **Step 1: `POST /api/knowledge-bases` — stop calling the provider at create time**
+
+Remove the entire `getResellerRetellConfig` + `retellClient.knowledgeBase.create(...)` block (currently ~lines 126-160, the whole "REQUIRED for knowledge base creation" section including its try/catch). Insert the local row directly instead, with no provider precondition check and no `retell_knowledge_base_id` in `configuration`:
+
+```ts
+const clientToUse = createAdminClient(); // access already verified via canAccessTenant above
+
+const { data: knowledgeBase, error: kbError } = await clientToUse
+  .from('knowledge_bases')
+  .insert({
+    tenant_id,
+    name,
+    type,
+    description: description || null,
+    configuration: configuration || {},
+    status: 'syncing', // not yet created in the voice provider -- first source add will create it there
+    page_count: 0,
+  })
+  .select()
+  .single();
+
+if (kbError) {
+  return NextResponse.json({ error: kbError.message }, { status: 500 });
+}
+```
+
+Keep the existing directory-creation try/catch block after this (it's unrelated, still fine). Keep the existing `tenant_id`/`name`/`type` validation and the `canAccessTenant(user.id, tenant_id, 'knowledge.manage')` check exactly as they are — only the provider-creation block is removed.
+
+- [ ] **Step 2: `POST /api/knowledge-bases/[id]/sources` — create the provider KB on first source, add to it on subsequent sources**
+
+Read the current file in full first (it already builds `urls`/`texts`/`files` arrays and an `addSourcesParams` object from the request `formData` — keep all of that parsing exactly as-is). Find the block that currently requires `retellKBId` to already exist and errors if not (around lines 111-118):
+
+```ts
+    // Get Retell knowledge base ID from configuration
+    const retellKBId = knowledgeBase.configuration?.retell_knowledge_base_id;
+    if (!retellKBId) {
+      return NextResponse.json(
+        { error: 'Knowledge base not linked to the voice provider. Please sync from the voice provider first.' },
+        { status: 400 }
+      );
+    }
+```
+
+Replace it with logic that creates the provider KB on first use instead of erroring:
+
+```ts
+    let retellKBId: string | undefined = knowledgeBase.configuration?.retell_knowledge_base_id;
+```
+
+Then, AFTER the `addSourcesParams` object is fully built (after the existing "No sources provided" 400 check, so an empty request still 400s exactly as today), branch on whether `retellKBId` already exists:
+
+```ts
+    let retellResponse: any;
+    if (!retellKBId) {
+      // First source(s) for this KB -- the provider requires sources at creation time, so create
+      // it now instead of erroring (see docs/superpowers/plans/2026-09-11-platform-polish-and-rebrand.md Task 9).
+      const created = await retellClient.knowledgeBase.create({
+        knowledge_base_name: knowledgeBase.name,
+        enable_auto_refresh: false,
+        ...addSourcesParams,
+      });
+      retellKBId = created.knowledge_base_id;
+      retellResponse = created;
+
+      await supabase
+        .from('knowledge_bases')
+        .update({
+          configuration: { ...(knowledgeBase.configuration || {}), retell_knowledge_base_id: retellKBId },
+          status: 'synced',
+        })
+        .eq('id', id);
+    } else {
+      retellResponse = await retellClient.knowledgeBase.addSources(retellKBId, addSourcesParams);
+    }
+```
+
+Remove the old standalone `const retellResponse = await retellClient.knowledgeBase.addSources(retellKBId, addSourcesParams);` line (now folded into the `else` branch above). Everything below this (the "Sync sources back to database" block reading `retellResponse.knowledge_base_sources`, the page_count update, the success response) stays exactly as-is — both `create()` and `addSources()` return the same `knowledge_base_sources` shape, per the existing Sync route's own handling of `create`-shaped responses.
+
+- [ ] **Step 3: `DELETE /api/knowledge-bases/[id]` — also delete the provider-side KB**
+
+Find the delete handler's current body (after the existing `canAccessTenant` check, before the `supabase.from('knowledge_bases').delete()` call). Fetch the full row (not just `tenant_id`) so `configuration` is available, and delete provider-side first if a `retell_knowledge_base_id` exists, tolerating provider failure (log, don't block the local delete — matching this codebase's existing lenient pattern for non-critical side effects):
+
+```ts
+    const { data: knowledgeBase } = await supabase
+      .from('knowledge_bases')
+      .select('tenant_id, configuration')
+      .eq('id', id)
+      .single();
+
+    // ... existing canAccessTenant check stays, using knowledgeBase.tenant_id ...
+
+    const retellKBId = (knowledgeBase.configuration as any)?.retell_knowledge_base_id;
+    if (retellKBId) {
+      try {
+        const retellApiKey = await getResellerRetellConfig(knowledgeBase.tenant_id);
+        if (retellApiKey) {
+          const { createRetellClient } = await import('@/lib/retell');
+          const retellClient = createRetellClient(retellApiKey);
+          await retellClient.knowledgeBase.delete(retellKBId);
+        }
+      } catch (retellError: any) {
+        console.error(`[KB API] Failed to delete voice-provider knowledge base ${retellKBId} (continuing with local delete):`, retellError?.message);
+      }
+    }
+```
+
+Add the needed imports at the top of the file: `getResellerRetellConfig` from `@/lib/reseller` (the dynamic `createRetellClient` import matches the existing pattern already used in the POST handler of `route.ts`).
+
+- [ ] **Step 4: Verify with tsc/lint**
+
+Run: `npx tsc --noEmit -p .` — expect no new errors.
+Run: `npx eslint src/app/api/knowledge-bases/route.ts "src/app/api/knowledge-bases/[id]/route.ts" "src/app/api/knowledge-bases/[id]/sources/route.ts"` — expect no new errors.
+
+- [ ] **Step 5: Rebuild, restart, and live-verify**
+
+Rebuild (`npm run build`), restart the `next start` server (Shell tool `block_until_ms: 0` + `required_permissions: ["all"]`), then live-verify against a real connected org (Master Platform or Caro Holdings, per Task 8's findings — do not connect the E2E test org's provider key):
+1. Create a new KB with just a name (no sources yet) → confirm the local row is created (`status: 'syncing'`, no `retell_knowledge_base_id`) and does NOT error.
+2. Add a text source to it → confirm success, confirm `configuration.retell_knowledge_base_id` is now set, confirm `status` is `'synced'`, confirm the source shows in the UI.
+3. Add a second source to the same KB → confirm it uses `addSources` (not `create` again) and both sources are now present.
+4. Delete the KB → confirm the local row is gone AND the provider-side KB is gone (check via the provider's own list/retrieve, or via the app's own Sync afterward returning it as no-longer-present).
+5. Clean up: leave no test KBs behind in either the DB or the provider.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/app/api/knowledge-bases/route.ts "src/app/api/knowledge-bases/[id]/route.ts" "src/app/api/knowledge-bases/[id]/sources/route.ts"
+git commit -m "fix(knowledge-bases): defer provider creation until the first source is added
+
+The voice provider requires at least one source at knowledge-base
+creation time; the app's create endpoint called it with none, so every
+creation attempt 500'd and zero knowledge bases could ever exist
+(pre-existing since 212543e, found during Task 8's E2E verification).
+
+Now: POST /api/knowledge-bases inserts a local row only (status
+'syncing', no provider id yet). POST .../sources creates the provider
+KB on the first source (passing the sources at create time, exactly as
+the provider requires) and uses addSources for subsequent additions.
+DELETE now also deletes the provider-side KB instead of orphaning it."
+```
+
+---
+
+## Task 10: Wire up or remove two dead admin buttons (found during Task 8)
+
+**Model:** `claude-sonnet-5-thinking-high` | **Tool:** `generalPurpose` subagent | **Justification:** Requires reading existing state/save patterns to wire one button correctly and judgment on the other; small scope but not purely mechanical. Tier 2.
+
+**Depends on:** nothing — independent of all other tasks.
+
+**Previous Phase Context Review:** Task 8's platform-admin pass found 14 buttons with no `onClick` handler across the four admin pages; 12 sit inside components already flagged as hardcoded-mock demo panels (`TenantSecurity.tsx`, `TenantAnalytics.tsx`, `SecuritySettings.tsx` — out of scope, consistent with their fake data, not touched here). Two are real, working pages' buttons that look functional but do nothing: `TenantConfiguration.tsx`'s "Save Configuration" (the panel just above it, "Save Name", already persists for real via `PATCH /api/tenants/[id]`) and `UsersHeader.tsx`'s "Settings" (a prominent top-right header button on `/users` with no defined destination or handler at all).
+
+**Files:**
+- Modify: `src/components/TenantConfiguration.tsx`
+- Modify: `src/components/UsersHeader.tsx`
+
+- [ ] **Step 1: Wire up `TenantConfiguration.tsx`'s "Save Configuration" button**
+
+This component already has `config`/`setConfig` local state (initialized from `tenant.settings.{features,limits,security}`, read via a `currentConfig` fallback) that backs the "Feature Toggles", "Usage Limits", and "Security Settings" sections directly above the "Save Configuration" button — none of those three sections currently persist anywhere. `PATCH /api/tenants/[id]` already accepts a `settings` field (see `src/app/api/tenants/[id]/route.ts`) and writes it through `canAccessTenant`/`isSystemAdmin`-gated `updateData.settings = settings`. Follow the exact same pattern as this file's existing `handleSaveName` (loading state, try/catch, success/error state set via whatever alert/message mechanism `handleSaveName` already uses):
+
+```ts
+const [savingConfig, setSavingConfig] = useState(false);
+
+const handleSaveConfiguration = async () => {
+  if (!tenant) return;
+  try {
+    setSavingConfig(true);
+    setError(null);
+    setSuccess(null);
+    const response = await fetch(`/api/tenants/${tenant.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        settings: {
+          features: currentConfig?.features,
+          limits: currentConfig?.limits,
+          security: currentConfig?.security,
+        },
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to save configuration');
+    setSuccess('Configuration saved.');
+  } catch (err: any) {
+    setError(err.message || 'Failed to save configuration');
+  } finally {
+    setSavingConfig(false);
+  }
+};
+```
+
+(Match the exact names of this file's existing `error`/`success` state setters and `tenant` variable — read the file first, the brief's names above are illustrative of the pattern, not necessarily byte-exact identifiers already in scope.) Wire the button:
+
+```tsx
+<button
+  onClick={handleSaveConfiguration}
+  disabled={savingConfig}
+  className="w-full inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+>
+  <CogIcon className="w-4 h-4 mr-2" />
+  {savingConfig ? 'Saving...' : 'Save Configuration'}
+</button>
+```
+
+- [ ] **Step 2: Remove `UsersHeader.tsx`'s dead "Settings" button**
+
+No destination or intended behavior for this button exists anywhere (checked: no `/settings`-adjacent route is specific to user management, no TODO/comment nearby indicating planned behavior). Follow this plan's Task 1 precedent for dead UI with no defined purpose: remove it rather than inventing new functionality. Delete just the "Settings" `<button>` element (lines ~93-96) — keep the sibling button next to it (the one with a real `onClick`) untouched.
+
+- [ ] **Step 3: Verify with tsc/lint**
+
+Run: `npx tsc --noEmit -p .` — expect no new errors.
+Run: `npx eslint src/components/TenantConfiguration.tsx src/components/UsersHeader.tsx` — expect no new errors.
+
+- [ ] **Step 4: Rebuild, restart, and live-verify**
+
+Rebuild + restart, then live-verify: on `/tenant-settings`, change a feature toggle or the session timeout, click "Save Configuration", confirm a success message and that a page reload shows the change persisted (re-fetch `GET /api/tenants/[id]` and confirm `settings` reflects it). On `/users`, confirm the "Settings" button is gone and the remaining header button still works.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/components/TenantConfiguration.tsx src/components/UsersHeader.tsx
+git commit -m "fix(admin): wire up Save Configuration, remove dead Settings button
+
+TenantConfiguration's Save Configuration button had no onClick handler
+despite sitting below three sections of real, editable state (feature
+toggles, usage limits, security settings) -- now persists via PATCH
+/api/tenants/[id]'s existing settings field, matching the adjacent
+Save Name button's pattern. UsersHeader's Settings button had no
+handler and no defined destination -- removed per the same dead-UI
+precedent as Task 1. Both found during Task 8's platform-admin pass."
+```
