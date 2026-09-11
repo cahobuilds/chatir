@@ -5,7 +5,7 @@
 
 ## Context
 
-Following the agent-template-creation-flow work and the RBAC/security hardening commits earlier this session, the user requested a broad end-to-end pass covering five areas:
+Following the agent-template-creation-flow work and the RBAC/security hardening commits earlier this session, the user requested a broad end-to-end pass covering:
 
 1. End-to-end system testing (signup → agent creation → knowledge base) via Playwright.
 2. A missing/unclear signup flow.
@@ -14,7 +14,9 @@ Following the agent-template-creation-flow work and the RBAC/security hardening 
 5. A comprehensive whitelabel sweep (zero "Retell" mentions on any company-facing or, per the final decision below, most platform-facing surface).
 6. Small visual/branding changes so the product looks distinct from other clients built on the same underlying admin template ("TinAdmin"/TailAdmin-style), without changing the overall UX/layout structure.
 
-This document captures the design decisions for the parts of this request that required judgment calls (whitelabel scope, admin reorg, visual direction). Signup/agent-creation/KB verification is **not** a design problem — the code already exists; it is a testing/bug-fixing pass covered directly by the implementation plan, not by this spec.
+After the first design pass was approved, the user reopened three items that had been marked out of scope, expanding the request to also cover: a full product rename (§6 below), a review of whether the nav needs restructuring (§7), and a mock-UI Stripe/billing stub for both company-admin and platform-admin (§8).
+
+This document captures the design decisions for the parts of this request that required judgment calls (whitelabel scope, admin reorg, visual direction, product name, billing-stub depth). Signup/agent-creation/KB verification is **not** a design problem — the code already exists; it is a testing/bug-fixing pass covered directly by the implementation plan, not by this spec.
 
 ## Decisions
 
@@ -73,7 +75,7 @@ Confirmed via the visual companion mockup comparison. Applies a new palette and 
 
 **Implementation approach:** Because nearly every themed surface in the app (buttons, active nav states, badges, form-focus rings, calendar events, etc.) already derives its color from the centralized `--color-brand-*` CSS custom property scale defined once in `src/app/globals.css` (currently the TailAdmin default blue, `--color-brand-500: #465fff`), the palette swap is primarily: (a) replace the `--color-brand-*` scale with an amber ramp, (b) change the sidebar's own background color (which is likely hardcoded separately from the brand scale, since it needs to stay dark while brand-500 stays a mid-tone accent — verify during implementation and adjust the specific sidebar background classes/variables), (c) swap the page background token, and (d) adjust the active-nav-item and stat-card component styles for the two structural tweaks above. This keeps the change centralized and low-risk rather than touching every component file individually.
 
-**Also part of this workstream:** update the visible product name/branding text (e.g., "AI Knowledge Bots" shown on the login page, and any other literal product-name strings) is explicitly **not** part of this rebrand — the user asked for color/layout differentiation, not a renaming exercise. Only visual styling changes; no copy/naming changes beyond what's already covered in the whitelabel section above.
+**Relationship to the product rename (§6):** this section is colors/layout only. The literal product-name text (e.g., "AI Knowledge Bots" on the login page) is handled separately in §6 as its own rename-to-"Chat IR" task — listed there rather than here so the two concerns (visual palette vs. brand text) stay independently trackable in the implementation plan.
 
 ### 5. Testing pass (drives the implementation plan's verification, not a design decision)
 
@@ -87,12 +89,47 @@ Using the `cursor-ide-browser` MCP tools (headed), after the above fixes are imp
 
 Any real bugs found during this pass are fixed as part of executing the plan, following the same root-cause-first debugging discipline used earlier this session (reproduce → read code → fix → re-verify live).
 
+### 6. Product rename — "Chat IR"
+
+Audit of literal product-name/brand strings across the app found three inconsistent names in active use, one of which is a real whitelabel bug:
+
+| String | Where | Count |
+|---|---|---|
+| "AI Knowledge Bots" | `src/app/layout.tsx` (root `<title>` metadata), `src/app/auth/login/page.tsx` (two `<h1>`s) | 4 files |
+| "AI Customer Care" | `src/app/(admin)/billing/page.tsx` and 4 siblings (page metadata `title`/`description`) | 5 files |
+| **"TinAdmin"** | 8 pages under `(admin)/analytics/*`, `(admin)/agents/*`, `(admin)/knowledge` — literally the purchased template vendor's own brand name leaking into the browser tab `<title>` | 8 files |
+
+**Decision:** standardize every one of these on **"Chat IR"** — the login page headings, the root layout metadata title/description, every page-level metadata `title`, and any other literal product-name string found during a final grep pass. This does not touch favicon/logo image assets (out of scope — no new assets requested) unless a trivial text-only swap is possible.
+
+### 7. Navigation — minor review, not a rebuild
+
+Per the user's clarification, this is "probably minor" — not a redesign. During implementation, review the current top-level nav (`src/config/navigation.tsx`) for the one concrete candidate issue already spotted: "Voice Agents," "Chat Agents," "Call History," "Chat History," and "Knowledge Base" currently sit as five separate loose items directly under the `dashboard` category, ungrouped, while "Platform," "Analytics," and "Settings" are properly grouped into collapsible sections. If confirmed to be a real usability issue, group those five into one collapsible section (working name: "Agents & Content" — subject to a quick sanity check with the user if a better name presents itself during implementation). If, on review, the current flat structure is actually fine (e.g., because these are the most-used items and deliberately kept one click away), make no change and note that in the plan's verification step. This is explicitly a "fix only if actually broken" task, not a mandate to change something regardless.
+
+### 8. Stripe stub — mock UI, billing screens only
+
+**Depth decision:** mock UI only. No Stripe SDK integration, no real API calls, no requirement for real Stripe keys right now. Screens must look and feel real; nothing behind them talks to an external payment processor yet.
+
+**Existing groundwork found in the schema** (from the earlier RBAC hardening work this session): `tenants.billing_plan` column already exists (values: `pay_as_you_go` / `monthly` / `annual` — a billing *cadence*, not a plan *tier*), and permission strings `billing.manage` (company-scoped) and `plans.update` (platform-scoped) already exist in the role/permission catalog. Reuse the permission strings as-is; they already fit this feature.
+
+**New persisted state:** add a `plan_tier` column to `tenants` (`starter` / `pro` / `enterprise`, default `starter`) via a new Supabase migration — this is the one piece of billing state worth actually saving, since it's meaningful today (which tier an org is nominally on) and will be the real anchor point when Stripe is wired for real in Phase 5. `billing_plan` (cadence) is left untouched/unrelated.
+
+**Company-admin screen** (new — a tab/section reachable from their Settings area, gated by `billing.manage`):
+- Current plan tier + a usage summary (reuse whatever usage data is already surfaced elsewhere, e.g., call/chat counts — no new analytics pipeework)
+- A "Payment Method" section: a styled card-entry form (card number / expiry / CVC-shaped inputs) that, on submit, only updates local/component state with a fake "•••• 4242 saved" confirmation — never sent anywhere, no real validation beyond basic format checks
+- An "Invoices" section: a short static/illustrative list (e.g., 3 mock rows with plausible dates/amounts/statuses) clearly presentational, not backed by a real invoices table
+- Plan-tier selection UI (Starter/Pro/Enterprise cards) that, unlike the payment method and invoices, **does** persist for real via a small API route updating `tenants.plan_tier` (since that's real, useful state)
+
+**Platform-admin screen** (enhance the existing `/billing` page, not a new page):
+- Add a per-organization plan/tier column to whatever list/table already renders there
+- Add a stubbed cross-org invoice/payment history view (same "illustrative, not real" treatment as the company-admin invoices section)
+
+**Environment placeholders:** add commented-out, empty placeholder entries to `.env.local` and `.env.example` for `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, and `STRIPE_WEBHOOK_SECRET`, with a one-line comment referencing this as future Phase 5 work. No code path reads these yet — they exist purely so the real integration later has an obvious place to drop keys in.
+
 ## Out of Scope (explicit non-goals)
 
-- Stripe/billing integration of any kind (deferred, per user decision).
-- Renaming the product / changing marketing copy beyond the whitelabel fixes in §2.
-- Rebuilding the navigation information architecture (it's already reasonably organized from earlier work).
-- Building real backend functionality for the four deleted demo settings components.
+- Any **real** Stripe/payment-processor integration (SDK calls, Checkout, webhooks, real charges) — still deferred to Phase 5. Only the mock UI described in §8 is in scope now.
+- New logo/favicon assets (product rename in §6 is text-only).
+- Building real backend functionality for the four deleted demo settings components (§3).
 - Any reseller-hierarchy or `parent_id`/`is_reseller` schema changes (locked decision from `docs/RETELL_WORKSPACE_ISOLATION.md`, unrelated to this work).
 
 ## Success Criteria
@@ -100,5 +137,7 @@ Any real bugs found during this pass are fixed as part of executing the plan, fo
 - A brand-new user can sign up, land on their dashboard, create a voice agent, create a chat agent, and attach a knowledge base — all working live, verified via headed Playwright.
 - `/settings` renders only real, working, correctly-scoped content.
 - Zero "Retell"/"Retell AI" text visible to any company-role user anywhere in the product; internal platform-staff-only screens keep only already-whitelabeled visible copy.
-- The admin UI reads as visually distinct (charcoal/amber/warm-off-white) from the original blue/indigo template theme, with identical navigation and page structure to before.
+- The admin UI reads as visually distinct (charcoal/amber/warm-off-white) from the original blue/indigo template theme, with identical navigation and page structure to before (aside from the one minor nav grouping fix in §7, if warranted).
+- Every literal product-name string in the app reads "Chat IR" — zero remaining "AI Knowledge Bots," "AI Customer Care," or "TinAdmin" occurrences.
+- A company-admin can view their plan tier, change it, see a stubbed payment-method section and invoice list; a platform-admin can see plan/tier per organization on `/billing`. None of it calls a real payment processor.
 - `npm run type-check` and `npm run lint` pass after all changes.
