@@ -90,10 +90,6 @@ export default function UsersHeader({ onAddUser }: UsersHeaderProps) {
         </div>
         
         <div className="flex items-center space-x-3">
-          <button className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-            <CogIcon className="w-4 h-4 mr-2" />
-            Settings
-          </button>
           <button 
             type="button"
             onClick={(e) => {

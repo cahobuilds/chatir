@@ -39,6 +39,7 @@ export default function TenantConfiguration() {
   const [wordmarkPreview, setWordmarkPreview] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
   const [copiedTenantId, setCopiedTenantId] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
 
   // Tracks the org id whose data we last fetched (or started fetching), so a same-id
   // `orgLoading` flip (e.g. INITIAL_SESSION -> TOKEN_REFRESHED from OrganizationProvider's
@@ -355,6 +356,44 @@ export default function TenantConfiguration() {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveConfiguration = async () => {
+    if (!tenant) return;
+
+    try {
+      setSavingConfig(true);
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch(`/api/tenants/${tenant.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          settings: {
+            features: currentConfig?.features,
+            limits: currentConfig?.limits,
+            security: currentConfig?.security,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to save configuration');
+      }
+
+      const data = await response.json();
+      setTenant(data.tenant);
+      setSuccess("Configuration saved successfully!");
+    } catch (err: any) {
+      console.error("Save configuration error:", err);
+      setError(err.message);
+    } finally {
+      setSavingConfig(false);
     }
   };
 
@@ -921,9 +960,13 @@ export default function TenantConfiguration() {
 
         {/* Save Button */}
         <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-          <button className="w-full inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+          <button
+            onClick={handleSaveConfiguration}
+            disabled={savingConfig}
+            className="w-full inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <CogIcon className="w-4 h-4 mr-2" />
-            Save Configuration
+            {savingConfig ? "Saving..." : "Save Configuration"}
           </button>
         </div>
       </div>
