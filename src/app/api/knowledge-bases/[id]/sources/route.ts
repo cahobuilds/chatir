@@ -76,8 +76,13 @@ export async function POST(
     }
     const formData = await request.formData();
 
+    // Platform staff may have no user_tenants row in this org; use an admin client for them
+    // so the writes below aren't silently blocked by RLS (mirrors [id]/route.ts's GET handler).
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
+    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
+
     // Get knowledge base
-    const { data: knowledgeBase, error: kbError } = await supabase
+    const { data: knowledgeBase, error: kbError } = await clientToUse
       .from('knowledge_bases')
       .select('*')
       .eq('id', id)
@@ -91,11 +96,6 @@ export async function POST(
     if (!(await canAccessTenant(user.id, knowledgeBase.tenant_id, 'knowledge.manage'))) {
       return NextResponse.json({ error: 'Forbidden: No access to this knowledge base' }, { status: 403 });
     }
-
-    // Platform staff may have no user_tenants row in this org; use an admin client for them
-    // so the writes below aren't silently blocked by RLS (mirrors [id]/route.ts's GET handler).
-    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
-    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
 
     // Get Retell API key
     const retellApiKey = await getResellerRetellConfig(knowledgeBase.tenant_id);
