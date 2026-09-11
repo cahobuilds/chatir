@@ -110,24 +110,62 @@ import { ChevronDownIcon } from "@heroicons/react/24/outline";
 ```
 The existing `<ChevronDownIcon />` usage (inside the `<span className="absolute ...">` wrapper) needs no other changes.
 
-- [ ] **Step 5: Trim `src/icons/index.tsx` down to the 3 exports still needed by out-of-scope dead files**
+- [ ] **Step 5: Trim `src/icons/index.tsx` down to only the exports still needed by out-of-scope dead files**
 
-Two files outside this task's scope (`DataTableOne.tsx`, `BasicTableFour.tsx` — do not modify them) still import `AngleDownIcon`, `AngleUpIcon`, and `MoreDotIcon` from this module. Every other export is now unused. Rewrite `src/icons/index.tsx` to just:
+**Correction (post-implementation):** the original version of this step underestimated the keep-list — it only searched for `../icons`/`@/icons` (exactly 2 levels up), missing every dead file nested deeper (`../../../icons`, `../../../../icons`). The real dangling-import discovery command is:
+```bash
+grep -rln 'from "\(\.\./\)\+icons"\|from "@/icons"' src --include="*.tsx" --include="*.ts"
+```
+This finds **13** out-of-scope dead files (not 2): `DataTableOne.tsx`, `BasicTableFour.tsx`, `DataTableTwo.tsx`, `DataTableThree.tsx`, `BasicTableTwo.tsx`, `CookieConsent.tsx`, `UpdateNotification.tsx`, `Notification.tsx`, `date-picker.tsx`, `DefaultInputs.tsx`, `InputGroup.tsx`, `ExampleFormOne.tsx`, `ExampleFormWithIcon.tsx` — all confirmed unreachable from any `src/app` route (same class as `DataTableOne.tsx`/`BasicTableFour.tsx`), but all still type-checked/bundled, so all their icon imports must keep resolving. The correct keep-list is 20 exports, not 3. Rewrite `src/icons/index.tsx` to:
 ```tsx
 import AngleUpIcon from "./angle-up.svg";
 import AngleDownIcon from "./angle-down.svg";
 import MoreDotIcon from "./MoreDotIcon.svg";
+import AlertIcon from "./alert.svg";
+import CloseIcon from "./close.svg";
+import BoltIcon from "./bolt.svg";
+import CheckCircleIcon from "./check-circle.svg";
+import InfoIcon from "./info.svg";
+import ErrorIcon from "./info-hexa.svg";
+import PencilIcon from "./pencil.svg";
+import TrashBinIcon from "./trash.svg";
+import CalenderIcon from "./calender-line.svg";
+import EyeCloseIcon from "./eye-close.svg";
+import EyeIcon from "./eye.svg";
+import TimeIcon from "./time.svg";
+import EnvelopeIcon from "./envelope.svg";
+import PaperPlaneIcon from "./paper-plane.svg";
+import ArrowRightIcon from "./arrow-right.svg";
+import LockIcon from "./lock.svg";
+import UserIcon from "./user-line.svg";
 
 export {
   AngleUpIcon,
   AngleDownIcon,
   MoreDotIcon,
+  AlertIcon,
+  CloseIcon,
+  BoltIcon,
+  CheckCircleIcon,
+  InfoIcon,
+  ErrorIcon,
+  PencilIcon,
+  TrashBinIcon,
+  CalenderIcon,
+  EyeCloseIcon,
+  EyeIcon,
+  TimeIcon,
+  EnvelopeIcon,
+  PaperPlaneIcon,
+  ArrowRightIcon,
+  LockIcon,
+  UserIcon,
 };
 ```
 
 - [ ] **Step 6: Delete every other `.svg` file under `src/icons/`**
 
-Keep only `angle-up.svg`, `angle-down.svg`, `MoreDotIcon.svg`. Delete all 58 others (the full original list minus those 3 — enumerate via `ls src/icons/*.svg` and delete everything not in the keep-list; do not hand-type the list and risk a typo, script the diff against the keep-list).
+Keep only the 20 files whose exports are listed in Step 5 (`angle-up.svg`, `angle-down.svg`, `MoreDotIcon.svg`, `alert.svg`, `close.svg`, `bolt.svg`, `check-circle.svg`, `info.svg`, `info-hexa.svg`, `pencil.svg`, `trash.svg`, `calender-line.svg`, `eye-close.svg`, `eye.svg`, `time.svg`, `envelope.svg`, `paper-plane.svg`, `arrow-right.svg`, `lock.svg`, `user-line.svg`). Delete the other 41 (the full original 61 minus those 20 — enumerate via `ls src/icons/*.svg` and delete everything not in the keep-list; do not hand-type the list and risk a typo, script the diff against the keep-list). `npx tsc --noEmit` and `npm run build` must both pass after this step — if either fails on a missing icon import, the keep-list above is the authoritative source of truth, not any earlier draft of this step.
 
 - [ ] **Step 7: Verify no dangling imports**
 
