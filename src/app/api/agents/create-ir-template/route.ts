@@ -3,6 +3,7 @@ import { createRetellClient } from '@/lib/retell';
 import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { getResellerRetellConfig } from '@/lib/reseller';
 import { buildIRAgentConfig } from '@/lib/ir-agent-template';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/agents/create-ir-template - One-click creation of the Investor Relations
@@ -27,8 +28,9 @@ export async function POST(request: NextRequest) {
       ticker_symbol,
       exchange,
       human_contact,
-      include_voice,
-      voice_id, // required if include_voice is true
+      create_chat,
+      create_voice,
+      voice_id, // required if create_voice is true
       knowledge_base_ids, // optional: local KB row ids to attach immediately
     } = body;
 
@@ -36,19 +38,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'tenant_id and company_name are required' }, { status: 400 });
     }
 
-    if (include_voice && !voice_id) {
-      return NextResponse.json({ error: 'voice_id is required when include_voice is true' }, { status: 400 });
+    if (!create_chat && !create_voice) {
+      return NextResponse.json(
+        { error: 'At least one of create_chat or create_voice must be true' },
+        { status: 400 }
+      );
     }
 
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenant_id)
-      .in('role', ['tenant_admin', 'super_admin'])
-      .single();
+    if (create_voice && !voice_id) {
+      return NextResponse.json({ error: 'voice_id is required when create_voice is true' }, { status: 400 });
+    }
 
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, tenant_id, 'agents.manage'))) {
       return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
     }
 
@@ -79,72 +80,79 @@ export async function POST(request: NextRequest) {
         .filter(Boolean);
     }
 
-    // Build the chat-channel prompt/config (used for the shared LLM's general_prompt too --
-    // the chat phrasing is the more general/detailed one; the voice agent gets its own
-    // separate LLM below with voice-appropriate phrasing, since Retell applies one
-    // general_prompt per LLM and the two channels genuinely need different phrasing).
-    const chatConfig = buildIRAgentConfig({
-      companyName: company_name,
-      tickerSymbol: ticker_symbol,
-      exchange,
-      humanContact: human_contact,
-      channel: 'chat',
-    });
+    let chatAgent: any = null;
+    let localChatAgent: any = null;
 
-    const chatLlm = await retellClient.llm.create({
-      general_prompt: chatConfig.systemPrompt,
-      model_temperature: chatConfig.modelTemperature,
-      knowledge_base_ids: retellKnowledgeBaseIds.length > 0 ? retellKnowledgeBaseIds : null,
-      kb_config: retellKnowledgeBaseIds.length > 0 ? chatConfig.kbConfig : null,
-    });
+    if (create_chat) {
+      // Build the chat-channel prompt/config (used for the shared LLM's general_prompt too --
+      // the chat phrasing is the more general/detailed one; the voice agent gets its own
+      // separate LLM below with voice-appropriate phrasing, since Retell applies one
+      // general_prompt per LLM and the two channels genuinely need different phrasing).
+      const chatConfig = buildIRAgentConfig({
+        companyName: company_name,
+        tickerSymbol: ticker_symbol,
+        exchange,
+        humanContact: human_contact,
+        channel: 'chat',
+      });
 
-    const chatAgentName = `${company_name} Investor Relations Chat`;
-    const chatAgent = await retellClient.chatAgent.create({
-      response_engine: { type: 'retell-llm', llm_id: chatLlm.llm_id },
-      agent_name: chatAgentName,
-      guardrail_config: chatConfig.guardrailConfig,
-      handbook_config: chatConfig.handbookConfig,
-    });
+      const chatLlm = await retellClient.llm.create({
+        general_prompt: chatConfig.systemPrompt,
+        model_temperature: chatConfig.modelTemperature,
+        knowledge_base_ids: retellKnowledgeBaseIds.length > 0 ? retellKnowledgeBaseIds : null,
+        kb_config: retellKnowledgeBaseIds.length > 0 ? chatConfig.kbConfig : null,
+      });
 
-    const { data: localChatAgent, error: chatAgentDbError } = await supabase
-      .from('agents')
-      .insert({
-        tenant_id,
-        name: chatAgentName,
-        type: 'chat',
-        description: `Investor Relations chat agent for ${company_name}, created from the IR template.`,
-        retell_agent_id: chatAgent.agent_id,
-        configuration: {
-          ...chatAgent,
-          retell_agent_id: chatAgent.agent_id,
-          ir_template: true,
-        },
-        is_active: true,
-      })
-      .select()
-      .single();
+      const chatAgentName = `${company_name} Investor Relations Chat`;
+      chatAgent = await retellClient.chatAgent.create({
+        response_engine: { type: 'retell-llm', llm_id: chatLlm.llm_id },
+        agent_name: chatAgentName,
+        guardrail_config: chatConfig.guardrailConfig,
+        handbook_config: chatConfig.handbookConfig,
+      });
 
-    if (chatAgentDbError) {
-      logRetellError(chatAgentDbError, 'IR Template - Chat Agent DB Insert');
-    }
-
-    // Mirror KB links locally for the chat agent, if any were attached up front.
-    if (localChatAgent && Array.isArray(knowledge_base_ids) && knowledge_base_ids.length > 0 && retellKnowledgeBaseIds.length > 0) {
-      await supabase.from('agent_knowledge_bases').insert(
-        knowledge_base_ids.map((kbId: string) => ({
-          agent_id: localChatAgent.id,
-          knowledge_base_id: kbId,
+      const { data: insertedChatAgent, error: chatAgentDbError } = await supabase
+        .from('agents')
+        .insert({
           tenant_id,
-          similarity_threshold: chatConfig.kbConfig.filter_score,
-          top_k: chatConfig.kbConfig.top_k,
-        }))
-      );
+          name: chatAgentName,
+          type: 'chat',
+          description: `Investor Relations chat agent for ${company_name}, created from the IR template.`,
+          retell_agent_id: chatAgent.agent_id,
+          configuration: {
+            ...chatAgent,
+            retell_agent_id: chatAgent.agent_id,
+            ir_template: true,
+          },
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (chatAgentDbError) {
+        logRetellError(chatAgentDbError, 'IR Template - Chat Agent DB Insert');
+      } else {
+        localChatAgent = insertedChatAgent;
+      }
+
+      // Mirror KB links locally for the chat agent, if any were attached up front.
+      if (localChatAgent && Array.isArray(knowledge_base_ids) && knowledge_base_ids.length > 0 && retellKnowledgeBaseIds.length > 0) {
+        await supabase.from('agent_knowledge_bases').insert(
+          knowledge_base_ids.map((kbId: string) => ({
+            agent_id: localChatAgent.id,
+            knowledge_base_id: kbId,
+            tenant_id,
+            similarity_threshold: chatConfig.kbConfig.filter_score,
+            top_k: chatConfig.kbConfig.top_k,
+          }))
+        );
+      }
     }
 
     let voiceAgent: any = null;
     let localVoiceAgent: any = null;
 
-    if (include_voice) {
+    if (create_voice) {
       const voiceConfig = buildIRAgentConfig({
         companyName: company_name,
         tickerSymbol: ticker_symbol,
@@ -206,13 +214,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const createdChannels = [create_chat && 'chat', create_voice && 'voice'].filter(Boolean).join(' and ');
     return NextResponse.json({
       success: true,
-      chat_agent: { agent: localChatAgent, retell_agent: chatAgent },
-      voice_agent: include_voice ? { agent: localVoiceAgent, retell_agent: voiceAgent } : null,
-      message: include_voice
-        ? `Created Investor Relations chat and voice agents for ${company_name}. Publish each when ready to go live.`
-        : `Created Investor Relations chat agent for ${company_name}. Publish it when ready to go live.`,
+      chat_agent: create_chat ? { agent: localChatAgent, retell_agent: chatAgent } : null,
+      voice_agent: create_voice ? { agent: localVoiceAgent, retell_agent: voiceAgent } : null,
+      message: `Created Investor Relations ${createdChannels} agent${create_chat && create_voice ? 's' : ''} for ${company_name}. Publish ${create_chat && create_voice ? 'each' : 'it'} when ready to go live.`,
     }, { status: 201 });
   } catch (error: any) {
     logRetellError(error, 'IR Template Create');
