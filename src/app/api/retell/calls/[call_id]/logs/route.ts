@@ -49,7 +49,7 @@ export async function GET(
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization.' },
+        { error: 'Voice provider not connected for this organization.' },
         { status: 400 }
       );
     }

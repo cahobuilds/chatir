@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     logRetellError(error, 'LLM List');
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to list Retell LLMs: ${errorMessage}` },
+      { error: `Failed to list language models: ${errorMessage}` },
       { status: 500 }
     );
   }
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
     logRetellError(error, 'LLM Create');
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to create Retell LLM: ${errorMessage}` },
+      { error: `Failed to create the language model: ${errorMessage}` },
       { status: 500 }
     );
   }

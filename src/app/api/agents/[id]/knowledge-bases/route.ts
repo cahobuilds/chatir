@@ -35,13 +35,13 @@ export async function GET(
     }
 
     if (!agent.retell_agent_id) {
-      return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+      return NextResponse.json({ error: 'Agent not linked to the voice provider' }, { status: 400 });
     }
 
     const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }
@@ -126,7 +126,7 @@ export async function PATCH(
     }
 
     if (!agent.retell_agent_id) {
-      return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+      return NextResponse.json({ error: 'Agent not linked to the voice provider' }, { status: 400 });
     }
 
     const body = await request.json();
@@ -157,7 +157,7 @@ export async function PATCH(
       const missing = localKbIds.filter((kbId: string) => !resolvedLocalIds.has(kbId));
       if (missing.length > 0) {
         return NextResponse.json(
-          { error: `Some knowledge bases were not found for this organization or are not yet synced to Retell: ${missing.join(', ')}` },
+          { error: `Some knowledge bases were not found for this organization or are not yet synced to the voice provider: ${missing.join(', ')}` },
           { status: 400 }
         );
       }
@@ -166,7 +166,7 @@ export async function PATCH(
     const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }

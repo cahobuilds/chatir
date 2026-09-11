@@ -57,7 +57,7 @@ export async function DELETE(
     const retellApiKey = await getResellerRetellConfig(knowledgeBase.tenant_id);
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization.' },
+        { error: 'Voice provider not connected for this organization.' },
         { status: 400 }
       );
     }
@@ -68,7 +68,7 @@ export async function DELETE(
 
     if (!retellKBId) {
       return NextResponse.json(
-        { error: 'Knowledge base not linked to Retell.' },
+        { error: 'Knowledge base not linked to the voice provider.' },
         { status: 400 }
       );
     }

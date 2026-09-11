@@ -50,7 +50,7 @@ export async function GET(
     }
 
     if (!agent.retell_agent_id) {
-      return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+      return NextResponse.json({ error: 'Agent not linked to the voice provider' }, { status: 400 });
     }
 
     // Get reseller's Retell API key (organizations inherit from reseller)
@@ -58,7 +58,7 @@ export async function GET(
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }
@@ -91,7 +91,7 @@ export async function GET(
     // Format user-friendly error message
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to retrieve Retell AI agent: ${errorMessage}` },
+      { error: `Failed to retrieve the agent from the voice provider: ${errorMessage}` },
       { status: 500 }
     );
   }
@@ -127,7 +127,7 @@ export async function PATCH(
     }
 
     if (!agent.retell_agent_id) {
-      return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+      return NextResponse.json({ error: 'Agent not linked to the voice provider' }, { status: 400 });
     }
 
     // Get reseller's Retell API key (organizations inherit from reseller)
@@ -135,7 +135,7 @@ export async function PATCH(
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }
@@ -206,7 +206,7 @@ export async function PATCH(
     // Format user-friendly error message
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to update Retell AI agent: ${errorMessage}` },
+      { error: `Failed to update the agent with the voice provider: ${errorMessage}` },
       { status: 500 }
     );
   }
@@ -266,7 +266,7 @@ export async function DELETE(
     // Format user-friendly error message
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to delete Retell AI agent: ${errorMessage}` },
+      { error: `Failed to delete the agent from the voice provider: ${errorMessage}` },
       { status: 500 }
     );
   }

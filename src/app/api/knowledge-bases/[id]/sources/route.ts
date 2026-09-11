@@ -103,7 +103,7 @@ export async function POST(
     const retellApiKey = await getResellerRetellConfig(knowledgeBase.tenant_id);
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization.' },
+        { error: 'Voice provider not connected for this organization.' },
         { status: 400 }
       );
     }
@@ -112,7 +112,7 @@ export async function POST(
     const retellKBId = knowledgeBase.configuration?.retell_knowledge_base_id;
     if (!retellKBId) {
       return NextResponse.json(
-        { error: 'Knowledge base not linked to Retell. Please sync from Retell first.' },
+        { error: 'Knowledge base not linked to the voice provider. Please sync from the voice provider first.' },
         { status: 400 }
       );
     }

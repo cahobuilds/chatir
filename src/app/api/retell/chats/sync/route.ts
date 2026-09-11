@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     const retellApiKey = await getResellerRetellConfig(tenant_id);
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization.' },
+        { error: 'Voice provider not connected for this organization.' },
         { status: 400 }
       );
     }
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     if (!agents || agents.length === 0) {
       return NextResponse.json({ 
-        error: 'No chat agents found with Retell agent IDs for this tenant' 
+        error: 'No chat agents found linked to the voice provider for this tenant' 
       }, { status: 400 });
     }
 
@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
     } catch (error: any) {
       console.error('[Chat Sync] Error fetching chats from Retell:', error);
       return NextResponse.json(
-        { error: `Failed to fetch chats from Retell: ${error.message}` },
+        { error: `Failed to fetch chats from the voice provider: ${error.message}` },
         { status: 500 }
       );
     }

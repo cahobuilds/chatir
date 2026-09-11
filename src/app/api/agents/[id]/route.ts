@@ -279,7 +279,7 @@ export async function PATCH(
         // Return success with a warning about Retell sync failure
         return NextResponse.json({ 
           agent: updatedAgent,
-          warning: `Agent updated in database but failed to sync to Retell AI: ${retellError.message}`
+          warning: `Agent updated in database but failed to sync to the voice provider: ${retellError.message}`
         });
       }
     }

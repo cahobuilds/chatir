@@ -34,7 +34,7 @@ export async function POST(
     }
 
     if (!agent.retell_agent_id) {
-      return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+      return NextResponse.json({ error: 'Agent not linked to the voice provider' }, { status: 400 });
     }
 
     // Platform staff or tenant agent-managers can test this agent.
@@ -49,7 +49,7 @@ export async function POST(
     if (!retellApiKey) {
       console.error(`[Web Call API] No Retell API key found for tenant: ${agent.tenant_id}`);
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }
@@ -78,7 +78,7 @@ export async function POST(
       if (!retellAgent.response_engine) {
         return NextResponse.json(
           { 
-            error: 'Agent is not properly configured in Retell AI. Please ensure the agent has a response engine (LLM) configured in the Retell dashboard.',
+            error: 'Agent is not properly configured with the voice provider. Please ensure the agent has a response engine (LLM) configured in the voice provider dashboard.',
             details: 'The agent exists but has no response engine configured.'
           },
           { status: 400 }
@@ -91,7 +91,7 @@ export async function POST(
         if (!llmId) {
           return NextResponse.json(
             { 
-              error: 'Agent LLM is not properly configured in Retell AI.',
+              error: 'Agent LLM is not properly configured with the voice provider.',
               details: 'The agent uses Retell LLM but the LLM ID is missing.'
             },
             { status: 400 }
@@ -102,7 +102,7 @@ export async function POST(
         if (!websocketUrl) {
           return NextResponse.json(
             { 
-              error: 'Agent custom LLM is not properly configured in Retell AI.',
+              error: 'Agent custom LLM is not properly configured with the voice provider.',
               details: 'The agent uses a custom LLM but the websocket URL is missing.'
             },
             { status: 400 }
@@ -124,7 +124,7 @@ export async function POST(
       if (retellError.status === 404 || retellError.statusCode === 404 || retellError.message?.includes('not found')) {
         return NextResponse.json(
           { 
-            error: 'Agent not found in Retell AI. Please ensure the agent is properly synced.',
+            error: 'Agent not found with the voice provider. Please ensure the agent is properly synced.',
             details: `Agent ID ${agent.retell_agent_id} does not exist in Retell.`
           },
           { status: 404 }
@@ -139,7 +139,7 @@ export async function POST(
         console.error('[Web Call API] Retell API authentication error - API key may be invalid or expired');
         return NextResponse.json(
           { 
-            error: 'Retell AI authentication failed. The API key may be invalid, expired, or lack necessary permissions.',
+            error: 'Voice provider authentication failed. The API key may be invalid, expired, or lack necessary permissions.',
             details: 'Please check the Retell API key configuration in the reseller settings.'
           },
           { status: 401 }
@@ -153,7 +153,7 @@ export async function POST(
         console.error('[Web Call API] Retell API permission error - API key may lack required permissions');
         return NextResponse.json(
           { 
-            error: 'Retell AI permission denied. The API key may not have permission to create web calls or access this agent.',
+            error: 'Voice provider permission denied. The API key may not have permission to create web calls or access this agent.',
             details: 'Please check the Retell API key permissions in the Retell dashboard.'
           },
           { status: 403 }
@@ -205,7 +205,7 @@ export async function POST(
           webCallError.message?.includes('Invalid API key')) {
         return NextResponse.json(
           { 
-            error: 'Retell AI authentication failed when creating web call. The API key may be invalid or expired.',
+            error: 'Voice provider authentication failed when creating web call. The API key may be invalid or expired.',
             details: 'Please check the Retell API key configuration in the reseller settings.'
           },
           { status: 401 }
@@ -217,7 +217,7 @@ export async function POST(
           webCallError.message?.includes('permission')) {
         return NextResponse.json(
           { 
-            error: 'Retell AI permission denied when creating web call. The API key may not have permission to create web calls.',
+            error: 'Voice provider permission denied when creating web call. The API key may not have permission to create web calls.',
             details: 'Please check the Retell API key permissions in the Retell dashboard.'
           },
           { status: 403 }

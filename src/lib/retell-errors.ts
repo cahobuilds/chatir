@@ -37,7 +37,7 @@ export function extractRetellError(error: unknown): RetellErrorDetails {
 
   if (error instanceof APIConnectionError) {
     return {
-      message: error.message || 'Failed to connect to Retell API',
+      message: error.message || 'Failed to connect to the voice provider',
       type: 'connection',
       retryable: true, // Connection errors are always retryable
     };
@@ -45,7 +45,7 @@ export function extractRetellError(error: unknown): RetellErrorDetails {
 
   if (error instanceof APIConnectionTimeoutError) {
     return {
-      message: error.message || 'Request to Retell API timed out',
+      message: error.message || 'Request to the voice provider timed out',
       type: 'timeout',
       retryable: true, // Timeouts are retryable
     };
@@ -135,42 +135,42 @@ export function formatRetellError(error: unknown): string {
   switch (details.type) {
     case 'api':
       if (details.status === 401) {
-        return 'Invalid Retell API key. Please check your credentials.';
+        return 'Invalid voice provider API key. Please check your credentials.';
       }
       if (details.status === 403) {
-        return 'Access denied. Please check your Retell API permissions.';
+        return 'Access denied. Please check your voice provider API permissions.';
       }
       if (details.status === 404) {
-        return 'Resource not found in Retell API.';
+        return 'Resource not found in the voice provider API.';
       }
       if (details.status === 429) {
         return 'Rate limit exceeded. Please try again later.';
       }
       if (details.status && details.status >= 500) {
-        return 'Retell API server error. Please try again later.';
+        return 'Voice provider server error. Please try again later.';
       }
-      return details.message || 'Retell API error occurred.';
+      return details.message || 'A voice provider API error occurred.';
 
     case 'connection':
-      return 'Failed to connect to Retell API. Please check your internet connection.';
+      return 'Failed to connect to the voice provider. Please check your internet connection.';
 
     case 'timeout':
-      return 'Request to Retell API timed out. Please try again.';
+      return 'Request to the voice provider timed out. Please try again.';
 
     case 'rate_limit':
       return 'Rate limit exceeded. Please try again later.';
 
     case 'auth':
-      return 'Invalid Retell API key. Please check your credentials.';
+      return 'Invalid voice provider API key. Please check your credentials.';
 
     case 'not_found':
-      return 'Resource not found in Retell API.';
+      return 'Resource not found in the voice provider API.';
 
     case 'bad_request':
       return details.message || 'Invalid request. Please check your parameters.';
 
     case 'server_error':
-      return 'Retell API server error. Please try again later.';
+      return 'Voice provider server error. Please try again later.';
 
     default:
       return details.message || 'An unexpected error occurred.';

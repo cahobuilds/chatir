@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     logRetellError(error, 'Chat Agent List');
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to list Retell chat agents: ${errorMessage}` },
+      { error: `Failed to list chat agents from the voice provider: ${errorMessage}` },
       { status: 500 }
     );
   }
@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
     logRetellError(error, 'Chat Agent Create');
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to create Retell chat agent: ${errorMessage}` },
+      { error: `Failed to create the chat agent with the voice provider: ${errorMessage}` },
       { status: 500 }
     );
   }

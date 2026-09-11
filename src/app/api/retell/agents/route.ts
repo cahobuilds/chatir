@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     // Format user-friendly error message
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to list Retell AI agents: ${errorMessage}` },
+      { error: `Failed to list agents from the voice provider: ${errorMessage}` },
       { status: 500 }
     );
   }
@@ -275,7 +275,7 @@ export async function POST(request: NextRequest) {
     // Format user-friendly error message
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to create Retell AI agent: ${errorMessage}` },
+      { error: `Failed to create the agent with the voice provider: ${errorMessage}` },
       { status: 500 }
     );
   }

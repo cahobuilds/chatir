@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!agent.retell_agent_id) {
-      return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+      return NextResponse.json({ error: 'Agent not linked to the voice provider' }, { status: 400 });
     }
 
     // Verify user has access
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }

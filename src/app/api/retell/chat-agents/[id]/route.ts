@@ -35,14 +35,14 @@ export async function GET(
     }
 
     if (!agent.retell_agent_id) {
-      return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+      return NextResponse.json({ error: 'Agent not linked to the voice provider' }, { status: 400 });
     }
 
     const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not configured for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }
@@ -62,7 +62,7 @@ export async function GET(
     logRetellError(error, 'Chat Agent Retrieval');
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to retrieve Retell chat agent: ${errorMessage}` },
+      { error: `Failed to retrieve the chat agent from the voice provider: ${errorMessage}` },
       { status: 500 }
     );
   }
@@ -97,14 +97,14 @@ export async function PATCH(
     }
 
     if (!agent.retell_agent_id) {
-      return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+      return NextResponse.json({ error: 'Agent not linked to the voice provider' }, { status: 400 });
     }
 
     const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not configured for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not configured for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }
@@ -151,7 +151,7 @@ export async function PATCH(
     logRetellError(error, 'Chat Agent Update');
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to update Retell chat agent: ${errorMessage}` },
+      { error: `Failed to update the chat agent with the voice provider: ${errorMessage}` },
       { status: 500 }
     );
   }
@@ -203,7 +203,7 @@ export async function DELETE(
     logRetellError(error, 'Chat Agent Deletion');
     const errorMessage = formatRetellError(error);
     return NextResponse.json(
-      { error: `Failed to delete Retell chat agent: ${errorMessage}` },
+      { error: `Failed to delete the chat agent from the voice provider: ${errorMessage}` },
       { status: 500 }
     );
   }

@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     if (agent.retell_agent_id && agent.retell_agent_id !== retell_agent_id) {
       return NextResponse.json(
-        { error: `Agent is already linked to a different Retell agent: ${agent.retell_agent_id}` },
+        { error: `Agent is already linked to a different voice provider agent: ${agent.retell_agent_id}` },
         { status: 400 }
       );
     }
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+        { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
         { status: 400 }
       );
     }
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     if (agent.type === 'chat' && channel !== 'chat') {
       return NextResponse.json(
         { 
-          error: `Agent type mismatch: Database agent is "chat" but Retell agent channel is "${channel}". Please link to a chat agent or convert the Retell agent to chat.`,
+          error: `Agent type mismatch: Database agent is "chat" but the voice provider agent channel is "${channel}". Please link to a chat agent or convert the voice provider agent to chat.`,
           channel: channel,
           retell_agent_name: retellAgentData.agent_name,
         },
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     if (agent.type === 'voice' && channel !== 'voice') {
       return NextResponse.json(
         { 
-          error: `Agent type mismatch: Database agent is "voice" but Retell agent channel is "${channel}". Please link to a voice agent.`,
+          error: `Agent type mismatch: Database agent is "voice" but the voice provider agent channel is "${channel}". Please link to a voice agent.`,
           channel: channel,
           retell_agent_name: retellAgentData.agent_name,
         },
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
         is_published: isPublished,
       },
       validation_method: validationMethod || 'agent.retrieve()',
-      message: `Agent "${agent.name}" successfully linked to Retell agent "${retellAgentData?.agent_name || retell_agent_id}" (${channel || 'unknown'} channel)`,
+      message: `Agent "${agent.name}" successfully linked to voice provider agent "${retellAgentData?.agent_name || retell_agent_id}" (${channel || 'unknown'} channel)`,
     });
   } catch (error: any) {
     logRetellError(error, 'Agent Link');

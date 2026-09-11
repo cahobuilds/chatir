@@ -49,7 +49,7 @@ export async function POST(
       // If phone_number is provided, use Retell phone call testing
       if (phone_number) {
         if (!agent.retell_agent_id) {
-          return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+          return NextResponse.json({ error: 'Agent not linked to the voice provider' }, { status: 400 });
         }
 
         // Get reseller's Retell API key
@@ -57,7 +57,7 @@ export async function POST(
 
         if (!retellApiKey) {
           return NextResponse.json(
-            { error: 'Retell AI not connected for this organization. Please connect a Retell workspace in Settings.' },
+            { error: 'Voice provider not connected for this organization. Please connect it in Settings.' },
             { status: 400 }
           );
         }
@@ -90,7 +90,7 @@ export async function POST(
         return NextResponse.json({
           success: true,
           response: `I heard you say: "${message}". This is a test response. To get real agent responses, ensure the agent is linked to Retell AI and use phone-based testing.`,
-          message: 'Voice test completed (simulated response - agent not linked to Retell)',
+          message: 'Voice test completed (simulated response - agent not linked to the voice provider)',
           note: 'For full voice testing with real-time responses, use phone-based testing or ensure the agent is configured with Retell AI.',
         });
       }
@@ -102,7 +102,7 @@ export async function POST(
         return NextResponse.json({
           success: true,
           response: `I heard you say: "${message}". This is a test response. Retell AI is not connected for this organization.`,
-          message: 'Voice test completed (simulated response - Retell not configured)',
+          message: 'Voice test completed (simulated response - voice provider not configured)',
           note: 'Connect a Retell workspace in Settings to enable full voice testing capabilities.',
         });
       }
@@ -130,8 +130,8 @@ export async function POST(
       if (!agent.retell_agent_id) {
         return NextResponse.json({
           success: true,
-          message: 'Chat test completed (agent not linked to Retell)',
-          response: `I received your message: "${message}". This agent is not yet linked to Retell AI. Please sync agents or create the agent in Retell first.`,
+          message: 'Chat test completed (agent not linked to the voice provider)',
+          response: `I received your message: "${message}". This agent is not yet linked to the voice provider. Please sync agents or create the agent there first.`,
           agent_id: agent.id,
         });
       }
@@ -142,8 +142,8 @@ export async function POST(
       if (!retellApiKey) {
         return NextResponse.json({
           success: true,
-          message: 'Chat test completed (Retell not configured)',
-          response: `I received your message: "${message}". Retell AI is not connected for this organization. Please connect a Retell workspace in Settings.`,
+          message: 'Chat test completed (voice provider not configured)',
+          response: `I received your message: "${message}". The voice provider is not connected for this organization. Please connect it in Settings.`,
           agent_id: agent.id,
         });
       }
@@ -240,8 +240,8 @@ export async function POST(
         if (agentMessages.length === 0) {
           return NextResponse.json({
             success: false,
-            message: 'No agent response received from Retell',
-            response: 'I apologize, but I couldn\'t generate a response. Please check the agent configuration in Retell AI.',
+            message: 'No agent response received from the voice provider',
+            response: 'I apologize, but I couldn\'t generate a response. Please check the agent configuration with the voice provider.',
             agent_id: agent.id,
           });
         }
@@ -296,7 +296,7 @@ export async function POST(
         return NextResponse.json({
           success: false,
           message: 'Chat test failed',
-          response: `Error: ${errorMessage}. Please check the agent configuration in Retell AI.`,
+          response: `Error: ${errorMessage}. Please check the agent configuration with the voice provider.`,
           agent_id: agent.id,
           error: errorMessage,
           status_code: statusCode,

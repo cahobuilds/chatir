@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     const retellApiKey = await getResellerRetellConfig(tenant_id);
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization.' },
+        { error: 'Voice provider not connected for this organization.' },
         { status: 400 }
       );
     }

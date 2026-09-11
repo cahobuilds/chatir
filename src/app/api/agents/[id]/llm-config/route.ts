@@ -38,13 +38,13 @@ export async function GET(
     }
 
     if (!agent.retell_agent_id) {
-      return NextResponse.json({ error: 'Agent not linked to Retell AI' }, { status: 400 });
+      return NextResponse.json({ error: 'Agent not linked to the voice provider' }, { status: 400 });
     }
 
     const retellApiKey = await getResellerRetellConfig(agent.tenant_id);
     if (!retellApiKey) {
       return NextResponse.json(
-        { error: 'Retell AI not connected for this organization.' },
+        { error: 'Voice provider not connected for this organization.' },
         { status: 400 }
       );
     }
@@ -77,7 +77,7 @@ export async function GET(
   } catch (error: any) {
     console.error('Retell LLM retrieval error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to retrieve Retell LLM configuration' },
+      { error: error.message || 'Failed to retrieve the language model configuration' },
       { status: 500 }
     );
   }
@@ -206,7 +206,7 @@ export async function PATCH(
             return NextResponse.json({
               success: true,
               agent: updatedAgent,
-              message: 'LLM configuration updated successfully and synced to Retell',
+              message: 'LLM configuration updated successfully and synced to the voice provider',
             });
           } else if (retellAgentData?.response_engine?.type === 'custom-llm') {
             // For custom LLM, only update local config
@@ -226,7 +226,7 @@ export async function PATCH(
           return NextResponse.json({
             success: true,
             agent: updatedAgent,
-            warning: 'LLM configuration updated locally but Retell API key not configured',
+            warning: 'LLM configuration updated locally but voice provider API key not configured',
           });
         }
       } catch (retellError: any) {
@@ -235,7 +235,7 @@ export async function PATCH(
         return NextResponse.json({
           success: true,
           agent: updatedAgent,
-          warning: `LLM configuration updated locally but failed to sync to Retell: ${retellError.message}`,
+          warning: `LLM configuration updated locally but failed to sync to the voice provider: ${retellError.message}`,
         });
       }
     }

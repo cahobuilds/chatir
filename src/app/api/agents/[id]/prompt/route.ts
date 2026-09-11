@@ -92,7 +92,7 @@ export async function PATCH(
           return NextResponse.json({
             success: true,
             agent: updatedAgent,
-            warning: 'Prompt updated locally but Retell API key not configured - prompt not synced to Retell',
+            warning: 'Prompt updated locally but voice provider API key not configured - prompt not synced to the voice provider',
           });
         }
 
@@ -118,7 +118,7 @@ export async function PATCH(
           return NextResponse.json({
             success: true,
             agent: updatedAgent,
-            message: 'Prompt updated successfully and synced to Retell LLM',
+            message: 'Prompt updated successfully and synced to the voice provider',
           });
         } else {
           // For custom LLM or other types, the prompt is managed by the websocket endpoint
@@ -137,7 +137,7 @@ export async function PATCH(
         return NextResponse.json({
           success: true,
           agent: updatedAgent,
-          warning: 'Prompt updated locally but failed to sync to Retell: ' + formatRetellError(retellError),
+          warning: 'Prompt updated locally but failed to sync to the voice provider: ' + formatRetellError(retellError),
         });
       }
     }
