@@ -1,11 +1,35 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import { verifyRetellSignature } from '@/lib/retell-webhook';
+import { decrypt, isEncrypted } from '@/lib/encryption';
 import { NextRequest, NextResponse } from 'next/server';
 
-// POST /api/webhooks/retell - Handle Retell AI webhooks
+// POST /api/webhooks/retell - Handle voice-provider webhooks
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    // Read the RAW body first (the signature is computed over the raw bytes + timestamp).
+    const rawBody = await request.text();
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
     const { event, data } = body;
+
+    const supabase = createAdminClient();
+
+    // Signature verification is OPT-IN via RETELL_WEBHOOK_VERIFY=true so enabling it can't
+    // silently break an existing not-yet-signed webhook flow. The secret is the tenant's
+    // voice-provider API key (Retell signs with the workspace API key that has the webhook
+    // badge); we resolve it from the payload's agent id, falling back to a shared env secret.
+    if (process.env.RETELL_WEBHOOK_VERIFY === 'true') {
+      const signature = request.headers.get('x-retell-signature');
+      const secret = await resolveWebhookSecret(supabase, data);
+      if (!verifyRetellSignature(rawBody, signature, secret)) {
+        console.warn('[Retell Webhook] Signature verification failed; rejecting');
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+    }
 
     // Enhanced logging for debugging
     console.log(`[Retell Webhook] Received event: ${event}`, {
@@ -13,12 +37,6 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
       data: JSON.stringify(data, null, 2),
     });
-
-    // Verify webhook signature (optional but recommended)
-    // const signature = request.headers.get('x-retell-signature');
-    // verifySignature(signature, body);
-
-    const supabase = createAdminClient();
 
     // Handle different webhook events
     switch (event) {
@@ -281,5 +299,35 @@ async function handleCallAnalyzed(supabase: any, data: any) {
   } else {
     console.warn(`[Retell Webhook] No interaction found for analyzed call ${call_id}`);
   }
+}
+
+// Resolve the voice-provider secret used to sign this webhook. Prefer a shared env secret,
+// then the tenant's own API key (resolved from the payload's agent id); the key may be
+// encrypted at rest so decrypt it first.
+async function resolveWebhookSecret(supabase: any, data: any): Promise<string> {
+  const shared = process.env.RETELL_WEBHOOK_SECRET || process.env.RETELL_API_KEY;
+  if (shared) return shared;
+
+  const agentId = data?.agent_id ?? data?.call?.agent_id ?? data?.agent?.agent_id;
+  if (agentId) {
+    const { data: agent } = await supabase
+      .from('agents')
+      .select('tenant_id')
+      .eq('retell_agent_id', agentId)
+      .maybeSingle();
+    if (agent?.tenant_id) {
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('retell_api_key')
+        .eq('id', agent.tenant_id)
+        .maybeSingle();
+      if (tenant?.retell_api_key) {
+        return isEncrypted(tenant.retell_api_key)
+          ? decrypt(tenant.retell_api_key)
+          : tenant.retell_api_key;
+      }
+    }
+  }
+  return '';
 }
 

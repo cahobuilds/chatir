@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { rateLimit } from '@/lib/rate-limit';
+import { decrypt, isEncrypted } from '@/lib/encryption';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/widget/chat/message - Public endpoint for chat widget messages
@@ -20,6 +22,21 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Best-effort per-IP rate limit (opt-in via WIDGET_RATE_LIMIT_ENABLED=true).
+    if (process.env.WIDGET_RATE_LIMIT_ENABLED === 'true') {
+      const ip =
+        request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+        request.headers.get('x-real-ip') ||
+        'unknown';
+      const { allowed } = rateLimit(
+        `widget:${ip}`,
+        Number(process.env.WIDGET_RATE_LIMIT_PER_MINUTE || 30)
+      );
+      if (!allowed) {
+        return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+      }
+    }
+
     const body = await request.json();
     const { agent_id, message, conversation_id, metadata } = body;
 
@@ -74,18 +91,26 @@ export async function POST(request: NextRequest) {
       interactionId = newInteraction.id;
     }
 
-    // Get transcript from existing interaction or initialize
+    // Get transcript from an existing conversation, but ONLY if it belongs to this agent.
+    // Prevents a caller from reading/overwriting another agent's/tenant's transcripts by
+    // supplying an arbitrary conversation_id (IDOR).
     let transcript: Array<{ role: string; content: string; timestamp: string }> = [];
     if (conversation_id) {
-      const { data: existingInteraction } = await adminSupabase
+      const { data: existingInteraction, error: convError } = await adminSupabase
         .from('interactions')
-        .select('transcript')
+        .select('agent_id, transcript')
         .eq('id', conversation_id)
-        .single();
+        .maybeSingle();
 
-      if (existingInteraction?.transcript) {
-        transcript = Array.isArray(existingInteraction.transcript) 
-          ? existingInteraction.transcript 
+      if (convError) {
+        return NextResponse.json({ error: 'Invalid conversation' }, { status: 400 });
+      }
+      if (!existingInteraction || existingInteraction.agent_id !== agent.id) {
+        return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+      }
+      if (existingInteraction.transcript) {
+        transcript = Array.isArray(existingInteraction.transcript)
+          ? existingInteraction.transcript
           : [];
       }
     }
@@ -101,48 +126,21 @@ export async function POST(request: NextRequest) {
     if (agent.retell_agent_id) {
       console.log('[Chat Widget] Agent has Retell integration, agent_id:', agent.retell_agent_id);
       try {
-        // Get Retell API key using admin client (public endpoint, no user session)
-        // Traverse up the tenant hierarchy to find reseller with API key
-        let currentTenantId: string | null = agent.tenant_id;
-        const visited = new Set<string>();
-        let retellApiKey: string | null = null;
-        
-        while (currentTenantId && !visited.has(currentTenantId) && !retellApiKey) {
-          visited.add(currentTenantId);
-          
-          const { data: tenant, error: tenantError } = await adminSupabase
-            .from('tenants')
-            .select('id, parent_id, is_reseller, retell_api_key')
-            .eq('id', currentTenantId)
-            .single();
-          
-          if (tenantError || !tenant) {
-            console.error('[Chat Widget] Error fetching tenant:', tenantError?.message || 'Tenant not found');
-            break;
-          }
-          
-          console.log('[Chat Widget] Checking tenant:', {
-            id: tenant.id,
-            is_reseller: tenant.is_reseller,
-            has_api_key: !!tenant.retell_api_key,
-            parent_id: tenant.parent_id,
-          });
-          
-          // If this tenant is a reseller and has an API key, use it
-          if (tenant.is_reseller === true && tenant.retell_api_key) {
-            retellApiKey = tenant.retell_api_key;
-            console.log('[Chat Widget] Found Retell API key for reseller tenant:', currentTenantId);
-            break;
-          }
-          
-          // Move to parent tenant
-          currentTenantId = tenant.parent_id;
-        }
-        
+        // Each company has its own voice-provider workspace (per-tenant key).
+        const { data: tenant, error: tenantError } = await adminSupabase
+          .from('tenants')
+          .select('retell_api_key')
+          .eq('id', agent.tenant_id)
+          .maybeSingle();
+        const storedKey = tenant?.retell_api_key || null;
+        const retellApiKey = storedKey ? (isEncrypted(storedKey) ? decrypt(storedKey) : storedKey) : null;
+
+        console.log('[Chat Widget] Tenant has voice-provider key:', !!retellApiKey);
+
         if (!retellApiKey) {
-          console.error('[Chat Widget] Retell API key not configured for tenant:', agent.tenant_id);
+          console.error('[Chat Widget] Voice-provider key not configured for tenant:', agent.tenant_id);
           return NextResponse.json({
-            error: 'Retell AI is not configured for this agent. Please contact support.',
+            error: 'Voice provider is not configured for this agent. Please contact support.',
           }, { 
             status: 500,
             headers: {
@@ -272,12 +270,12 @@ export async function POST(request: NextRequest) {
           // Provide user-friendly error messages
           const statusCode = retellError.response.status;
           const errorData = retellError.response.data || {};
-          const errorMessage = errorData.message || retellError.message || 'Failed to get response from Retell AI';
+          const errorMessage = errorData.message || retellError.message || 'Failed to get a response';
           
           // If agent not published or invalid, return helpful error
           if (statusCode === 422 || errorMessage.includes('Cannot start a chat session')) {
             return NextResponse.json({
-              error: 'Agent is not published or not available. Please ensure the agent is published in Retell AI.',
+              error: 'Agent is not published or not available. Please ensure the agent is published.',
               details: errorMessage,
             }, { 
               status: 422,
@@ -291,7 +289,7 @@ export async function POST(request: NextRequest) {
           
           // For other errors, return generic error but log details
           return NextResponse.json({
-            error: 'Failed to get response from Retell AI. Please try again.',
+            error: 'Failed to get a response. Please try again.',
             details: errorMessage,
           }, { 
             status: statusCode >= 400 && statusCode < 500 ? statusCode : 500,
@@ -306,7 +304,7 @@ export async function POST(request: NextRequest) {
         // If no response object, log and return error (don't fall through silently)
         console.error('[Chat Widget] Retell error without response object, returning error to user');
         return NextResponse.json({
-          error: 'Failed to connect to Retell AI. Please try again.',
+          error: 'Failed to connect to the voice provider. Please try again.',
           details: retellError?.message || 'Unknown error',
         }, { 
           status: 500,
@@ -342,7 +340,7 @@ export async function POST(request: NextRequest) {
       conversation_id: interactionId,
       response: agentResponse,
       agent_name: agent.name,
-      warning: 'Agent is not connected to Retell AI. This is a fallback response.',
+      warning: 'Agent is not connected to the voice provider. This is a fallback response.',
     }, {
       headers: {
         'Access-Control-Allow-Origin': '*',
