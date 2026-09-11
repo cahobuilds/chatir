@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   CreditCardIcon,
   DocumentTextIcon,
@@ -8,6 +8,62 @@ import {
 } from "@heroicons/react/24/outline";
 
 export default function TenantBilling() {
+  const [tenants, setTenants] = useState<{ id: string; name: string }[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState<string>("");
+  const [selectedTenantPlanTier, setSelectedTenantPlanTier] = useState<"starter" | "pro" | "enterprise">("starter");
+  const [tenantsLoading, setTenantsLoading] = useState(true);
+  const [updatingTier, setUpdatingTier] = useState(false);
+
+  useEffect(() => {
+    const fetchTenants = async () => {
+      try {
+        const res = await fetch("/api/tenants");
+        if (res.ok) {
+          const data = await res.json();
+          const tenantsList: { tenant_id?: string; name?: string; tenants?: { id?: string; name?: string } }[] = data.tenants || [];
+          const formattedTenants = tenantsList
+            .map((t) => ({ id: t.tenant_id || t.tenants?.id, name: t.tenants?.name || t.name }))
+            .filter((t): t is { id: string; name: string } => Boolean(t.id && t.name));
+          setTenants(formattedTenants);
+          if (formattedTenants.length > 0) {
+            setSelectedTenantId(formattedTenants[0].id);
+          }
+        }
+      } finally {
+        setTenantsLoading(false);
+      }
+    };
+    fetchTenants();
+  }, []);
+
+  useEffect(() => {
+    const fetchSelectedTenant = async () => {
+      if (!selectedTenantId) return;
+      const res = await fetch(`/api/tenants/${selectedTenantId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const tier = data.tenant?.plan_tier;
+        setSelectedTenantPlanTier(tier === "pro" || tier === "enterprise" ? tier : "starter");
+      }
+    };
+    fetchSelectedTenant();
+  }, [selectedTenantId]);
+
+  const handleChangeTier = async (tier: "starter" | "pro" | "enterprise") => {
+    if (!selectedTenantId) return;
+    setUpdatingTier(true);
+    try {
+      const res = await fetch(`/api/tenants/${selectedTenantId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_tier: tier }),
+      });
+      if (res.ok) setSelectedTenantPlanTier(tier);
+    } finally {
+      setUpdatingTier(false);
+    }
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [billingData, setBillingData] = useState({
     currentPlan: {
@@ -74,6 +130,46 @@ export default function TenantBilling() {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Billing & Usage
           </h3>
+        </div>
+      </div>
+
+      <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Organization
+        </label>
+        {tenantsLoading ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">Loading organizations…</p>
+        ) : (
+          <select
+            value={selectedTenantId}
+            onChange={(e) => setSelectedTenantId(e.target.value)}
+            className="w-full max-w-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-sm"
+          >
+            {tenants.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+        <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Plan Tier (real, persisted)</h4>
+        <div className="flex gap-2">
+          {(["starter", "pro", "enterprise"] as const).map((tier) => (
+            <button
+              key={tier}
+              type="button"
+              disabled={updatingTier}
+              onClick={() => handleChangeTier(tier)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium capitalize border ${
+                tier === selectedTenantPlanTier
+                  ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-400"
+                  : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400"
+              }`}
+            >
+              {tier}
+            </button>
+          ))}
         </div>
       </div>
 
