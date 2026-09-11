@@ -25,17 +25,19 @@ interface CreateIRAgentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  defaultChannel: "chat" | "voice"; // which checkbox starts checked
 }
 
 /**
- * One-click "Investor Relations" agent template: creates a chat agent (and optionally a
- * voice agent) pre-configured with the restrictive IR prompt, guardrails, and knowledge
+ * One-click "Investor Relations" agent template: creates a chat agent and/or a
+ * voice agent pre-configured with the restrictive IR prompt, guardrails, and knowledge
  * base defaults from docs/RETELL_IR_AGENT_TEMPLATE.md, via /api/agents/create-ir-template.
  */
 export default function CreateIRAgentModal({
   isOpen,
   onClose,
   onSuccess,
+  defaultChannel,
 }: CreateIRAgentModalProps) {
   const { currentOrganization } = useOrganization();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,7 +48,8 @@ export default function CreateIRAgentModal({
   const [tickerSymbol, setTickerSymbol] = useState("");
   const [exchange, setExchange] = useState("NASDAQ");
   const [humanContact, setHumanContact] = useState("");
-  const [includeVoice, setIncludeVoice] = useState(true);
+  const [createChat, setCreateChat] = useState(defaultChannel === "chat");
+  const [createVoice, setCreateVoice] = useState(defaultChannel === "voice");
   const [voiceId, setVoiceId] = useState("");
   const [selectedKbIds, setSelectedKbIds] = useState<string[]>([]);
 
@@ -102,7 +105,8 @@ export default function CreateIRAgentModal({
     setTickerSymbol("");
     setExchange("NASDAQ");
     setHumanContact("");
-    setIncludeVoice(true);
+    setCreateChat(defaultChannel === "chat");
+    setCreateVoice(defaultChannel === "voice");
     setSelectedKbIds([]);
     setError(null);
     setSuccess(null);
@@ -121,7 +125,11 @@ export default function CreateIRAgentModal({
       setError("Company name is required.");
       return;
     }
-    if (includeVoice && !voiceId) {
+    if (!createChat && !createVoice) {
+      setError("Please select at least one channel to create (chat and/or voice).");
+      return;
+    }
+    if (createVoice && !voiceId) {
       setError("Please select a voice, or turn off the voice agent option.");
       return;
     }
@@ -138,8 +146,9 @@ export default function CreateIRAgentModal({
           ticker_symbol: tickerSymbol.trim() || undefined,
           exchange: exchange || undefined,
           human_contact: humanContact.trim() || undefined,
-          include_voice: includeVoice,
-          voice_id: includeVoice ? voiceId : undefined,
+          create_chat: createChat,
+          create_voice: createVoice,
+          voice_id: createVoice ? voiceId : undefined,
           knowledge_base_ids: selectedKbIds,
         }),
       });
@@ -151,7 +160,18 @@ export default function CreateIRAgentModal({
         return;
       }
 
-      setSuccess(data.message || "Investor Relations agent template created successfully!");
+      const createdBoth = Boolean(data.chat_agent) && Boolean(data.voice_agent);
+      const createdChat = Boolean(data.chat_agent);
+      const createdVoice = Boolean(data.voice_agent);
+      const defaultMessage = createdBoth
+        ? `Created Investor Relations chat and voice agents for ${companyName.trim()}. Publish each when ready to go live.`
+        : createdChat
+          ? `Created Investor Relations chat agent for ${companyName.trim()}. Publish it when ready to go live.`
+          : createdVoice
+            ? `Created Investor Relations voice agent for ${companyName.trim()}. Publish it when ready to go live.`
+            : "Investor Relations agent template created successfully!";
+
+      setSuccess(data.message || defaultMessage);
       setTimeout(() => {
         resetForm();
         onSuccess();
@@ -165,6 +185,12 @@ export default function CreateIRAgentModal({
     }
   };
 
+  const canSubmit =
+    !isSubmitting &&
+    Boolean(companyName.trim()) &&
+    (createChat || createVoice) &&
+    !(createVoice && !voiceId);
+
   return (
     <Modal
       isOpen={isOpen}
@@ -176,7 +202,7 @@ export default function CreateIRAgentModal({
     >
       <div className="px-6 py-4">
         <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-          Creates a chat agent (and optionally a matching voice agent) pre-configured with a
+          Creates a chat agent and/or a matching voice agent pre-configured with a
           restrictive investor-relations prompt, safety guardrails, and knowledge-base
           grounding defaults. See <code className="text-xs bg-gray-100 dark:bg-gray-800 px-1 rounded">docs/RETELL_IR_AGENT_TEMPLATE.md</code> for details.
         </p>
@@ -290,18 +316,32 @@ export default function CreateIRAgentModal({
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                id="ir-include-voice"
-                checked={includeVoice}
-                onChange={(e) => setIncludeVoice(e.target.checked)}
+                id="ir-create-chat"
+                checked={createChat}
+                onChange={(e) => setCreateChat(e.target.checked)}
                 disabled={isSubmitting}
                 className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
               />
-              <Label htmlFor="ir-include-voice" className="mb-0">
-                Also create a matching voice agent (for inbound phone calls)
+              <Label htmlFor="ir-create-chat" className="mb-0">
+                Create chat agent (for web chat widget)
               </Label>
             </div>
 
-            {includeVoice && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="ir-create-voice"
+                checked={createVoice}
+                onChange={(e) => setCreateVoice(e.target.checked)}
+                disabled={isSubmitting}
+                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <Label htmlFor="ir-create-voice" className="mb-0">
+                Create voice agent (for inbound phone calls)
+              </Label>
+            </div>
+
+            {createVoice && (
               <div>
                 <Label htmlFor="ir-voice-id">Voice</Label>
                 {loadingOptions ? (
@@ -310,7 +350,7 @@ export default function CreateIRAgentModal({
                   </div>
                 ) : voiceOptions.length === 0 ? (
                   <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
-                    No voices available. Please ensure Retell AI is connected.
+                    No voices available. Please ensure AI Assistant is connected.
                   </div>
                 ) : (
                   <Select
@@ -336,7 +376,7 @@ export default function CreateIRAgentModal({
               >
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={isSubmitting || !companyName.trim()}>
+              <Button type="submit" size="sm" disabled={!canSubmit}>
                 {isSubmitting ? "Creating..." : "Create IR Agent(s)"}
               </Button>
             </div>
