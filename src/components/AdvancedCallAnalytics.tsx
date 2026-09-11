@@ -171,9 +171,9 @@ export default function AdvancedCallAnalytics() {
             </p>
           </div>
           
-          <div className="rounded-lg bg-orange-50 dark:bg-orange-900/20 p-4 border border-orange-200 dark:border-orange-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400">Escalated</p>
-            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
               {data.callOutcomes.escalated.toLocaleString()}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -220,9 +220,9 @@ export default function AdvancedCallAnalytics() {
             </p>
           </div>
           
-          <div className="rounded-lg bg-teal-50 dark:bg-teal-900/20 p-4 border border-teal-200 dark:border-teal-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400">Average</p>
-            <p className="text-xl font-bold text-teal-600 dark:text-teal-400">
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {data.durationDistribution.meanFormatted}
             </p>
           </div>

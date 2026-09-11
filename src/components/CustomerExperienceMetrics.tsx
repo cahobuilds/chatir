@@ -291,17 +291,17 @@ export default function CustomerExperienceMetrics() {
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">resolutions</p>
           </div>
           
-          <div className="rounded-lg bg-teal-50 dark:bg-teal-900/20 p-4 border border-teal-200 dark:border-teal-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Total Customers</p>
-            <p className="text-xl font-bold text-teal-600 dark:text-teal-400">
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {data.customerJourney.totalCustomers}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">unique customers</p>
           </div>
           
-          <div className="rounded-lg bg-cyan-50 dark:bg-cyan-900/20 p-4 border border-cyan-200 dark:border-cyan-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Avg Calls/Customer</p>
-            <p className="text-xl font-bold text-cyan-600 dark:text-cyan-400">
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {data.customerJourney.averageCallsPerCustomer.toFixed(1)}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">calls per customer</p>
