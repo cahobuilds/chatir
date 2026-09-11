@@ -249,7 +249,7 @@ export default function CallHistoryPage() {
             onClick={handleFullSync}
             disabled={syncing || !currentOrganization?.id}
             className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-            title="Full sync from Retell API (last 30 days)"
+            title="Full sync from the voice provider (last 30 days)"
           >
             {syncing ? (
               <>

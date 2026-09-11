@@ -19,6 +19,7 @@ export interface NavSubItem {
   description?: string;
   icon?: React.ReactNode;
   adminOnly?: boolean; // If true, only show for admin users
+  platformOnly?: boolean; // If true, only show for platform staff (platform_admin/operator/billing) - never a company admin
 }
 
 export interface NavItem {
@@ -90,34 +91,52 @@ export const navigationConfig: NavItem[] = [
     description: "Manage knowledge bases and content",
   },
 
-  // Admin - Functional features
+  // Platform - visible ONLY to platform staff (platform_admin / platform_operator / platform_billing).
+  // A company admin never sees this section, regardless of how "admin" they are within their own org.
   {
-    name: "Admin",
+    name: "Platform",
     icon: <BoxIcon />,
     category: "admin",
     type: "functional",
     defaultOpen: true,
     subItems: [
       {
-        name: "Users",
+        name: "Organizations",
+        path: "/tenant-settings",
+        type: "functional",
+        description: "Every company: its users, plan, and voice-provider key",
+        platformOnly: true,
+      },
+      {
+        name: "Platform Users",
         path: "/users",
         type: "functional",
         badge: "new",
-        description: "User management",
+        description: "Manage platform staff and their roles",
+        platformOnly: true,
       },
       {
         name: "Roles & Permissions",
         path: "/admin/roles",
         type: "functional",
         badge: "new",
-        description: "Manage roles and permissions",
+        description: "Manage the platform role/permission catalog",
+        platformOnly: true,
+      },
+      {
+        name: "Model Comparison",
+        path: "/admin/model-compare",
+        type: "functional",
+        description: "Compare candidate models to pick the allowlist",
+        platformOnly: true,
       },
       {
         name: "Billing & Usage",
         path: "/billing",
         type: "functional",
         icon: <CreditCardIcon className="w-5 h-5" />,
-        description: "Manage billing, subscription, and usage",
+        description: "Plans and usage across all organizations",
+        platformOnly: true,
       },
       {
         name: "Railway Services",
@@ -125,22 +144,9 @@ export const navigationConfig: NavItem[] = [
         type: "functional",
         badge: "new",
         description: "Manage Railway services for Notion MCP",
-        adminOnly: true,
+        platformOnly: true,
         icon: <CloudIcon className="w-5 h-5" />,
       },
-      // Future functional items can be added here
-      // {
-      //   name: "Tenants",
-      //   path: "/tenants",
-      //   type: "functional",
-      //   description: "Tenant management",
-      // },
-      // {
-      //   name: "Interactions",
-      //   path: "/interactions",
-      //   type: "functional",
-      //   description: "View interaction history",
-      // },
     ],
   },
 
@@ -210,13 +216,6 @@ export const navigationConfig: NavItem[] = [
         type: "functional",
         badge: "new",
         description: "General application settings",
-      },
-      {
-        name: "Organization Settings",
-        path: "/tenant-settings",
-        type: "functional",
-        badge: "pro",
-        description: "Organization-specific configuration",
       },
       // Future settings items
       // {

@@ -28,7 +28,7 @@ const AppSidebar: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [organizationLogo, setOrganizationLogo] = useState<string | null>(null);
   const [organizationWordmark, setOrganizationWordmark] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isPlatformStaff, setIsPlatformStaff] = useState(false);
   const [checkingAdmin, setCheckingAdmin] = useState(true);
   const { user } = useAuth();
   const supabase = createClient();
@@ -37,40 +37,35 @@ const AppSidebar: React.FC = () => {
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Check if user is admin
+  // Determine whether the user is PLATFORM staff (platform_admin/operator/billing). A company
+  // admin is admin of their own organization only, never platform staff, so they must not see
+  // platform-only tools. Uses the canonical role model via /api/permissions/check.
   useEffect(() => {
-    const checkAdminStatus = async () => {
+    const checkPlatformStatus = async () => {
       if (!user || !currentOrganization?.id) {
-        setIsAdmin(false);
+        setIsPlatformStaff(false);
         setCheckingAdmin(false);
         return;
       }
 
       try {
-        const { data: userTenant } = await supabase
-          .from('user_tenants')
-          .select('role')
-          .eq('user_id', user.id)
-          .eq('tenant_id', currentOrganization.id)
-          .eq('status', 'active')
-          .single();
-
-        if (userTenant) {
-          const isAdminRole = ['tenant_admin', 'super_admin', 'system_admin'].includes(userTenant.role);
-          setIsAdmin(isAdminRole);
+        const res = await fetch(`/api/permissions/check?tenant_id=${currentOrganization.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setIsPlatformStaff(data.role_info?.scope === 'platform');
         } else {
-          setIsAdmin(false);
+          setIsPlatformStaff(false);
         }
       } catch (error) {
-        console.error('Error checking admin status:', error);
-        setIsAdmin(false);
+        console.error('Error checking platform status:', error);
+        setIsPlatformStaff(false);
       } finally {
         setCheckingAdmin(false);
       }
     };
 
-    checkAdminStatus();
-  }, [user, currentOrganization, supabase]);
+    checkPlatformStatus();
+  }, [user, currentOrganization]);
 
   // Fetch organization logo and wordmark when organization changes
   useEffect(() => {
@@ -317,8 +312,8 @@ const AppSidebar: React.FC = () => {
               <ul className="mt-2 space-y-1 ml-9">
                 {nav.subItems
                   .filter((subItem) => {
-                    // Filter out admin-only items if user is not admin
-                    if (subItem.adminOnly && !isAdmin) {
+                    // Filter out platform-only items if the user is not platform staff.
+                    if ((subItem.platformOnly || subItem.adminOnly) && !isPlatformStaff) {
                       return false;
                     }
                     return true;
@@ -391,7 +386,7 @@ const AppSidebar: React.FC = () => {
 
   const categoryLabels: Record<string, string> = {
     dashboard: "Dashboard",
-    admin: "Admin",
+    admin: "Platform",
     analytics: "Analytics",
     settings: "Settings",
     templates: "Templates",
@@ -498,8 +493,8 @@ const AppSidebar: React.FC = () => {
               </div>
             )}
 
-            {/* Admin Section - Only visible to admins */}
-            {isAdmin && navigationByCategory.admin.length > 0 && (
+            {/* Platform Section - Only visible to platform staff */}
+            {isPlatformStaff && navigationByCategory.admin.length > 0 && (
               <div>
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
@@ -518,8 +513,8 @@ const AppSidebar: React.FC = () => {
               </div>
             )}
 
-            {/* Analytics Section - Only visible to admins */}
-            {isAdmin && navigationByCategory.analytics && navigationByCategory.analytics.length > 0 && (
+            {/* Analytics Section - visible to every member of an organization */}
+            {navigationByCategory.analytics && navigationByCategory.analytics.length > 0 && (
               <div>
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
@@ -538,8 +533,8 @@ const AppSidebar: React.FC = () => {
               </div>
             )}
 
-            {/* Settings Section - Only visible to admins */}
-            {isAdmin && navigationByCategory.settings.length > 0 && (
+            {/* Settings Section - visible to every member of an organization */}
+            {navigationByCategory.settings.length > 0 && (
               <div>
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${
@@ -558,8 +553,8 @@ const AppSidebar: React.FC = () => {
               </div>
             )}
 
-            {/* Templates Section - Only visible to admins */}
-            {isAdmin && navigationByCategory.templates.length > 0 && (
+            {/* Templates Section */}
+            {navigationByCategory.templates.length > 0 && (
               <div>
                 <h2
                   className={`mb-4 text-xs uppercase flex leading-5 text-gray-400 ${

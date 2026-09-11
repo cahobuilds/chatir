@@ -130,7 +130,7 @@ export default function KnowledgeBasePage() {
       setTimeout(() => setSuccess(null), 5000);
     } catch (err: any) {
       console.error("Sync error:", err);
-      setError(err.message || 'Failed to sync knowledge bases from Retell');
+      setError(err.message || 'Failed to sync knowledge bases');
     } finally {
       setSyncing(false);
     }

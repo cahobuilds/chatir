@@ -56,46 +56,31 @@ function AuthForm() {
           return;
         }
 
-        // 1. Create auth user
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-          options: {
-            data: {
-              name: formData.name,
-            },
-          },
+        // Self-serve signup is handled server-side so the company + user + company_admin are
+        // created atomically (the client no longer inserts into tenants/user_tenants, which RLS
+        // now blocks). See POST /api/auth/signup.
+        const res = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            name: formData.name,
+            company_name: formData.companyName,
+          }),
         });
+        const data = await res.json();
 
-        if (authError) throw authError;
-
-        if (!authData.user) {
-          throw new Error('Failed to create user');
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to create account');
         }
 
-        // 2. Create tenant
-        const { data: tenantData, error: tenantError } = await supabase
-          .from('tenants')
-          .insert({
-            name: formData.companyName,
-            subdomain: formData.companyName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-'),
-          })
-          .select()
-          .single();
-
-        if (tenantError) throw tenantError;
-
-        // 3. Create user_tenant relationship
-        const { error: userTenantError } = await supabase
-          .from('user_tenants')
-          .insert({
-            user_id: authData.user.id,
-            tenant_id: tenantData.id,
-            role: 'tenant_admin',
-            status: 'active',
-          });
-
-        if (userTenantError) throw userTenantError;
+        // Sign the user in (the route created the auth user; get a session cookie).
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password,
+        });
+        if (signInError) throw signInError;
 
         // Success - redirect to dashboard
         router.push('/dashboard');
