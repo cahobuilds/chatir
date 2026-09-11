@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { hasPlatformPermission } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
@@ -40,17 +41,10 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (userTenantError || !userTenant) {
-      // Check if user is superadmin/system_admin - they can access all organizations
-      const { data: adminCheck } = await supabase
-        .from('user_tenants')
-        .select('role')
-        .eq('user_id', user.id)
-        .in('role', ['system_admin', 'super_admin'])
-        .eq('status', 'active')
-        .limit(1)
-        .maybeSingle();
+      // Platform staff can access all organizations.
+      const isPlatform = await hasPlatformPermission(user.id, 'orgs.view');
 
-      if (!adminCheck) {
+      if (!isPlatform) {
         return NextResponse.json({ error: 'You do not have access to this organization' }, { status: 403 });
       }
 
@@ -81,7 +75,7 @@ export async function POST(request: NextRequest) {
           name: tenant.name,
           subdomain: tenant.subdomain,
           tier: tenant.tier,
-          role: adminCheck.role,
+          role: 'platform_admin',
         },
       });
     }

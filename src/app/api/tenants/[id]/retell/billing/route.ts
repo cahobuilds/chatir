@@ -3,6 +3,7 @@ import { createRetellClient } from '@/lib/retell';
 import { formatRetellError, logRetellError } from '@/lib/retell-errors';
 import { decrypt, isEncrypted } from '@/lib/encryption';
 import { NextRequest, NextResponse } from 'next/server';
+import { canAccessTenant, hasPlatformPermission } from '@/lib/permissions-server';
 
 // GET /api/tenants/[id]/retell/billing - Sync billing data from Retell
 export async function GET(
@@ -20,16 +21,9 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user is system_admin or super_admin (only system admins can sync billing)
-    const { data: userTenants } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin']);
-
-    if (!userTenants || userTenants.length === 0) {
+    if (!(await hasPlatformPermission(user.id, 'payments.view'))) {
       return NextResponse.json({ 
-        error: 'Forbidden: System admin access required' 
+        error: 'Forbidden: Platform access required' 
       }, { status: 403 });
     }
 

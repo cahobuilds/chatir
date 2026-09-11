@@ -1,6 +1,7 @@
 // GET /api/tenants/[id]/users - Get all users for a tenant
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
+import { canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
@@ -28,35 +29,9 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin (can access any tenant's users)
-    const { data: systemAdminCheck } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin'])
-      .single();
-
-    const isSystemAdmin = !!systemAdminCheck;
-
-    // If not system_admin, verify user has access to this tenant
-    if (!isSystemAdmin) {
-      const { data: userTenant } = await supabase
-        .from('user_tenants')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('tenant_id', id)
-        .eq('status', 'active')
-        .single();
-
-      if (!userTenant) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-
-      // Check if user has permission to view users (admin roles)
-      const canViewUsers = ['super_admin', 'tenant_admin', 'organization_admin'].includes(userTenant.role);
-      if (!canViewUsers) {
-        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-      }
+    // Platform staff or tenant user-managers can view this tenant's users.
+    if (!(await canAccessTenant(user.id, id, 'users.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
     // Get all users for this tenant

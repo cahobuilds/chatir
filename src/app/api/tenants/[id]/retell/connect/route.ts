@@ -1,6 +1,8 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { formatRetellError, logRetellError } from '@/lib/retell-errors';
+import { hasPlatformPermission } from '@/lib/permissions-server';
+import { encrypt } from '@/lib/encryption';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/tenants/[id]/retell/connect - Connect to Retell tenant
@@ -19,17 +21,9 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user is system_admin or super_admin (only system admins can manage Retell connections)
-    const { data: userTenants } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin']);
-
-    if (!userTenants || userTenants.length === 0) {
-      return NextResponse.json({ 
-        error: 'Forbidden: System admin access required' 
-      }, { status: 403 });
+    // Only platform roles with `retell_key.manage` can connect the voice-provider key.
+    if (!(await hasPlatformPermission(user.id, 'retell_key.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: Platform access required' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -56,7 +50,7 @@ export async function POST(
       
       // If successful, update tenant with Retell connection info
       const updateData: any = {
-        retell_api_key: retell_api_key,
+        retell_api_key: encrypt(retell_api_key),
         retell_connection_status: 'connected',
         retell_connected_at: new Date().toISOString(),
       };
@@ -125,17 +119,9 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user is system_admin or super_admin (only system admins can view Retell connections)
-    const { data: userTenants } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin']);
-
-    if (!userTenants || userTenants.length === 0) {
-      return NextResponse.json({ 
-        error: 'Forbidden: System admin access required' 
-      }, { status: 403 });
+    // Only platform roles with `retell_key.manage` can view voice-provider connection status.
+    if (!(await hasPlatformPermission(user.id, 'retell_key.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: Platform access required' }, { status: 403 });
     }
 
     // Get tenant Retell connection info (don't return API key for security)
@@ -184,17 +170,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user is system_admin or super_admin (only system admins can disconnect Retell)
-    const { data: userTenants } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin']);
-
-    if (!userTenants || userTenants.length === 0) {
-      return NextResponse.json({ 
-        error: 'Forbidden: System admin access required' 
-      }, { status: 403 });
+    // Only platform roles with `retell_key.manage` can disconnect the voice provider.
+    if (!(await hasPlatformPermission(user.id, 'retell_key.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: Platform access required' }, { status: 403 });
     }
 
     // Clear Retell connection (but keep API key for reconnection)

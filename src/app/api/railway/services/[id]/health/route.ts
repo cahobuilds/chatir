@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { hasPlatformPermission } from '@/lib/permissions-server';
 import { logger } from '@/lib/logger';
 
 /**
@@ -32,15 +33,7 @@ export async function GET(
     }
 
     // Check access
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .single();
-
-    const isSystemAdmin = !!userTenant;
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
 
     if (!isSystemAdmin) {
       const { data: userTenants } = await supabase

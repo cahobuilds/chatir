@@ -1,5 +1,13 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { hasPlatformPermission } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
+
+// Never expose the voice-provider API key to any client.
+function sanitizeTenant(t: any): any {
+  if (!t) return t;
+  const { retell_api_key, ...rest } = t;
+  return rest;
+}
 
 // GET /api/tenants - Get current user's tenants (or all tenants for system_admin/super_admin)
 export async function GET(request: NextRequest) {
@@ -37,19 +45,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is system_admin or super_admin
-    const { data: userTenants } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .limit(1);
-
-    const isSystemAdmin = userTenants && userTenants.length > 0;
+    // Platform staff can see all tenants.
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
 
     if (isSystemAdmin) {
-      // For system_admin/super_admin: return ALL tenants with their role info
+      // For platform staff: return ALL tenants with their role info
       const { data: allTenants, error: allTenantsError } = await adminSupabase
         .from('tenants')
         .select('*')
@@ -71,12 +71,12 @@ export async function GET(request: NextRequest) {
       );
 
       // Format response to match expected structure
-      const adminRole = userTenants && userTenants.length > 0 ? userTenants[0].role : 'system_admin';
+      const adminRole = 'platform_admin';
       const formattedTenants = (allTenants || []).map((tenant: any) => ({
         tenant_id: tenant.id,
-        role: tenantRoleMap.get(tenant.id) || adminRole, // Use system_admin/super_admin role if no specific role
+        role: tenantRoleMap.get(tenant.id) || adminRole, // Use platform role if not a specific member
         status: 'active',
-        tenants: tenant,
+        tenants: sanitizeTenant(tenant),
       }));
 
       return NextResponse.json({ tenants: formattedTenants });
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: userTenantsError.message }, { status: 500 });
       }
 
-      return NextResponse.json({ tenants: userTenants || [] });
+      return NextResponse.json({ tenants: (userTenants || []).map((ut: any) => ({ ...ut, tenants: sanitizeTenant(ut.tenants) })) });
     }
   } catch (error: any) {
     console.error('[Tenants API] Unexpected error:', error);
@@ -130,16 +130,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    // Check if user is system_admin or super_admin (can create tenants)
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .single();
-
-    if (!userTenant) {
-      return NextResponse.json({ error: 'Forbidden: System admin or super admin access required' }, { status: 403 });
+    // Platform staff can create tenants.
+    if (!(await hasPlatformPermission(user.id, 'orgs.create'))) {
+      return NextResponse.json({ error: 'Forbidden: Platform access required' }, { status: 403 });
     }
 
     // Create tenant using admin client

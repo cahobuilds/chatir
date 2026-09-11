@@ -1,4 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { hasPlatformPermission } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createDeployment, getServiceDomain } from '@/lib/railway';
 import { logger } from '@/lib/logger';
@@ -22,17 +23,9 @@ export async function POST(
     }
 
     // Check if user is system admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .single();
-
-    if (!userTenant) {
+    if (!(await hasPlatformPermission(user.id, 'orgs.view'))) {
       return NextResponse.json(
-        { error: 'Forbidden: System admin access required' },
+        { error: 'Forbidden: Platform access required' },
         { status: 403 }
       );
     }

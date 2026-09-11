@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { canAccessTenant } from '@/lib/permissions-server';
 
 // POST /api/tenants/[id]/wordmark - Upload tenant wordmark
 export async function POST(
@@ -17,16 +18,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user is tenant_admin or super_admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', id)
-      .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'system_admin'])
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, id, 'users.manage'))) {
       return NextResponse.json({ 
         error: 'Forbidden: Admin access required' 
       }, { status: 403 });
@@ -169,16 +161,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify user is tenant_admin or super_admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('tenant_id', id)
-      .in('role', ['tenant_admin', 'super_admin', 'organization_admin', 'system_admin'])
-      .single();
-
-    if (!userTenant) {
+    if (!(await canAccessTenant(user.id, id, 'users.manage'))) {
       return NextResponse.json({ 
         error: 'Forbidden: Admin access required' 
       }, { status: 403 });

@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { hasPlatformPermission } from '@/lib/permissions-server';
 import {
   createRailwayService,
   updateServiceVariables,
@@ -25,17 +26,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is system admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .single();
-
-    if (!userTenant) {
+    if (!(await hasPlatformPermission(user.id, 'orgs.view'))) {
       return NextResponse.json(
-        { error: 'Forbidden: System admin access required' },
+        { error: 'Forbidden: Platform access required' },
         { status: 403 }
       );
     }
@@ -243,15 +236,7 @@ export async function GET(request: NextRequest) {
     const tenantId = searchParams.get('tenant_id');
 
     // Check if user is system admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .single();
-
-    const isSystemAdmin = !!userTenant;
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
 
     // Build base query - fetch services first, then relations separately to avoid hanging
     let query = adminSupabase

@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { hasPlatformPermission } from '@/lib/permissions-server';
 import {
   getRailwayService,
   deleteRailwayService,
@@ -49,15 +50,7 @@ export async function GET(
     }
 
     // Check access
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .single();
-
-    const isSystemAdmin = !!userTenant;
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
 
     if (!isSystemAdmin) {
       // Check if user has access to this tenant
@@ -102,17 +95,9 @@ export async function PATCH(
     }
 
     // Check if user is system admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .single();
-
-    if (!userTenant) {
+    if (!(await hasPlatformPermission(user.id, 'orgs.view'))) {
       return NextResponse.json(
-        { error: 'Forbidden: System admin access required' },
+        { error: 'Forbidden: Platform access required' },
         { status: 403 }
       );
     }
@@ -170,17 +155,9 @@ export async function DELETE(
     }
 
     // Check if user is system admin
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['system_admin', 'super_admin'])
-      .eq('status', 'active')
-      .single();
-
-    if (!userTenant) {
+    if (!(await hasPlatformPermission(user.id, 'orgs.view'))) {
       return NextResponse.json(
-        { error: 'Forbidden: System admin access required' },
+        { error: 'Forbidden: Platform access required' },
         { status: 403 }
       );
     }
