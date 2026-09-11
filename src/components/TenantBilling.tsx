@@ -6,6 +6,7 @@ import {
   DocumentTextIcon,
   ExclamationTriangleIcon
 } from "@heroicons/react/24/outline";
+import Alert from "./ui/alert/Alert";
 
 export default function TenantBilling() {
   const [tenants, setTenants] = useState<{ id: string; name: string }[]>([]);
@@ -13,6 +14,8 @@ export default function TenantBilling() {
   const [selectedTenantPlanTier, setSelectedTenantPlanTier] = useState<"starter" | "pro" | "enterprise">("starter");
   const [tenantsLoading, setTenantsLoading] = useState(true);
   const [updatingTier, setUpdatingTier] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTenants = async () => {
@@ -29,6 +32,8 @@ export default function TenantBilling() {
             setSelectedTenantId(formattedTenants[0].id);
           }
         }
+      } catch (err) {
+        console.error("[TenantBilling] Failed to fetch tenants:", err);
       } finally {
         setTenantsLoading(false);
       }
@@ -39,11 +44,15 @@ export default function TenantBilling() {
   useEffect(() => {
     const fetchSelectedTenant = async () => {
       if (!selectedTenantId) return;
-      const res = await fetch(`/api/tenants/${selectedTenantId}`);
-      if (res.ok) {
-        const data = await res.json();
-        const tier = data.tenant?.plan_tier;
-        setSelectedTenantPlanTier(tier === "pro" || tier === "enterprise" ? tier : "starter");
+      try {
+        const res = await fetch(`/api/tenants/${selectedTenantId}`);
+        if (res.ok) {
+          const data = await res.json();
+          const tier = data.tenant?.plan_tier;
+          setSelectedTenantPlanTier(tier === "pro" || tier === "enterprise" ? tier : "starter");
+        }
+      } catch (err) {
+        console.error("[TenantBilling] Failed to fetch selected tenant:", err);
       }
     };
     fetchSelectedTenant();
@@ -52,13 +61,20 @@ export default function TenantBilling() {
   const handleChangeTier = async (tier: "starter" | "pro" | "enterprise") => {
     if (!selectedTenantId) return;
     setUpdatingTier(true);
+    setError(null);
+    setSuccess(null);
     try {
       const res = await fetch(`/api/tenants/${selectedTenantId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan_tier: tier }),
       });
-      if (res.ok) setSelectedTenantPlanTier(tier);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update plan tier");
+      setSelectedTenantPlanTier(tier);
+      setSuccess(`Plan tier updated to ${tier}.`);
+    } catch (err: any) {
+      setError(err.message || "Failed to update plan tier");
     } finally {
       setUpdatingTier(false);
     }
@@ -153,7 +169,7 @@ export default function TenantBilling() {
       </div>
 
       <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-        <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Plan Tier (real, persisted)</h4>
+        <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Plan Tier</h4>
         <div className="flex gap-2">
           {(["starter", "pro", "enterprise"] as const).map((tier) => (
             <button
@@ -171,6 +187,8 @@ export default function TenantBilling() {
             </button>
           ))}
         </div>
+        {error && <div className="mt-4"><Alert variant="error" title="Error" message={error} /></div>}
+        {success && <div className="mt-4"><Alert variant="success" title="Success" message={success} /></div>}
       </div>
 
       <div className="p-6 space-y-6">
