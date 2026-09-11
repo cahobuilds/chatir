@@ -1,6 +1,15 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { hasPlatformPermission, resolveRoleId, CANONICAL_ROLE_NAMES } from '@/lib/permissions-server';
+import { hasPlatformPermission, resolveRoleId, CANONICAL_ROLE_NAMES, nestedRoleName, toCanonicalRoleName } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
+
+// Prefer the canonical role_id-derived name; fall back to mapping the legacy `role` text
+// column. The UI's role dropdowns only offer the 6 canonical names, so returning a raw
+// legacy value here (e.g. "super_admin") makes the browser silently default-select
+// whichever option happens to be first in the list - a display bug that can lead an
+// admin to unknowingly promote/demote a user's role on save.
+function membershipRoleName(ut: { role: string | null; roles?: unknown }): string {
+  return nestedRoleName(ut.roles) || toCanonicalRoleName(ut.role) || ut.role || '';
+}
 
 // GET /api/users - Get all users (system_admin only)
 export async function GET(request: NextRequest) {
@@ -28,7 +37,7 @@ export async function GET(request: NextRequest) {
     // Get user-tenant relationships with last_login
     const { data: userTenants, error: userTenantsError } = await adminSupabase
       .from('user_tenants')
-      .select('user_id, tenant_id, role, status, last_login, tenants(id, name)');
+      .select('user_id, tenant_id, role, role_id, status, last_login, tenants(id, name), roles(name)');
 
     if (userTenantsError) {
       return NextResponse.json({ error: userTenantsError.message }, { status: 500 });
@@ -54,7 +63,7 @@ export async function GET(request: NextRequest) {
         tenants: tenantRelationships.map(ut => ({
           tenant_id: ut.tenant_id,
           tenant_name: (ut.tenants as any)?.name,
-          role: ut.role,
+          role: membershipRoleName(ut),
           status: ut.status,
         })),
       };

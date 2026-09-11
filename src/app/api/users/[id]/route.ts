@@ -1,6 +1,15 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { hasPlatformPermission, resolveRoleId } from '@/lib/permissions-server';
+import { hasPlatformPermission, resolveRoleId, nestedRoleName, toCanonicalRoleName } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
+
+// Prefer the canonical role_id-derived name; fall back to mapping the legacy `role` text
+// column. The UI's role dropdowns only offer the 6 canonical names, so returning a raw
+// legacy value here (e.g. "super_admin") makes the browser silently default-select
+// whichever option happens to be first in the list - a display bug that can lead an
+// admin to unknowingly promote/demote a user's role on save.
+function membershipRoleName(ut: { role: string | null; roles?: unknown }): string {
+  return nestedRoleName(ut.roles) || toCanonicalRoleName(ut.role) || ut.role || '';
+}
 
 // GET /api/users/[id] - Get user details with tenant relationships
 export async function GET(
@@ -32,7 +41,7 @@ export async function GET(
     // Get user-tenant relationships
     const { data: userTenants, error: userTenantsError } = await adminSupabase
       .from('user_tenants')
-      .select('id, tenant_id, role, status, last_login, created_at, tenants(id, name)')
+      .select('id, tenant_id, role, role_id, status, last_login, created_at, tenants(id, name), roles(name)')
       .eq('user_id', id);
 
     if (userTenantsError) {
@@ -51,7 +60,7 @@ export async function GET(
           id: ut.id,
           tenant_id: ut.tenant_id,
           tenant_name: (ut.tenants as any)?.name,
-          role: ut.role,
+          role: membershipRoleName(ut),
           status: ut.status,
           last_login: ut.last_login,
           created_at: ut.created_at,
@@ -192,7 +201,7 @@ export async function PATCH(
     
     const { data: updatedTenants } = await adminSupabase
       .from('user_tenants')
-      .select('id, tenant_id, role, status, last_login, created_at, tenants(id, name)')
+      .select('id, tenant_id, role, role_id, status, last_login, created_at, tenants(id, name), roles(name)')
       .eq('user_id', id);
 
     return NextResponse.json({
@@ -204,7 +213,7 @@ export async function PATCH(
           id: ut.id,
           tenant_id: ut.tenant_id,
           tenant_name: (ut.tenants as any)?.name,
-          role: ut.role,
+          role: membershipRoleName(ut),
           status: ut.status,
         })) || [],
       },
