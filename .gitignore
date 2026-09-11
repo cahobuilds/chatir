@@ -118,3 +118,8 @@ temp/
 # Local environment backups (may contain real credentials)
 .env.local.backup
 .env.local.backup-*
+
+# Superpowers scratch space (brainstorming visual companion mockups, etc.)
+# Note: docs/superpowers/specs and docs/superpowers/plans are intentionally
+# NOT ignored - they document real design decisions and are kept in git.
+.superpowers/
