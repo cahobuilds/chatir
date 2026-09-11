@@ -10,7 +10,7 @@ import CustomerExperienceMetrics from "@/components/CustomerExperienceMetrics";
 
 export const metadata: Metadata = {
   title: "Analytics & Reporting | Chat IR",
-  description: "Comprehensive performance analytics and business intelligence for AI customer care operations",
+  description: "Comprehensive performance analytics and business intelligence for the platform",
 };
 
 export default function AnalyticsPage() {

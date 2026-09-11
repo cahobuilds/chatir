@@ -188,7 +188,7 @@ export async function getUserRoleInfo(
         role: 'platform_admin',
         scope: 'platform',
         displayName: 'Platform Admin',
-        description: 'Full platform access: organizations, plans, payments, Retell key, platform staff.',
+        description: 'Full platform access: organizations, plans, payments, voice provider connection, platform staff.',
         permissions: [],
       };
     }

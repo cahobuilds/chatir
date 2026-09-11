@@ -84,7 +84,7 @@ export default function UsersHeader({ onAddUser }: UsersHeaderProps) {
               User & Role Management
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Manage users, roles, and permissions for AI customer care operations
+              Manage users, roles, and permissions for the platform
             </p>
           </div>
         </div>

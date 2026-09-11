@@ -134,7 +134,7 @@ function AuthForm() {
             </div>
             <div>
               <h3 className="font-semibold text-lg mb-1">Smart Knowledge Base</h3>
-              <p className="text-blue-100">Build and manage your AI knowledge bots with ease</p>
+              <p className="text-blue-100">Build and manage your AI voice and chat agents with ease</p>
             </div>
           </div>
           
@@ -211,7 +211,7 @@ function AuthForm() {
             </h2>
             <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-6">
               {isSignup
-                ? 'Start building your AI knowledge bots today'
+                ? 'Start building your AI voice and chat agents today'
                 : 'Sign in to access your Chat IR dashboard'}
             </p>
 
