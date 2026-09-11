@@ -171,9 +171,9 @@ export default function CustomerExperienceMetrics() {
         </h4>
         {data.sentimentAnalysis.total > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="rounded-lg bg-green-50 dark:bg-green-900/20 p-4 border border-green-200 dark:border-green-800">
+            <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Positive</p>
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {data.sentimentAnalysis.positive}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -181,9 +181,9 @@ export default function CustomerExperienceMetrics() {
               </p>
             </div>
             
-            <div className="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 p-4 border border-yellow-200 dark:border-yellow-800">
+            <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Neutral</p>
-              <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {data.sentimentAnalysis.neutral}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -191,9 +191,9 @@ export default function CustomerExperienceMetrics() {
               </p>
             </div>
             
-            <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-4 border border-red-200 dark:border-red-800">
+            <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Negative</p>
-              <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {data.sentimentAnalysis.negative}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -201,9 +201,9 @@ export default function CustomerExperienceMetrics() {
               </p>
             </div>
             
-            <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4 border border-blue-200 dark:border-blue-800">
+            <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Avg Sentiment</p>
-              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {data.sentimentAnalysis.average >= 0 ? '+' : ''}{data.sentimentAnalysis.average.toFixed(2)}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -273,9 +273,9 @@ export default function CustomerExperienceMetrics() {
           Customer Journey Analytics
         </h5>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="rounded-lg bg-indigo-50 dark:bg-indigo-900/20 p-4 border border-indigo-200 dark:border-indigo-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Single Call</p>
-            <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {data.customerJourney.singleCallResolution}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -283,9 +283,9 @@ export default function CustomerExperienceMetrics() {
             </p>
           </div>
           
-          <div className="rounded-lg bg-purple-50 dark:bg-purple-900/20 p-4 border border-purple-200 dark:border-purple-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Multi Call</p>
-            <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {data.customerJourney.multiCallResolution}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">resolutions</p>

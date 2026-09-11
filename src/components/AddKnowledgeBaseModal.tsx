@@ -92,8 +92,8 @@ export default function AddKnowledgeBaseModal({
                     onClick={() => handleAddOption("web")}
                     className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-600 flex items-start gap-3 first:rounded-t-lg"
                   >
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
-                      <LinkIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                      <LinkIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">
@@ -110,8 +110,8 @@ export default function AddKnowledgeBaseModal({
                     onClick={() => handleAddOption("file")}
                     className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-600 flex items-start gap-3"
                   >
-                    <div className="p-2 bg-green-100 dark:bg-green-900/20 rounded-lg">
-                      <ArrowUpTrayIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                      <ArrowUpTrayIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">
@@ -128,8 +128,8 @@ export default function AddKnowledgeBaseModal({
                     onClick={() => handleAddOption("text")}
                     className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-600 flex items-start gap-3 last:rounded-b-lg"
                   >
-                    <div className="p-2 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
-                      <DocumentTextIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                    <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                      <DocumentTextIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">

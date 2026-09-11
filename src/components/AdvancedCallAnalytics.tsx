@@ -141,9 +141,9 @@ export default function AdvancedCallAnalytics() {
           Call Outcomes
         </h4>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="rounded-lg bg-green-50 dark:bg-green-900/20 p-4 border border-green-200 dark:border-green-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400">Successful</p>
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
               {data.callOutcomes.successful.toLocaleString()}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -151,9 +151,9 @@ export default function AdvancedCallAnalytics() {
             </p>
           </div>
           
-          <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-4 border border-red-200 dark:border-red-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400">Abandoned</p>
-            <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
               {data.callOutcomes.abandoned.toLocaleString()}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -161,9 +161,9 @@ export default function AdvancedCallAnalytics() {
             </p>
           </div>
           
-          <div className="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 p-4 border border-yellow-200 dark:border-yellow-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400">Transferred</p>
-            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
               {data.callOutcomes.transferred.toLocaleString()}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -199,23 +199,23 @@ export default function AdvancedCallAnalytics() {
           Call Duration Distribution
         </h4>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4 border border-blue-200 dark:border-blue-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400">P50 (Median)</p>
-            <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {data.durationDistribution.p50Formatted}
             </p>
           </div>
           
-          <div className="rounded-lg bg-purple-50 dark:bg-purple-900/20 p-4 border border-purple-200 dark:border-purple-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400">P95</p>
-            <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {data.durationDistribution.p95Formatted}
             </p>
           </div>
           
-          <div className="rounded-lg bg-indigo-50 dark:bg-indigo-900/20 p-4 border border-indigo-200 dark:border-indigo-800">
+          <div className="rounded-lg bg-gray-100 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400">P99</p>
-            <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
               {data.durationDistribution.p99Formatted}
             </p>
           </div>

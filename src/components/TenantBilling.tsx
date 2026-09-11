@@ -238,52 +238,52 @@ export default function TenantBilling() {
             Current Usage
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Agents
                 </span>
-                <span className="text-sm text-blue-600 dark:text-blue-400">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
                   {billingData.usage.agents}/{billingData.usage.maxAgents}
                 </span>
               </div>
-              <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+              <div className="w-full bg-gray-300 dark:bg-gray-700 rounded-full h-2">
                 <div 
-                  className="bg-blue-600 h-2 rounded-full" 
+                  className="bg-gray-600 h-2 rounded-full" 
                   style={{ width: `${(billingData.usage.agents / billingData.usage.maxAgents) * 100}%` }}
                 ></div>
               </div>
             </div>
             
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+            <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Calls
                 </span>
-                <span className="text-sm text-green-600 dark:text-green-400">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
                   {billingData.usage.calls.toLocaleString()}/{billingData.usage.maxCalls.toLocaleString()}
                 </span>
               </div>
-              <div className="w-full bg-green-200 dark:bg-green-800 rounded-full h-2">
+              <div className="w-full bg-gray-300 dark:bg-gray-700 rounded-full h-2">
                 <div 
-                  className="bg-green-600 h-2 rounded-full" 
+                  className="bg-gray-600 h-2 rounded-full" 
                   style={{ width: `${(billingData.usage.calls / billingData.usage.maxCalls) * 100}%` }}
                 ></div>
               </div>
             </div>
             
-            <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+            <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Storage
                 </span>
-                <span className="text-sm text-purple-600 dark:text-purple-400">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
                   {billingData.usage.storage}/{billingData.usage.maxStorage}
                 </span>
               </div>
-              <div className="w-full bg-purple-200 dark:bg-purple-800 rounded-full h-2">
+              <div className="w-full bg-gray-300 dark:bg-gray-700 rounded-full h-2">
                 <div 
-                  className="bg-purple-600 h-2 rounded-full" 
+                  className="bg-gray-600 h-2 rounded-full" 
                   style={{ width: `${(parseInt(billingData.usage.storage) / parseInt(billingData.usage.maxStorage)) * 100}%` }}
                 ></div>
               </div>

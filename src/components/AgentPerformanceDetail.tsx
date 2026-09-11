@@ -201,8 +201,8 @@ export default function AgentPerformanceDetail({ agentId }: AgentPerformanceDeta
       {/* Agent Header Card */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center space-x-4">
-          <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
-            <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
+          <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+            <span className="text-xl font-bold text-gray-600 dark:text-gray-400">
               {getInitials(agent.agentName)}
             </span>
           </div>

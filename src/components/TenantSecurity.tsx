@@ -88,8 +88,8 @@ export default function TenantSecurity() {
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-green-100 dark:bg-green-900/20 rounded-lg">
-                  <ShieldCheckIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                  <ShieldCheckIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -112,8 +112,8 @@ export default function TenantSecurity() {
 
             <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
-                  <KeyIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                  <KeyIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">

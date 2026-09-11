@@ -107,10 +107,10 @@ export default function TenantAnalytics() {
             Overview
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                  <PhoneIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                  <PhoneIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                 </div>
                 <div className="flex items-center space-x-1">
                   {getTrendIcon(analyticsData.overview.callTrend)}
@@ -125,10 +125,10 @@ export default function TenantAnalytics() {
               <p className="text-sm text-gray-600 dark:text-gray-400">Total Calls</p>
             </div>
 
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+            <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-green-100 dark:bg-green-900/40 rounded-lg">
-                  <UsersIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                  <UsersIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                 </div>
                 <div className="flex items-center space-x-1">
                   {getTrendIcon(analyticsData.overview.userTrend)}
@@ -143,10 +143,10 @@ export default function TenantAnalytics() {
               <p className="text-sm text-gray-600 dark:text-gray-400">Total Users</p>
             </div>
 
-            <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+            <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
-                  <ClockIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                  <ClockIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                 </div>
                 <div className="flex items-center space-x-1">
                   {getTrendIcon(analyticsData.overview.durationTrend)}
@@ -161,10 +161,10 @@ export default function TenantAnalytics() {
               <p className="text-sm text-gray-600 dark:text-gray-400">Avg Duration</p>
             </div>
 
-            <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+            <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">
-                <div className="p-2 bg-yellow-100 dark:bg-yellow-900/40 rounded-lg">
-                  <ChartBarIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                  <ChartBarIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                 </div>
                 <div className="flex items-center space-x-1">
                   {getTrendIcon(analyticsData.overview.satisfactionTrend)}
@@ -282,8 +282,8 @@ export default function TenantAnalytics() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-8 w-8">
-                          <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
-                            <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                          <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                               {agent.name.split(' ').map(n => n[0]).join('')}
                             </span>
                           </div>

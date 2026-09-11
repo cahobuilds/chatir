@@ -619,8 +619,8 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
               <div className="flex items-start space-x-4">
                 {/* Avatar */}
                 <div className="flex-shrink-0">
-                  <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                  <div className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                       {getInitials(user.name)}
                     </span>
                   </div>
