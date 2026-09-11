@@ -99,8 +99,12 @@ export async function POST(request: NextRequest) {
       const chatLlm = await retellClient.llm.create({
         general_prompt: chatConfig.systemPrompt,
         model_temperature: chatConfig.modelTemperature,
-        knowledge_base_ids: retellKnowledgeBaseIds.length > 0 ? retellKnowledgeBaseIds : null,
-        kb_config: retellKnowledgeBaseIds.length > 0 ? chatConfig.kbConfig : null,
+        // Retell's schema requires kb_config to be an object when present at all - sending
+        // `null` fails validation ("request/body/kb_config must be object"). Omit both fields
+        // entirely when no knowledge bases were attached, rather than sending null.
+        ...(retellKnowledgeBaseIds.length > 0
+          ? { knowledge_base_ids: retellKnowledgeBaseIds, kb_config: chatConfig.kbConfig }
+          : {}),
       });
 
       const chatAgentName = `${company_name} Investor Relations Chat`;
@@ -164,8 +168,11 @@ export async function POST(request: NextRequest) {
       const voiceLlm = await retellClient.llm.create({
         general_prompt: voiceConfig.systemPrompt,
         model_temperature: voiceConfig.modelTemperature,
-        knowledge_base_ids: retellKnowledgeBaseIds.length > 0 ? retellKnowledgeBaseIds : null,
-        kb_config: retellKnowledgeBaseIds.length > 0 ? voiceConfig.kbConfig : null,
+        // Same fix as the chat LLM above: omit both fields when no KBs are attached, rather
+        // than sending kb_config: null (which fails Retell's schema validation).
+        ...(retellKnowledgeBaseIds.length > 0
+          ? { knowledge_base_ids: retellKnowledgeBaseIds, kb_config: voiceConfig.kbConfig }
+          : {}),
       });
 
       const voiceAgentName = `${company_name} Investor Relations Voice`;
