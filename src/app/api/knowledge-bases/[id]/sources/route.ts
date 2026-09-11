@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { createRetellClient } from '@/lib/retell';
 import { getResellerRetellConfig } from '@/lib/reseller';
+import { hasPlatformPermission, canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/knowledge-bases/[id]/sources - Get sources for a knowledge base
@@ -87,17 +88,14 @@ export async function POST(
     }
 
     // Verify user has access to this tenant
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('tenant_id')
-      .eq('user_id', user.id)
-      .eq('tenant_id', knowledgeBase.tenant_id)
-      .eq('status', 'active')
-      .single();
-
-    if (!userTenant) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!(await canAccessTenant(user.id, knowledgeBase.tenant_id, 'knowledge.manage'))) {
+      return NextResponse.json({ error: 'Forbidden: No access to this knowledge base' }, { status: 403 });
     }
+
+    // Platform staff may have no user_tenants row in this org; use an admin client for them
+    // so the writes below aren't silently blocked by RLS (mirrors [id]/route.ts's GET handler).
+    const isSystemAdmin = await hasPlatformPermission(user.id, 'orgs.view');
+    const clientToUse = isSystemAdmin ? createAdminClient() : supabase;
 
     // Get Retell API key
     const retellApiKey = await getResellerRetellConfig(knowledgeBase.tenant_id);
@@ -208,13 +206,21 @@ export async function POST(
       retellKBId = created.knowledge_base_id;
       retellResponse = created;
 
-      await supabase
+      const { error: kbUpdateError } = await clientToUse
         .from('knowledge_bases')
         .update({
           configuration: { ...(knowledgeBase.configuration || {}), retell_knowledge_base_id: retellKBId },
           status: 'synced',
         })
         .eq('id', id);
+
+      if (kbUpdateError) {
+        console.error('[KB Sources API] Error saving retell_knowledge_base_id after creation:', kbUpdateError);
+        return NextResponse.json(
+          { error: 'Created knowledge base in the voice provider but failed to save the reference locally: ' + kbUpdateError.message },
+          { status: 500 }
+        );
+      }
     } else {
       retellResponse = await retellClient.knowledgeBase.addSources(retellKBId, addSourcesParams);
     }
@@ -222,7 +228,7 @@ export async function POST(
     // Sync sources back to database
     if (retellResponse.knowledge_base_sources) {
       // Delete existing sources
-      await supabase
+      await clientToUse
         .from('knowledge_base_sources')
         .delete()
         .eq('knowledge_base_id', id);
@@ -248,7 +254,7 @@ export async function POST(
           sourceUrl = (source as any).content_url || null;
         }
 
-        await supabase
+        await clientToUse
           .from('knowledge_base_sources')
           .insert({
             knowledge_base_id: id,
@@ -261,7 +267,7 @@ export async function POST(
       }
 
       // Update knowledge base page count
-      await supabase
+      await clientToUse
         .from('knowledge_bases')
         .update({ page_count: retellResponse.knowledge_base_sources.length })
         .eq('id', id);
