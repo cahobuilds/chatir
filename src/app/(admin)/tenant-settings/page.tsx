@@ -2,13 +2,12 @@ import type { Metadata } from "next";
 import React from "react";
 import TenantManagement from "@/components/TenantManagement";
 import TenantConfiguration from "@/components/TenantConfiguration";
-import SubtenantManagement from "@/components/SubtenantManagement";
 import TenantSecurity from "@/components/TenantSecurity";
 import TenantAnalytics from "@/components/TenantAnalytics";
 
 export const metadata: Metadata = {
   title: "Organization Management | Chat IR",
-  description: "Manage organizations, workspaces, and multi-organization configurations for AI knowledge bot operations.",
+  description: "Manage organizations and multi-organization configurations for AI voice and chat agent operations.",
 };
 
 export default function TenantSettingsPage() {
@@ -26,7 +25,7 @@ export default function TenantSettingsPage() {
               Organization Management
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Manage organizations and workspaces
+              Manage organizations and configurations
             </p>
           </div>
         </div>
@@ -39,11 +38,8 @@ export default function TenantSettingsPage() {
       </div>
 
       <div className="grid grid-cols-12 gap-4 md:gap-6">
-        <div className="col-span-12 lg:col-span-6">
+        <div className="col-span-12">
           <TenantConfiguration />
-        </div>
-        <div className="col-span-12 lg:col-span-6">
-          <SubtenantManagement />
         </div>
       </div>
 
