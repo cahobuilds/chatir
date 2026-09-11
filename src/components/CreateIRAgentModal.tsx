@@ -204,7 +204,7 @@ export default function CreateIRAgentModal({
         <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
           Creates a chat agent and/or a matching voice agent pre-configured with a
           restrictive investor-relations prompt, safety guardrails, and knowledge-base
-          grounding defaults. See <code className="text-xs bg-gray-100 dark:bg-gray-800 px-1 rounded">docs/RETELL_IR_AGENT_TEMPLATE.md</code> for details.
+          grounding defaults.
         </p>
 
         {error && (
