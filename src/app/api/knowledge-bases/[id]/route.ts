@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { hasPlatformPermission, canAccessTenant } from '@/lib/permissions-server';
+import { getResellerRetellConfig } from '@/lib/reseller';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/knowledge-bases/[id] - Get knowledge base by ID
@@ -130,7 +131,7 @@ export async function DELETE(
     // First, get the knowledge base to check tenant access
     const { data: knowledgeBase } = await supabase
       .from('knowledge_bases')
-      .select('tenant_id')
+      .select('tenant_id, configuration')
       .eq('id', id)
       .single();
 
@@ -141,6 +142,20 @@ export async function DELETE(
     // Verify user is tenant_admin or super_admin
     if (!(await canAccessTenant(user.id, knowledgeBase.tenant_id, 'knowledge.manage'))) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    }
+
+    const retellKBId = (knowledgeBase.configuration as any)?.retell_knowledge_base_id;
+    if (retellKBId) {
+      try {
+        const retellApiKey = await getResellerRetellConfig(knowledgeBase.tenant_id);
+        if (retellApiKey) {
+          const { createRetellClient } = await import('@/lib/retell');
+          const retellClient = createRetellClient(retellApiKey);
+          await retellClient.knowledgeBase.delete(retellKBId);
+        }
+      } catch (retellError: any) {
+        console.error(`[KB API] Failed to delete voice-provider knowledge base ${retellKBId} (continuing with local delete):`, retellError?.message);
+      }
     }
 
     const { error: deleteError } = await supabase

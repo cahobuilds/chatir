@@ -1,5 +1,4 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { getResellerRetellConfig } from '@/lib/reseller';
 import { hasPlatformPermission, canAccessTenant } from '@/lib/permissions-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
@@ -123,50 +122,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden: No access to this tenant' }, { status: 403 });
     }
 
-    // Get voice-provider key - REQUIRED for knowledge base creation
-    const retellApiKey = await getResellerRetellConfig(tenant_id);
-
-    if (!retellApiKey) {
-      return NextResponse.json(
-        { 
-          error: 'Voice provider not connected for this organization. Knowledge bases must be created there to inform agents. Please connect it in Settings.' 
-        },
-        { status: 400 }
-      );
-    }
-
-    // Create knowledge base in Retell - REQUIRED for agents to use the KB
-    let retellKBId: string;
-      try {
-        const { createRetellClient } = await import('@/lib/retell');
-        const retellClient = createRetellClient(retellApiKey);
-        
-        const retellKB = await retellClient.knowledgeBase.create({
-          knowledge_base_name: name,
-          enable_auto_refresh: false,
-        });
-
-        retellKBId = retellKB.knowledge_base_id;
-        console.log(`[KB API] Created Retell knowledge base: ${retellKBId}`);
-      } catch (retellError: any) {
-        console.error('[KB API] Error creating Retell knowledge base:', retellError);
-      const errorMessage = retellError?.message || retellError?.toString() || 'Unknown error';
-      return NextResponse.json(
-        { 
-          error: `Failed to create knowledge base in the voice provider: ${errorMessage}. Knowledge bases must be created there to inform agents.` 
-        },
-        { status: 500 }
-      );
-    }
-
-    // Access verified via canAccessTenant above; use the admin client for the write.
-    const clientToUse = createAdminClient();
-
-    // Create knowledge base locally - only after successful Retell creation
-    const kbConfig = {
-      ...(configuration || {}),
-      retell_knowledge_base_id: retellKBId, // Always store Retell KB ID
-    };
+    const clientToUse = createAdminClient(); // access already verified via canAccessTenant above
 
     const { data: knowledgeBase, error: kbError } = await clientToUse
       .from('knowledge_bases')
@@ -175,8 +131,8 @@ export async function POST(request: NextRequest) {
         name,
         type,
         description: description || null,
-        configuration: kbConfig,
-        status: 'synced', // Always synced since we just created it in Retell
+        configuration: configuration || {},
+        status: 'syncing', // not yet created in the voice provider -- first source add will create it there
         page_count: 0,
       })
       .select()

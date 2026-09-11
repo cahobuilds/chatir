@@ -108,14 +108,8 @@ export async function POST(
       );
     }
 
-    // Get Retell knowledge base ID from configuration
-    const retellKBId = knowledgeBase.configuration?.retell_knowledge_base_id;
-    if (!retellKBId) {
-      return NextResponse.json(
-        { error: 'Knowledge base not linked to the voice provider. Please sync from the voice provider first.' },
-        { status: 400 }
-      );
-    }
+    // Get Retell knowledge base ID from configuration (may not exist yet -- created below on first source)
+    let retellKBId: string | undefined = knowledgeBase.configuration?.retell_knowledge_base_id;
 
     const retellClient = createRetellClient(retellApiKey, {
       timeout: 60 * 1000, // 60 seconds for file uploads
@@ -202,7 +196,28 @@ export async function POST(
       files: files.length,
     });
 
-    const retellResponse = await retellClient.knowledgeBase.addSources(retellKBId, addSourcesParams);
+    let retellResponse: any;
+    if (!retellKBId) {
+      // First source(s) for this KB -- the provider requires sources at creation time, so create
+      // it now instead of erroring (see docs/superpowers/plans/2026-09-11-platform-polish-and-rebrand.md Task 9).
+      const created = await retellClient.knowledgeBase.create({
+        knowledge_base_name: knowledgeBase.name,
+        enable_auto_refresh: false,
+        ...addSourcesParams,
+      });
+      retellKBId = created.knowledge_base_id;
+      retellResponse = created;
+
+      await supabase
+        .from('knowledge_bases')
+        .update({
+          configuration: { ...(knowledgeBase.configuration || {}), retell_knowledge_base_id: retellKBId },
+          status: 'synced',
+        })
+        .eq('id', id);
+    } else {
+      retellResponse = await retellClient.knowledgeBase.addSources(retellKBId, addSourcesParams);
+    }
 
     // Sync sources back to database
     if (retellResponse.knowledge_base_sources) {
