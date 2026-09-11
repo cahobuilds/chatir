@@ -773,7 +773,7 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
             setCreateError(null);
             setCreateSuccess(null);
           }}
-          className="max-w-2xl mx-4 my-4"
+          className="max-w-xl"
           title="Create New User"
         >
             <div className="px-6 py-4">
@@ -988,7 +988,7 @@ export default function UserManagement({ onAddUserClick, externalShowModal, onMo
             setUpdateError(null);
             setUpdateSuccess(null);
           }}
-          className="max-w-3xl mx-4 my-4"
+          className="max-w-xl"
           title="Edit User"
         >
           <div className="px-6 py-4">

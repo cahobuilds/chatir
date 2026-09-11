@@ -613,7 +613,7 @@ export default function AgentEditModal({
   if (!agent) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Edit Agent: ${agent.name}`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={`Edit Agent: ${agent.name}`} className="max-w-2xl">
       <div className="flex flex-col h-full max-h-[80vh]">
         {/* Alerts */}
         {(error || success) && (

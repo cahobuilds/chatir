@@ -901,6 +901,7 @@ export default function AgentInteractionModal({
       isOpen={isOpen}
       onClose={onClose}
       title={`${agent.name} - Interaction Test`}
+      className="max-w-4xl"
     >
       <div className="flex h-[80vh] overflow-hidden">
         {/* Left Panel - Agent Configuration */}

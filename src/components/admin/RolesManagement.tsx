@@ -405,6 +405,7 @@ export default function RolesManagement() {
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           title={editingRole ? "Edit Role" : "Create Role"}
+          className="max-w-xl"
         >
           <Form onSubmit={handleSubmit}>
             <div className="space-y-6">
@@ -595,6 +596,7 @@ export default function RolesManagement() {
           isOpen={!!selectedRole}
           onClose={() => setSelectedRole(null)}
           title={`Permissions: ${selectedRole.display_name}`}
+          className="max-w-2xl"
         >
           <RolePermissionsView roleId={selectedRole.id} />
         </Modal>

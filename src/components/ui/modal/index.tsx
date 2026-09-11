@@ -52,9 +52,12 @@ export const Modal: React.FC<ModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Default to a sane dialog width for simple forms; callers with content-heavy
+  // modals (tabs, side-by-side panels, wide tables) should pass a wider max-w-*
+  // via `className` — see e.g. AgentEditModal, AgentInteractionModal.
   const contentClasses = isFullscreen
     ? "w-full h-full"
-    : "relative w-full max-h-[90vh] rounded-3xl bg-white dark:bg-gray-900 flex flex-col";
+    : "relative w-full max-w-lg max-h-[90vh] mx-4 rounded-3xl bg-white dark:bg-gray-900 flex flex-col";
 
   return (
     <div className="fixed inset-0 flex items-center justify-center overflow-y-auto py-4 z-[100000]">

@@ -905,6 +905,7 @@ export default function ChatAgentList() {
           setEmbedCodeCopied(false);
         }}
         title="Embed Chat Widget"
+        className="max-w-xl"
       >
         {embeddingAgent && (
           <div className="space-y-4">

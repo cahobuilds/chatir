@@ -870,6 +870,7 @@ export default function AgentTestModal({
       isOpen={isOpen}
       onClose={onClose}
       title={`Test Agent: ${agent.name}`}
+      className="max-w-2xl"
     >
       <div className="px-6 py-4">
         {error && (

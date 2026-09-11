@@ -631,7 +631,7 @@ export default function TenantManagement() {
             setCreateError(null);
             setCreateSuccess(null);
           }}
-          className="max-w-4xl mx-4 my-4"
+          className="max-w-2xl"
           title="Create New Organization"
         >
           <div className="px-6 py-4">
@@ -884,7 +884,7 @@ export default function TenantManagement() {
             setSelectedTenant(null);
           }}
           title={`Organization: ${selectedTenant.name}`}
-          className="max-w-3xl mx-4"
+          className="max-w-2xl"
         >
           <div className="px-6 py-6">
             <div className="space-y-8">
@@ -1053,7 +1053,7 @@ export default function TenantManagement() {
             setCreateSuccess(null);
           }}
           title={`Voice Provider: ${selectedTenant.name}`}
-          className="max-w-2xl mx-4"
+          className="max-w-2xl"
         >
           <div className="px-6 py-6">
             {createError && (

@@ -526,6 +526,7 @@ export default function RailwayServicesManagement() {
           setCreateSuccess(null);
         }}
         title="Create Railway Service"
+        className="max-w-xl"
       >
         <Form onSubmit={(e) => { e.preventDefault(); handleCreateService(); }}>
           {createError && (
@@ -731,6 +732,7 @@ export default function RailwayServicesManagement() {
           setNotionResourceSuccess(null);
         }}
         title="Create Notion Resource"
+        className="max-w-xl"
       >
         <Form onSubmit={(e) => { e.preventDefault(); handleCreateNotionResource(); }}>
           {notionResourceError && (
