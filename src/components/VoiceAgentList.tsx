@@ -10,9 +10,6 @@ import {
 } from "./ui/table";
 import Badge from "./ui/badge/Badge";
 import Button from "./ui/button/Button";
-import { Modal } from "./ui/modal";
-import Form from "./form/Form";
-import Input from "./form/input/InputField";
 import Label from "./form/Label";
 import Select from "./form/Select";
 import { useOrganization } from "@/context/OrganizationContext";
@@ -21,6 +18,8 @@ import TextArea from "./form/input/TextArea";
 import { ArrowPathIcon, PencilIcon, TrashIcon, PlayIcon } from "@heroicons/react/24/outline";
 import AgentEditModal from "./AgentEditModal";
 import AgentInteractionModal from "./AgentInteractionModal";
+import AgentTemplatePicker, { TemplateId } from "./AgentTemplatePicker";
+import CreateIRAgentModal from "./CreateIRAgentModal";
 
 interface Agent {
   id: string;
@@ -36,17 +35,6 @@ interface Agent {
   updated_at: string;
 }
 
-interface AvailableVoice {
-  voice_id: string;
-  voice_name?: string;
-  gender?: string;
-}
-
-interface VoiceOption {
-  value: string;
-  label: string;
-}
-
 type SortField = "name" | "status" | "created_at";
 type SortDirection = "asc" | "desc";
 type StatusFilter = "all" | "active" | "inactive";
@@ -55,12 +43,12 @@ export default function VoiceAgentList() {
   const { currentOrganization } = useOrganization();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<TemplateId | null>(null);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [testingAgent, setTestingAgent] = useState<Agent | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -68,59 +56,11 @@ export default function VoiceAgentList() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [voiceOptions, setVoiceOptions] = useState<VoiceOption[]>([]);
-  const [voicesLoading, setVoicesLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    type: "voice" as "voice" | "chat",
-    is_active: true,
-    voice_id: "",
-    language: "en-US",
-  });
 
   useEffect(() => {
     if (currentOrganization?.id) {
       fetchAgents();
     }
-  }, [currentOrganization?.id]);
-
-  // Load the curated voice list for this organization (see /api/retell/voices)
-  useEffect(() => {
-    if (!currentOrganization?.id) {
-      setVoiceOptions([]);
-      return;
-    }
-
-    const fetchVoices = async () => {
-      setVoicesLoading(true);
-      try {
-        const response = await fetch(
-          `/api/retell/voices?tenant_id=${currentOrganization.id}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setVoiceOptions(
-            (data.voices || []).map((voice: AvailableVoice) => ({
-              value: voice.voice_id,
-              label:
-                voice.gender && voice.gender !== "Unknown"
-                  ? `${voice.voice_name || voice.voice_id} (${voice.gender})`
-                  : voice.voice_name || voice.voice_id,
-            }))
-          );
-        } else {
-          console.warn("Failed to fetch voices:", response.status);
-          setVoiceOptions([]);
-        }
-      } catch (err) {
-        console.warn("Error fetching voices:", err);
-        setVoiceOptions([]);
-      } finally {
-        setVoicesLoading(false);
-      }
-    };
-
-    fetchVoices();
   }, [currentOrganization?.id]);
 
   const handleSyncAgents = async () => {
@@ -215,15 +155,12 @@ export default function VoiceAgentList() {
   };
 
   const handleCreate = () => {
-    setEditingAgent(null);
-    setFormData({
-      name: "",
-      type: "voice",
-      is_active: true,
-      voice_id: "",
-      language: "en-US",
-    });
-    setIsCreateModalOpen(true);
+    setIsTemplatePickerOpen(true);
+  };
+
+  const handleTemplateSelect = (templateId: TemplateId) => {
+    setSelectedTemplateId(templateId);
+    setIsTemplatePickerOpen(false);
   };
 
   const handleEdit = (agent: Agent) => {
@@ -248,73 +185,6 @@ export default function VoiceAgentList() {
       }
     } catch (error) {
       console.error("Failed to delete agent:", error);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    if (!currentOrganization?.id) {
-      setError("No organization selected. Please select an organization first.");
-      return;
-    }
-
-    if (!formData.name.trim()) {
-      setError("Agent name is required");
-      return;
-    }
-
-    if (!formData.voice_id.trim()) {
-      setError("Voice ID is required");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const response = await fetch("/api/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenant_id: currentOrganization.id,
-          name: formData.name.trim(),
-          type: formData.type,
-          is_active: formData.is_active,
-          configuration: {
-            voice_id: formData.voice_id,
-            language: formData.language,
-          },
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSuccess("Agent created successfully!");
-        setIsCreateModalOpen(false);
-        await fetchAgents();
-        
-        // Reset form
-        setFormData({
-          name: "",
-          type: "voice",
-          is_active: true,
-          voice_id: "",
-          language: "en-US",
-        });
-        
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(null), 3000);
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || "Failed to save agent");
-      }
-    } catch (error: any) {
-      console.error("Failed to save agent:", error);
-      setError(error.message || "Failed to save agent");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -389,15 +259,6 @@ export default function VoiceAgentList() {
       setSortDirection("asc");
     }
   };
-
-  const languageOptions = [
-    { value: "en-US", label: "English (US)" },
-    { value: "en-GB", label: "English (UK)" },
-    { value: "es-ES", label: "Spanish" },
-    { value: "fr-FR", label: "French" },
-    { value: "de-DE", label: "German" },
-    { value: "it-IT", label: "Italian" },
-  ];
 
   if (loading) {
     return (
@@ -677,146 +538,24 @@ export default function VoiceAgentList() {
         }}
       />
 
-      {/* Create Agent Modal */}
-      <Modal 
-        isOpen={isCreateModalOpen} 
-        onClose={() => {
-          setIsCreateModalOpen(false);
-          setError(null);
-          setSuccess(null);
+      {/* Step 1: Template Picker */}
+      <AgentTemplatePicker
+        isOpen={isTemplatePickerOpen}
+        onClose={() => setIsTemplatePickerOpen(false)}
+        onSelect={handleTemplateSelect}
+      />
+
+      {/* Step 2: Investor Relations template form (voice-first: this page defaults to
+          creating a voice agent, but the user can add a chat agent on the same LLM too) */}
+      <CreateIRAgentModal
+        isOpen={selectedTemplateId === "investor-relations"}
+        onClose={() => setSelectedTemplateId(null)}
+        onSuccess={() => {
+          setSelectedTemplateId(null);
+          fetchAgents();
         }}
-        title="Create Voice Agent"
-      >
-        <div className="px-6 py-4">
-          {error && (
-            <div className="mb-4">
-              <Alert
-                variant="error"
-                title="Error"
-                message={error}
-              />
-            </div>
-          )}
-
-          {success && (
-            <div className="mb-4">
-              <Alert
-                variant="success"
-                title="Success"
-                message={success}
-              />
-            </div>
-          )}
-
-          <Form onSubmit={handleSubmit}>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="name">Agent Name</Label>
-                <Input
-                  type="text"
-                  id="name"
-                  name="name"
-                  placeholder="Enter agent name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="voice_id">Voice</Label>
-                {voicesLoading ? (
-                  <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
-                    Loading voices...
-                  </div>
-                ) : voiceOptions.length === 0 ? (
-                  <div className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-sm text-gray-500 dark:text-gray-400">
-                    No voices available. Please ensure AI Assistant is connected.
-                  </div>
-                ) : (
-                  <Select
-                    id="voice_id"
-                    options={voiceOptions}
-                    placeholder="Select a voice"
-                    value={formData.voice_id}
-                    onChange={(value) =>
-                      setFormData({ ...formData, voice_id: value })
-                    }
-                    disabled={isSubmitting}
-                  />
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="language">Language</Label>
-                <Select
-                  options={languageOptions}
-                  placeholder="Select a language"
-                  defaultValue={formData.language}
-                  onChange={(value) =>
-                    setFormData({ ...formData, language: value })
-                  }
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="is_active">Status</Label>
-                <Select
-                  options={[
-                    { value: "true", label: "Active" },
-                    { value: "false", label: "Inactive" },
-                  ]}
-                  placeholder="Select status"
-                  defaultValue={formData.is_active ? "true" : "false"}
-                  onChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      is_active: value === "true",
-                    })
-                  }
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setIsCreateModalOpen(false);
-                    setError(null);
-                    setSuccess(null);
-                    setFormData({
-                      name: "",
-                      type: "voice",
-                      is_active: true,
-                      voice_id: "",
-                      language: "en-US",
-                    });
-                  }}
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  size="sm"
-                  disabled={isSubmitting || !formData.name.trim() || !formData.voice_id.trim()}
-                >
-                  {isSubmitting 
-                    ? "Creating..." 
-                    : "Create"
-                  }
-                </Button>
-              </div>
-            </div>
-          </Form>
-        </div>
-      </Modal>
+        defaultChannel="voice"
+      />
     </>
   );
 }
