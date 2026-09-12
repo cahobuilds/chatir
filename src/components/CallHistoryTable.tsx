@@ -2,6 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { useOrganization } from "@/context/OrganizationContext";
+import {
+  PhoneIcon,
+  MusicalNoteIcon,
+  DocumentTextIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline";
 
 interface Interaction {
   id: string;
@@ -189,7 +195,10 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
   };
 
   const getDirectionIcon = (direction: string) => {
-    return direction === "inbound" ? "📞" : "📞";
+    // Note: both branches have always returned the same icon (pre-existing
+    // behavior, unrelated to this icon-glyph swap) - direction is not
+    // currently distinguished visually.
+    return direction === "inbound" ? PhoneIcon : PhoneIcon;
   };
 
   const formatDuration = (seconds: number | null) => {
@@ -293,7 +302,10 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
                 >
                   <td className="px-4 py-4">
                     <div className="flex items-center space-x-2">
-                      <span className="text-lg flex-shrink-0">{getDirectionIcon(call.direction)}</span>
+                      {(() => {
+                        const DirectionIcon = getDirectionIcon(call.direction);
+                        return <DirectionIcon className="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />;
+                      })()}
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {call.id.substring(0, 8)}...
@@ -351,17 +363,19 @@ export default function CallHistoryTable({ filters = {}, onFiltersChange }: Call
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-1">
                       {call.hasRecording && (
-                        <span className="text-indigo-600 dark:text-indigo-400" title="Has Recording">
-                          🎵
+                        <span title="Has Recording">
+                          <MusicalNoteIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-400 inline-block" />
                         </span>
                       )}
                       {call.hasTranscript && (
-                        <span className="text-green-600 dark:text-green-400" title="Has Transcript">
-                          📝
+                        <span title="Has Transcript">
+                          <DocumentTextIcon className="w-4 h-4 text-green-600 dark:text-green-400 inline-block" />
                         </span>
                       )}
                       {call.transferred && (
-                        <span className="text-blue-600 dark:text-blue-400" title="Transferred">🔄</span>
+                        <span title="Transferred">
+                          <ArrowPathIcon className="w-4 h-4 text-blue-600 dark:text-blue-400 inline-block" />
+                        </span>
                       )}
                       <button
                         onClick={(e) => {

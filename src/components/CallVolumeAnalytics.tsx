@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useOrganization } from "@/context/OrganizationContext";
+import { ArrowTrendingUpIcon, PhoneIcon } from "@heroicons/react/24/outline";
 
 interface TimeSeriesData {
   timeSeries: Array<{
@@ -143,7 +144,7 @@ export default function CallVolumeAnalytics() {
       <div className="h-64 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center">
         {data?.timeSeries && data.timeSeries.length > 0 ? (
           <div className="text-center">
-            <div className="mb-4 text-4xl">📈</div>
+            <ArrowTrendingUpIcon className="w-9 h-9 mx-auto mb-4 text-gray-500 dark:text-gray-400" />
             <p className="text-gray-600 dark:text-gray-300">
               {data.timeSeries.length} data points
             </p>
@@ -153,7 +154,7 @@ export default function CallVolumeAnalytics() {
           </div>
         ) : (
           <div className="text-center">
-            <div className="mb-4 text-4xl">📈</div>
+            <ArrowTrendingUpIcon className="w-9 h-9 mx-auto mb-4 text-gray-500 dark:text-gray-400" />
             <p className="text-gray-600 dark:text-gray-300">
               No data available
             </p>
@@ -172,7 +173,7 @@ export default function CallVolumeAnalytics() {
               </p>
             </div>
             <div className="rounded-lg bg-green-100 p-2 dark:bg-green-900">
-              <span className="text-green-600 dark:text-green-400">📞</span>
+              <PhoneIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
             </div>
           </div>
           {data?.growthMetrics?.monthOverMonth !== null && data?.growthMetrics?.monthOverMonth !== undefined && (

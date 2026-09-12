@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useOrganization } from "@/context/OrganizationContext";
+import { ArrowTrendingUpIcon } from "@heroicons/react/24/outline";
 
 interface CustomerExperienceData {
   satisfactionTrends: Array<{
@@ -145,7 +146,7 @@ export default function CustomerExperienceMetrics() {
         {data.satisfactionTrends && data.satisfactionTrends.length > 0 ? (
           <div className="h-48 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center">
             <div className="text-center">
-              <div className="text-3xl mb-2">📈</div>
+              <ArrowTrendingUpIcon className="w-8 h-8 mx-auto mb-2 text-gray-500 dark:text-gray-400" />
               <p className="text-gray-600 dark:text-gray-300">
                 {data.satisfactionTrends.length} data points
               </p>

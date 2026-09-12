@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useOrganization } from "@/context/OrganizationContext";
+import { DocumentTextIcon } from "@heroicons/react/24/outline";
 
 interface Interaction {
   id: string;
@@ -314,8 +315,8 @@ export default function ChatHistoryTable({ filters = {} }: ChatHistoryTableProps
                         Details
                       </button>
                       {chat.hasTranscript && (
-                        <span className="text-green-600 dark:text-green-400" title="Has Transcript">
-                          📝
+                        <span title="Has Transcript">
+                          <DocumentTextIcon className="w-4 h-4 text-green-600 dark:text-green-400 inline-block" />
                         </span>
                       )}
                     </div>
