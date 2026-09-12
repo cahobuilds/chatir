@@ -2,6 +2,13 @@
 
 import React, { useState, useEffect } from "react";
 import { useOrganization } from "@/context/OrganizationContext";
+import {
+  PhoneIcon,
+  ClockIcon,
+  UsersIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+} from "@heroicons/react/24/outline";
 
 interface RealtimeData {
   liveCallVolume: {
@@ -129,37 +136,37 @@ export default function RealTimeMetrics() {
   {
     title: "Active Calls",
       value: data.liveCallVolume.activeCalls.toLocaleString(),
-    icon: "📞",
+    icon: PhoneIcon,
       color: "bg-blue-500",
   },
   {
     title: "Calls in Queue",
       value: data.liveCallVolume.queueLength.toLocaleString(),
-    icon: "⏳",
+    icon: ClockIcon,
       color: "bg-yellow-500",
   },
   {
     title: "Avg Wait Time",
       value: data.liveCallVolume.avgWaitTimeFormatted || formatDuration(data.liveCallVolume.avgWaitTime),
-    icon: "⏱️",
+    icon: ClockIcon,
       color: "bg-green-500",
   },
   {
       title: "Online Agents",
       value: `${data.agentStatus.busy}/${data.agentStatus.total}`,
-      icon: "👥",
+      icon: UsersIcon,
       color: "bg-purple-500",
   },
   {
       title: "Hour Answer Rate",
       value: `${data.liveMetrics.currentHourAnswerRate.toFixed(1)}%`,
-    icon: "✅",
+    icon: CheckCircleIcon,
       color: "bg-emerald-500",
   },
   {
       title: "Error Rate",
       value: `${data.systemHealth.errorRate.toFixed(2)}%`,
-      icon: "⚠️",
+      icon: ExclamationTriangleIcon,
       color: "bg-orange-500",
     },
 ];
@@ -191,7 +198,7 @@ export default function RealTimeMetrics() {
           >
             <div className="flex items-center justify-between mb-3">
               <div className={`rounded-lg p-2 ${metric.color}`}>
-                <span className="text-white text-lg">{metric.icon}</span>
+                <metric.icon className="w-4 h-4 text-white" />
               </div>
             </div>
             <div>

@@ -13,6 +13,14 @@ import Badge from "./ui/badge/Badge";
 import Button from "./ui/button/Button";
 import Link from "next/link";
 import { usePermissions } from "@/hooks/usePermissions";
+import {
+  BuildingOfficeIcon,
+  Squares2X2Icon,
+  CheckCircleIcon,
+  PhoneIcon,
+  ChatBubbleLeftRightIcon,
+  PauseCircleIcon,
+} from "@heroicons/react/24/outline";
 import { useOrganization } from "@/context/OrganizationContext";
 
 interface Tenant {
@@ -203,42 +211,42 @@ export default function DashboardOverview() {
     ...(canViewOrganizations ? [{
       title: "Total Organizations",
       value: stats.totalOrganizations,
-      icon: "🏢",
+      icon: BuildingOfficeIcon,
       color: "bg-blue-500",
       description: "Active organizations",
     }] : []),
     {
       title: "Total Agents",
       value: stats.totalAgents,
-      icon: "🤖",
+      icon: Squares2X2Icon,
       color: "bg-purple-500",
       description: "All agents",
     },
     {
       title: "Active Agents",
       value: stats.activeAgents,
-      icon: "✅",
+      icon: CheckCircleIcon,
       color: "bg-green-500",
       description: "Currently active",
     },
     {
       title: "Voice Agents",
       value: stats.voiceAgents,
-      icon: "📞",
+      icon: PhoneIcon,
       color: "bg-indigo-500",
       description: "Voice bots",
     },
     {
       title: "Chat Agents",
       value: stats.chatAgents,
-      icon: "💬",
+      icon: ChatBubbleLeftRightIcon,
       color: "bg-pink-500",
       description: "Chat bots",
     },
     {
       title: "Inactive Agents",
       value: stats.totalAgents - stats.activeAgents,
-      icon: "⏸️",
+      icon: PauseCircleIcon,
       color: "bg-gray-500",
       description: "Paused agents",
     },
@@ -277,7 +285,7 @@ export default function DashboardOverview() {
           >
             <div className="flex items-center justify-between mb-4">
               <div className={`rounded-lg p-3 ${metric.color}`}>
-                <span className="text-white text-xl">{metric.icon}</span>
+                <metric.icon className="w-5 h-5 text-white" />
               </div>
             </div>
             <div>

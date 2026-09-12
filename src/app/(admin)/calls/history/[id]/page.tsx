@@ -5,7 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/context/OrganizationContext";
 import { createClient } from "@/lib/supabase/client";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowLeftIcon,
+  ClipboardDocumentIcon,
+  DocumentTextIcon,
+  ChartBarIcon,
+  MusicalNoteIcon,
+} from "@heroicons/react/24/outline";
 import CallAnalytics from "@/components/CallAnalytics";
 
 interface Interaction {
@@ -185,10 +191,10 @@ export default function CallDetailPage() {
   }
 
   const tabs = [
-    { id: "details", label: "Details", icon: "📋" },
-    { id: "transcript", label: "Transcript", icon: "📝" },
-    { id: "analytics", label: "Analytics", icon: "📊" },
-    { id: "recording", label: "Recording", icon: "🎵" }
+    { id: "details", label: "Details", icon: ClipboardDocumentIcon },
+    { id: "transcript", label: "Transcript", icon: DocumentTextIcon },
+    { id: "analytics", label: "Analytics", icon: ChartBarIcon },
+    { id: "recording", label: "Recording", icon: MusicalNoteIcon }
   ];
 
   const formatDuration = (seconds: number | null) => {
@@ -286,7 +292,7 @@ export default function CallDetailPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                 }`}
               >
-                <span className="mr-2">{tab.icon}</span>
+                <tab.icon className="w-4 h-4 mr-2 inline-block" />
                 {tab.label}
               </button>
             ))}
@@ -464,7 +470,7 @@ export default function CallDetailPage() {
                 } else {
                   return (
                     <div className="text-center py-12">
-                      <div className="text-4xl mb-4">📝</div>
+                      <DocumentTextIcon className="w-10 h-10 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
                       <p className="text-gray-500 dark:text-gray-400">
                         No transcript available for this call
                       </p>
@@ -553,7 +559,7 @@ export default function CallDetailPage() {
                 } else {
                   return (
                     <div className="text-center py-12">
-                      <div className="text-4xl mb-4">🎵</div>
+                      <MusicalNoteIcon className="w-10 h-10 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
                       <p className="text-gray-500 dark:text-gray-400">
                         No recording available for this call
                       </p>

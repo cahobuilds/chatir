@@ -2,13 +2,20 @@
 
 import React, { useState, useEffect } from "react";
 import { useOrganization } from "@/context/OrganizationContext";
+import {
+  PhoneIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  MicrophoneIcon,
+  ChatBubbleLeftRightIcon,
+} from "@heroicons/react/24/outline";
 
 interface OverviewMetric {
   title: string;
   value: string | number;
   change: string;
   trend: "up" | "down" | "neutral";
-  icon: string;
+  icon: React.ComponentType<{ className?: string }>;
   color: string;
   description: string;
 }
@@ -100,7 +107,7 @@ export default function AnalyticsOverview() {
         value: overview.totalCalls.toLocaleString(),
         change: "", // TODO: Calculate vs previous period
         trend: "neutral",
-    icon: "📞",
+    icon: PhoneIcon,
     color: "bg-blue-500",
         description: "total interactions"
   },
@@ -109,7 +116,7 @@ export default function AnalyticsOverview() {
         value: `${overview.answerRate.toFixed(1)}%`,
         change: "", // TODO: Calculate vs previous period
         trend: "neutral",
-    icon: "✅",
+    icon: CheckCircleIcon,
     color: "bg-green-500",
         description: "completed calls"
   },
@@ -118,7 +125,7 @@ export default function AnalyticsOverview() {
         value: overview.avgHandleTimeFormatted || `${overview.avgHandleTime.toFixed(1)}m`,
         change: "", // TODO: Calculate vs previous period
         trend: "neutral",
-    icon: "⏱️",
+    icon: ClockIcon,
     color: "bg-purple-500",
         description: "average duration"
   },
@@ -127,7 +134,7 @@ export default function AnalyticsOverview() {
         value: overview.voiceCalls.toLocaleString(),
         change: "",
         trend: "neutral",
-        icon: "🎙️",
+        icon: MicrophoneIcon,
     color: "bg-yellow-500",
         description: "voice interactions"
   },
@@ -136,7 +143,7 @@ export default function AnalyticsOverview() {
         value: overview.chatConversations.toLocaleString(),
         change: "",
         trend: "neutral",
-        icon: "💬",
+        icon: ChatBubbleLeftRightIcon,
     color: "bg-indigo-500",
         description: "chat interactions"
   },
@@ -145,7 +152,7 @@ export default function AnalyticsOverview() {
         value: overview.completedCalls.toLocaleString(),
         change: "",
         trend: "neutral",
-        icon: "✅",
+        icon: CheckCircleIcon,
     color: "bg-emerald-500",
         description: "successful calls"
       },
@@ -227,7 +234,7 @@ export default function AnalyticsOverview() {
         >
           <div className="flex items-center justify-between">
             <div className={`rounded-lg p-3 ${metric.color}`}>
-              <span className="text-white text-xl">{metric.icon}</span>
+              <metric.icon className="w-5 h-5 text-white" />
             </div>
               {metric.change && (
             <div className={`text-sm font-medium ${

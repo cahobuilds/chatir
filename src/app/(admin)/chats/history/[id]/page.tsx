@@ -4,7 +4,12 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/context/OrganizationContext";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowLeftIcon,
+  ChatBubbleLeftRightIcon,
+  ClipboardDocumentIcon,
+  ChartBarIcon,
+} from "@heroicons/react/24/outline";
 import { logger } from "@/lib/logger";
 
 interface Interaction {
@@ -271,9 +276,9 @@ export default function ChatDetailPage() {
   }
 
   const tabs = [
-    { id: "conversation", label: "Conversation", icon: "💬" },
-    { id: "details", label: "Details", icon: "📋" },
-    { id: "analytics", label: "Analytics", icon: "📊" },
+    { id: "conversation", label: "Conversation", icon: ChatBubbleLeftRightIcon },
+    { id: "details", label: "Details", icon: ClipboardDocumentIcon },
+    { id: "analytics", label: "Analytics", icon: ChartBarIcon },
   ];
 
   const formatDuration = (seconds: number | null) => {
@@ -454,7 +459,7 @@ export default function ChatDetailPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                 }`}
               >
-                <span className="mr-2">{tab.icon}</span>
+                <tab.icon className="w-4 h-4 mr-2 inline-block" />
                 {tab.label}
               </button>
             ))}
@@ -593,7 +598,7 @@ export default function ChatDetailPage() {
                   </div>
                 ) : (
                   <div className="text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                    <div className="text-4xl mb-4">💬</div>
+                    <ChatBubbleLeftRightIcon className="w-10 h-10 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
                     <p className="text-gray-500 dark:text-gray-400">
                       No messages available for this conversation
                     </p>
@@ -804,7 +809,7 @@ export default function ChatDetailPage() {
 
               {!chatAnalysis && (
                 <div className="text-center py-12">
-                  <div className="text-4xl mb-4">📊</div>
+                  <ChartBarIcon className="w-10 h-10 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
                   <p className="text-gray-500 dark:text-gray-400">
                     Analytics data will be available here soon
                   </p>
