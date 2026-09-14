@@ -26,7 +26,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
-  const adminSupabase = createAdminClient();
+  let adminSupabase;
+  try {
+    adminSupabase = createAdminClient();
+  } catch (err: unknown) {
+    logger.error('Failed to create admin Supabase client', err);
+    return NextResponse.json({ received: true });
+  }
 
   try {
     switch (event.type) {
@@ -46,10 +52,19 @@ export async function POST(request: NextRequest) {
           break;
         }
 
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        let subscription;
+        try {
+          subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        } catch (err: unknown) {
+          logger.error('Retryable upstream Stripe API failure retrieving subscription', err, {
+            tenantId,
+            subscriptionId,
+          });
+          return NextResponse.json({ error: 'Upstream Stripe API call failed' }, { status: 500 });
+        }
         const priceId = subscription.items.data[0]?.price.id || null;
 
-        const { error } = await adminSupabase
+        const { data, error } = await adminSupabase
           .from('tenants')
           .update({
             stripe_customer_id: customerId,
@@ -57,10 +72,17 @@ export async function POST(request: NextRequest) {
             plan_id: priceId,
             plan_status: mapStripeStatus(subscription.status),
           })
-          .eq('id', tenantId);
+          .eq('id', tenantId)
+          .select('id');
 
         if (error) {
           logger.error('Failed to update tenant after checkout.session.completed', error, { tenantId });
+        } else if (!data?.length) {
+          logger.error(
+            'no tenant found matching tenant_id — event may have arrived out of order or tenant_id was stale',
+            undefined,
+            { tenantId, subscriptionId },
+          );
         }
         break;
       }
@@ -69,18 +91,25 @@ export async function POST(request: NextRequest) {
         const subscription = event.data.object as Stripe.Subscription;
         const priceId = subscription.items.data[0]?.price.id || null;
 
-        const { error } = await adminSupabase
+        const { data, error } = await adminSupabase
           .from('tenants')
           .update({
             plan_id: priceId,
             plan_status: mapStripeStatus(subscription.status),
           })
-          .eq('stripe_subscription_id', subscription.id);
+          .eq('stripe_subscription_id', subscription.id)
+          .select('id');
 
         if (error) {
           logger.error('Failed to update tenant after customer.subscription.updated', error, {
             subscriptionId: subscription.id,
           });
+        } else if (!data?.length) {
+          logger.error(
+            'no tenant found matching stripe_subscription_id — event may have arrived out of order or tenant_id was stale',
+            undefined,
+            { subscriptionId: subscription.id },
+          );
         }
         break;
       }
@@ -88,15 +117,22 @@ export async function POST(request: NextRequest) {
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
 
-        const { error } = await adminSupabase
+        const { data, error } = await adminSupabase
           .from('tenants')
           .update({ plan_status: 'canceled' })
-          .eq('stripe_subscription_id', subscription.id);
+          .eq('stripe_subscription_id', subscription.id)
+          .select('id');
 
         if (error) {
           logger.error('Failed to update tenant after customer.subscription.deleted', error, {
             subscriptionId: subscription.id,
           });
+        } else if (!data?.length) {
+          logger.error(
+            'no tenant found matching stripe_subscription_id — event may have arrived out of order or tenant_id was stale',
+            undefined,
+            { subscriptionId: subscription.id },
+          );
         }
         break;
       }
