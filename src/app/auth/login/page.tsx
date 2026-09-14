@@ -82,9 +82,15 @@ function AuthForm() {
         });
         if (signInError) throw signInError;
 
-        // Success - redirect to dashboard
-        router.push('/dashboard');
-        router.refresh();
+        // Success - a subscription is required, so go straight to Stripe Checkout if we got
+        // a URL back. If Checkout Session creation failed server-side, fall back to the
+        // dashboard - the billing screen there offers a "start subscription" retry.
+        if (data.checkout_url) {
+          window.location.href = data.checkout_url;
+        } else {
+          router.push('/dashboard');
+          router.refresh();
+        }
       } else {
         // Login
         const { data, error: authError } = await supabase.auth.signInWithPassword({

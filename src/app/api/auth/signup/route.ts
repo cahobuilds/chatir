@@ -3,12 +3,17 @@
 // service-role client (RLS-bypassing), so a company + its admin are live immediately. Cleans up
 // partially-created records on failure.
 //
-// NOTE: The full product flow (charge the card, set a "pending/ready in 24h" status, send the
-// welcome email once the voice-provider key is connected, then flip to active) is Scaffolded below
-// with TODOs — those need STRIPE_* (Phase 5) + an email provider. Until then the account is created
-// as active so the self-serve path works.
+// After the account is created, immediately starts a Stripe Checkout Session for the required
+// subscription (14-day trial, card required). The new tenant is created with plan_status:
+// 'inactive' and billing_exempt: false (column defaults) - it stays soft-locked (see
+// src/lib/billing.ts) until the checkout webhook flips it to 'trialing'. If Checkout Session
+// creation itself fails (e.g. misconfigured Stripe keys), the account still exists and
+// checkout_url is null - the client falls back to the dashboard, where the same soft-lock
+// banner offers a "start subscription" retry.
 import { createAdminClient } from '@/lib/supabase/server';
+import { createCheckoutSession } from '@/lib/stripe';
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   let createdUserId: string | null = null;
@@ -81,17 +86,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: utError.message || 'Failed to assign role' }, { status: 500 });
     }
 
-    // TODO(Phase 5 + email): create a Stripe Checkout Session / customer + set status='pending'
-    // ("Your account will be ready within 24 hours"), and send a welcome email once the
-    // voice-provider key is connected in the admin panel.
+    // 4) Start the required subscription checkout. The account already exists at this point
+    // regardless of what happens here - a failure here does not roll back signup.
+    let checkoutUrl: string | null = null;
+    try {
+      // Non-null: every failure path above returns before this point and resets
+      // createdTenantId to null, so it is guaranteed to be set here.
+      checkoutUrl = await createCheckoutSession(createdTenantId!, email, request.nextUrl.origin);
+    } catch (checkoutError: unknown) {
+      logger.error('Failed to create signup Checkout Session', checkoutError, { tenantId: createdTenantId });
+    }
 
     return NextResponse.json({
       success: true,
       user_id: createdUserId,
       tenant_id: createdTenantId,
-      message: 'Account created. Your organization is ready.',
+      checkout_url: checkoutUrl,
+      message: 'Account created.',
     }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Signup failed' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Signup failed';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
