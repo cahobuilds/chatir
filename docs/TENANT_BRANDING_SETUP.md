@@ -20,13 +20,13 @@ supabase db push
 ```
 
 Or manually run the migration file:
-- `supabase/migrations/20250120000000_add_tenant_logo_storage.sql`
+- `supabase/migrations/20251112000005_add_tenant_logo_storage.sql`
 
 ### 2. Set Up Supabase Storage
 
 Run the storage setup script in Supabase Dashboard:
 
-1. Go to: https://supabase.com/dashboard/project/ystivchlyoijaghwdcjd/sql/new
+1. Go to your Supabase project's SQL Editor (Dashboard → SQL Editor → New query)
 2. Open: `scripts/setup-tenant-storage.sql`
 3. Copy and paste the entire contents
 4. Click "Run"
@@ -97,7 +97,9 @@ Body: { name: string }
 
 ## Security
 
-- Only users with `tenant_admin` or `super_admin` roles can:
+- Only users with the `users.manage` permission can (held by `company_admin` for their
+  own organization, or any platform-scope role for any organization — see
+  `src/lib/permissions-server.ts`):
   - Upload logos
   - Update tenant name
   - Delete logos
@@ -150,4 +152,10 @@ Example structure:
   "secondaryColor": "#06B6D4"
 }
 ```
+
+## See also
+
+Wordmark support uses this exact same pattern (same bucket, same permission model) — see
+`docs/LOGO_WORDMARK_STORAGE.md` for the wordmark-specific endpoint
+(`/api/tenants/[id]/wordmark`).
 

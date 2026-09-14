@@ -1,5 +1,18 @@
 # Architecture & Technology Recommendations
 
+> **Status: implemented 2025 — historical design record.** This document captured the original
+> technology/architecture recommendations for the project. The core DB schema and RLS strategy
+> below were implemented almost verbatim — compare against
+> `supabase/migrations/20251111172146_create_initial_schema.sql` (tenants/agents/interactions/
+> billing_records tables and their `tenant_isolation_*` RLS policies match closely; the role model
+> referenced here has since been superseded by the 6-role model in `src/lib/permissions-server.ts`,
+> see `supabase/migrations/20260908000000_platform_roles_cleanup.sql`). Some proposals below —
+> the per-tenant embed-code generator, a WordPress plugin, and a Shopify app — were **never
+> built**; they're left in place as a historical record and marked inline. The "TailAdmin"
+> frontend framing is also stale: the app has since undergone a "Chat IR" rebrand (charcoal/gray +
+> amber palette, Heroicons — see `src/app/globals.css` and `src/config/navigation.tsx`), noted
+> inline below as well. Treat this whole file as a snapshot of 2025 planning, not current guidance.
+
 ## Executive Summary
 
 Based on research of Retell AI SDKs, Supabase multi-tenancy, TailAdmin frontend, and Retell AI API documentation, here are the recommended technology choices and architecture for building a multi-tenant platform for managing chatbots and voice bots.
@@ -78,7 +91,14 @@ CREATE POLICY tenant_isolation ON agents
 
 ---
 
-### 3. **Frontend: TailAdmin Compatibility** ✅
+### 3. **Frontend: TailAdmin Compatibility** ✅ *(superseded — see note)*
+
+> **2026 update:** the app originally started from the TailAdmin template (hence this section),
+> but has since undergone a full "Chat IR" rebrand — a charcoal/gray + amber color palette
+> (`--color-brand-*` in `src/app/globals.css`) and Heroicons (`@heroicons/react`, see
+> `src/config/navigation.tsx`) instead of TailAdmin's default theme/icons. The stack-compatibility
+> reasoning below (Next.js/TypeScript/Tailwind) is still accurate; the TailAdmin branding/theme
+> itself is not current.
 
 **Current Stack Analysis:**
 - ✅ **Next.js 15.5.4** - Compatible with TailAdmin
@@ -101,7 +121,7 @@ CREATE POLICY tenant_isolation ON agents
 - Charts and analytics widgets
 - UI components (buttons, modals, etc.)
 
-**Note:** TailAdmin is a template/component library, not a framework. Your current architecture is compatible.
+**Note:** TailAdmin is a template/component library, not a framework. Your current architecture is compatible. *(Historical note: this was true when written; the app's visual branding has since moved away from TailAdmin's default look — see the 2026 update above.)*
 
 **References:**
 - [TailAdmin Website](https://tailadmin.com/)
@@ -310,7 +330,9 @@ For embedding in WordPress/Webflow/Shopify:
 </script>
 ```
 
-**Better Approach: Generate Embed Code Per Tenant**
+**Better Approach: Generate Embed Code Per Tenant** — *never built.* No `embed-code` route,
+per-tenant embed generator, or public widget script exists anywhere in `src/app` as of this
+writing. Left below as the original proposal, not a description of current functionality.
 
 ```typescript
 // src/app/api/tenants/[id]/embed-code/route.ts
@@ -340,7 +362,12 @@ export async function GET(
 
 ---
 
-## 📋 Embedding Strategy for WordPress/Webflow/Shopify
+## 📋 Embedding Strategy for WordPress/Webflow/Shopify — *never built / not planned*
+
+None of the options below exist today: there is no embeddable widget script, no WordPress
+plugin, and no Shopify app anywhere in this repo (confirmed by searching `src/app` and the repo
+root for `embed-code`/`wordpress`/`shopify`). Kept below as the original 2025 proposal for
+historical reference only.
 
 ### Option 1: Simple Script Tag (Recommended)
 
@@ -516,25 +543,25 @@ NEXT_PUBLIC_APP_URL=https://your-domain.com
 
 ---
 
-## ✅ Final Recommendations
+## ✅ Final Recommendations *(2025, as originally written — see status banner at top)*
 
-1. ✅ **Use Retell TypeScript SDK** - Native Next.js integration
-2. ✅ **Use Supabase** - Database + Auth + Multi-tenancy
-3. ✅ **Keep TailAdmin/Current Stack** - Already compatible
+1. ✅ **Use Retell TypeScript SDK** - Native Next.js integration — implemented
+2. ✅ **Use Supabase** - Database + Auth + Multi-tenancy — implemented
+3. ✅ **Keep TailAdmin/Current Stack** - Already compatible — stack kept, but branding since moved away from TailAdmin's default theme (Chat IR rebrand)
 4. ✅ **Deploy on Vercel** - Best Next.js hosting
-5. ✅ **Generate Embed Codes** - Simple script tag for WordPress/Webflow/Shopify
-6. ✅ **Track Interactions** - Use Retell webhooks for billing
+5. ⬜ **Generate Embed Codes** - Simple script tag for WordPress/Webflow/Shopify — **never built**
+6. ✅ **Track Interactions** - Use Retell webhooks for billing — implemented
 
 ---
 
-## 🎯 Next Steps
+## 🎯 Next Steps *(2025 plan — see status banner at top for what actually shipped)*
 
-1. Set up Supabase project
-2. Install Retell TypeScript SDK
-3. Create database schema with RLS policies
-4. Build API routes for agent management
-5. Implement webhook handlers
-6. Create embed code generator
-7. Build billing system
-8. Deploy to Vercel
+1. Set up Supabase project — done
+2. Install Retell TypeScript SDK — done
+3. Create database schema with RLS policies — done
+4. Build API routes for agent management — done
+5. Implement webhook handlers — done
+6. Create embed code generator — **never built**
+7. Build billing system — done (Stripe, shipped 2026-09-14; see `docs/AUTHENTICATION_API_SETUP.md`)
+8. Deploy to Vercel — done
 

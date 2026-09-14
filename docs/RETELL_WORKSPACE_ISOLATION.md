@@ -42,21 +42,22 @@ per-workspace provisioning is required.
 - `tenants.retell_api_key` (column already existed) stores the Retell API key for
   **any** tenant row — not just resellers.
 - `src/lib/reseller.ts` → `getResellerRetellConfig(organizationTenantId)` is the single
-  choke point almost every Retell-calling route uses to obtain an API key. It now:
-  1. **Prefers the organization's own `retell_api_key`** (its dedicated workspace) when
-     `retell_connection_status !== 'disconnected'`.
-  2. Falls back to the parent reseller's shared key only if the organization has not
-     been given its own workspace yet. This fallback is backward-compatibility debt for
-     tenants provisioned before this model existed — **new client companies should never
-     rely on it.**
+  choke point almost every Retell-calling route uses to obtain an API key. As of the
+  `refactor(tenants): remove reseller hierarchy; encrypt Retell key at rest` cleanup, it
+  simply returns the organization's own `retell_api_key` when
+  `retell_connection_status !== 'disconnected'`, or `null` otherwise — there is no
+  reseller/parent-tenant fallback anymore. The `parent_id`/`is_reseller` traversal was
+  removed entirely; `getResellerTenantId()` is kept only as a null-returning stub for a
+  pending column-drop migration.
 - `POST /api/tenants/[id]/retell/connect` (existing endpoint, `src/app/api/tenants/[id]/retell/connect/route.ts`)
-  validates a Retell API key (via a lightweight `agent.list({ limit: 1 })` call) and
-  stores it against **any specific organization tenant id** — this already supports
-  per-company keys; it was just being shadowed by the old reseller-first fallback logic,
-  which is now fixed.
-- The `RetellIntegrationManagement` component (`src/components/RetellIntegrationManagement.tsx`,
-  mounted at `/settings`) is the admin UI for this: pick an organization from the
-  dropdown, paste in its dedicated Retell API key, connect.
+  validates a Retell API key (via a lightweight `agent.list({ limit: 1 })` call), encrypts
+  it, and stores it against **any specific organization tenant id** — this is the only
+  way a Retell key gets attached to a tenant today.
+- The `TenantManagement` component (`src/components/TenantManagement.tsx`, mounted at
+  `/tenant-settings`) is the admin UI for this: platform staff click **Edit** on an
+  organization's row, which opens a "Voice Provider" modal; paste in that organization's
+  dedicated Retell API key and click **Save Configuration** to call the connect endpoint
+  above.
 
 No database migration was required — the schema already supported per-tenant keys.
 This was a lookup-order bug, not a missing feature.
@@ -76,10 +77,11 @@ new client company.
    so usage is tracked/billed per company rather than pooled.
 4. **Create the organization tenant in this app** (if not already created) via the
    normal tenant/organization creation flow.
-5. **Connect the workspace key to the tenant**: go to `/settings` → Voice Provider
-   Integration → select the new organization → **Connect Voice Provider** → paste the
-   API key from step 2 → Connect. The connection test (`agent.list({ limit: 1 })`) must
-   succeed before the key is saved.
+5. **Connect the workspace key to the tenant**: go to `/tenant-settings` → find the
+   organization's row → click **Edit** → in the "Voice Provider" modal, paste the API
+   key from step 2 into the **API Key** field → **Save Configuration**. This calls
+   `POST /api/tenants/{id}/retell/connect`, whose connection test (`agent.list({ limit: 1 })`)
+   must succeed before the key is saved.
 6. **Verify isolation**: as that organization, go to Knowledge Base and Agents — both
    lists should be empty (a fresh workspace has nothing in it yet). This is the proof
    the tenant is talking to its own dedicated workspace and not seeing anyone else's data.
@@ -93,11 +95,10 @@ new client company.
   workspace creation becomes a real bottleneck. If/when Retell ships a workspace
   creation API, prioritize automating step 1–2. Until then, this is a required
   checklist item in the sales/onboarding handoff, not an optional nice-to-have.
-- **Existing tenants still on the shared reseller key** should be migrated to their own
-  workspace as a cleanup task — treat any tenant relying on the fallback path in
-  `getResellerRetellConfig` as technical debt, not a supported permanent state for a
-  live public-company client.
-- If a reseller genuinely wants to offer a lower-isolation/lower-cost tier (e.g. an
-  internal test/demo org that isn't a real public company), the shared-key fallback
-  remains available for that explicitly-chosen case — just never for a live client
-  handling real, non-public-until-filed investor content.
+- **The reseller/shared-key fallback described in earlier revisions of this doc no
+  longer exists in code.** The `parent_id`/`is_reseller` hierarchy and the fallback path
+  in `getResellerRetellConfig` were removed (see the `refactor(tenants): remove reseller
+  hierarchy; encrypt Retell key at rest` commit); every tenant row's Retell connection is
+  now fully independent. There is no supported lower-isolation/shared-key tier anymore —
+  every organization, including internal test/demo orgs, needs its own workspace + key
+  via the onboarding runbook above.

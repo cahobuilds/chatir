@@ -4,6 +4,13 @@
 
 The Retell AI SDK has been integrated into the multi-tenant platform for managing voice and chat bots.
 
+## Scope & related docs
+
+This guide focuses on **voice-agent** integration: phone calls, phone numbers, voice webhooks, and the `/api/retell/agents` voice CRUD routes below. **Chat agents**, LLM/response-engine configuration, and knowledge-base linking use separate APIs and UI flows:
+
+- [Retell Chat Agent Guide](./RETELL_CHAT_AGENT_GUIDE.md) — native `chatAgent` CRUD, publish, and testing (`/api/retell/chat-agents`)
+- [Retell Knowledge Base Integration](./RETELL_KNOWLEDGE_BASE_INTEGRATION.md) — KB creation and linking via LLM `response_engine`
+
 ## 📦 Installed Package
 
 - `retell-sdk` - Official Retell AI TypeScript SDK

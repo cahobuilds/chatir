@@ -111,60 +111,17 @@ ON CONFLICT (id) DO NOTHING;
 - Deletes all logo files for the tenant
 - Removes `logo_url` from `tenants.branding`
 
-## Adding Wordmark Support
+## Wordmark Support (implemented)
 
-Currently, **wordmarks are not implemented**, but they can be added using the same pattern:
+Wordmarks use exactly the pattern this doc used to propose as future work — it's now
+live, not a proposal:
 
-### Option 1: Same Storage Bucket (Recommended)
-
-Store wordmarks in the same `tenant-logos` bucket with a different path:
-
-```
-tenant-logos/
-  └── {tenant-id}/
-      ├── logo.{ext}
-      └── wordmark.{ext}
-```
-
-**Update branding structure:**
-```json
-{
-  "logo_url": "...",
-  "wordmark_url": "...",
-  "logo_updated_at": "...",
-  "wordmark_updated_at": "..."
-}
-```
-
-### Option 2: Separate Storage Bucket
-
-Create a new bucket `tenant-wordmarks` (same structure as `tenant-logos`).
-
-### Implementation Steps for Wordmarks
-
-1. **Create API endpoint**: `/api/tenants/[id]/wordmark`
-   - Similar to `/api/tenants/[id]/logo`
-   - Upload to `tenant-logos/{tenant-id}/wordmark.{ext}`
-
-2. **Update UI component**: `TenantConfiguration.tsx`
-   - Add wordmark upload section
-   - Display wordmark preview
-
-3. **Update storage policies** (if needed):
-   - Current policies already allow any file in `tenant-logos/{tenant-id}/`
-   - No changes needed if using same bucket
-
-4. **Update TypeScript types**:
-   ```typescript
-   interface TenantBranding {
-     logo_url?: string;
-     wordmark_url?: string;  // Add this
-     logo_updated_at?: string;
-     wordmark_updated_at?: string;  // Add this
-     primaryColor?: string;
-     secondaryColor?: string;
-   }
-   ```
+- Same `tenant-logos` bucket, path `{tenant-id}/wordmark.{ext}` alongside `logo.{ext}`
+- `branding` JSON gains `wordmark_url` / `wordmark_updated_at` alongside `logo_url` / `logo_updated_at`
+- API endpoint: `src/app/api/tenants/[id]/wordmark/route.ts` (POST/DELETE), mirroring
+  `src/app/api/tenants/[id]/logo/route.ts`
+- No separate storage policies were needed — the existing `{tenant-id}/*` path policies
+  already cover any filename under a tenant's folder
 
 ## Querying Logo/Wordmark Data
 
@@ -213,10 +170,10 @@ ORDER BY created_at DESC;
 - UI component: `TenantConfiguration.tsx`
 - Storage policies: Configured
 
-❌ **Wordmark Support**: Not implemented
-- Can be added using same pattern as logos
-- Would use same storage bucket or separate bucket
-- Would need new API endpoint and UI updates
+✅ **Wordmark Support**: Fully implemented (same pattern as logos)
+- Storage: same `tenant-logos` bucket, path `{tenant-id}/wordmark.{ext}`
+- API endpoint: `src/app/api/tenants/[id]/wordmark/route.ts` (POST upload / DELETE)
+- Updates `tenants.branding.wordmark_url` / `wordmark_updated_at`
 
 ## Related Files
 

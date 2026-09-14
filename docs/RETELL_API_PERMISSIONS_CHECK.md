@@ -53,32 +53,21 @@ npx tsx scripts/test-retell-api-permissions.ts
 npx tsx scripts/test-retell-api-permissions.ts "your_api_key_here"
 ```
 
-### Option 2: Manual Testing via API Routes
+### Option 2: Direct Retell API (curl)
 
-1. **Test Agent List:**
-   ```bash
-   curl -X GET "http://localhost:3000/api/retell/agents?tenant_id=YOUR_TENANT_ID" \
-     -H "Authorization: Bearer YOUR_SUPABASE_TOKEN"
-   ```
+Retell REST calls authenticate with `Authorization: Bearer <RETELL_API_KEY>` — the same format used by `retell-sdk` (`src/lib/retell.ts`) and scripts such as `scripts/test-direct-retell-chat-api.ts`. Prefer **Option 1** for a full permission sweep; use curl for a quick smoke test:
 
-2. **Test Agent Creation:**
-   ```bash
-   curl -X POST "http://localhost:3000/api/retell/agents" \
-     -H "Content-Type: application/json" \
-     -H "Authorization: Bearer YOUR_SUPABASE_TOKEN" \
-     -d '{
-       "tenant_id": "YOUR_TENANT_ID",
-       "agent_id": "LOCAL_AGENT_ID",
-       "agent_name": "Test Agent",
-       "voice_id": "11labs-Adrian"
-     }'
-   ```
+```bash
+export RETELL_API_KEY="your_api_key_here"
 
-3. **Test Phone Number List:**
-   ```bash
-   curl -X GET "http://localhost:3000/api/retell/phone-numbers?tenant_id=YOUR_TENANT_ID" \
-     -H "Authorization: Bearer YOUR_SUPABASE_TOKEN"
-   ```
+# List agents (POST /v2/list-agents)
+curl -s -X POST "https://api.retellai.com/v2/list-agents" \
+  -H "Authorization: Bearer $RETELL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+> **Note:** This app's `/api/retell/*` proxy routes use Supabase **session cookies**, not a Bearer token in curl. Test those from the logged-in UI or use Option 1.
 
 ### Option 3: Check Retell Dashboard
 

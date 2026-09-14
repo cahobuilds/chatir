@@ -56,8 +56,8 @@ A single agent handling 100% of inbound calls is expressed as **one entry with
    ```
 4. **Test the inbound flow**: call the number and verify the agent answers with the IR
    greeting, stays in scope, and declines out-of-scope/advice-seeking questions (see
-   Phase 5 testing checklist in `docs/RETELL_IR_AGENT_TEMPLATE.md` and the adversarial
-   test cases below).
+   section 5, "Guardrail verification," and section 7, "Voice-specific checks," in
+   `docs/RETELL_IR_AGENT_TEST_PLAN.md`).
 
 ## Recommended IR-specific voice settings
 

@@ -1,94 +1,109 @@
-# Deployment Guide - Multi-Tenant AI Client Care Platform
+# Deployment Guide — Chat IR
 
-This guide covers deployment for your multi-tenant AI Client Care platform using **Supabase** for database/auth and **Retell AI** for voice/chat bots.
+This guide covers deploying **Chat IR**, a multi-tenant SaaS platform for AI voice/chat agents (via **Retell AI**) with **Supabase** for database/auth and **Stripe** for subscription billing.
 
-## 🚀 Quick Deploy (Vercel - Recommended)
+## 🚀 Quick Deploy (Vercel — Recommended)
 
-### 1. Prerequisites
-
-**Required Accounts:**
-- [Supabase](https://supabase.com) - Database & Authentication
-- [Retell AI](https://retellai.com) - Voice & Chat Bot API
-- [Vercel](https://vercel.com) - Hosting (or your preferred hosting)
-
-### 2. Set Up Supabase
+For the full step-by-step Vercel + CI/CD setup (native Git integration vs. GitHub Actions, environment variables, GitHub secrets), see **[`VERCEL_SETUP.md`](./VERCEL_SETUP.md)** — that is the canonical Vercel deployment doc for this repo. The summary:
 
 ```bash
-# Install Supabase CLI
-npm install -g supabase
-
-# Initialize Supabase in your project
-supabase init
-
-# Link to your Supabase project
-supabase link --project-ref your-project-ref
-
-# Run database migrations
-supabase db push
-```
-
-**Create Supabase Project:**
-1. Go to [supabase.com](https://supabase.com)
-2. Create a new project
-3. Note your project URL and API keys:
-   - Project URL: `https://xxxxx.supabase.co`
-   - Anon Key: `eyJhbGc...` (public)
-   - Service Role Key: `eyJhbGc...` (secret, server-only)
-
-### 3. Deploy to Vercel
-
-```bash
-# Install Vercel CLI
 npm i -g vercel
-
-# Deploy to production
+vercel link
 vercel --prod
 ```
 
-### 4. Environment Variables
+### Prerequisites
 
-Set these in your **Vercel dashboard** → Project Settings → Environment Variables:
+**Required accounts:**
+- [Supabase](https://supabase.com) — Database & Authentication
+- [Retell AI](https://retellai.com) — Voice & Chat Bot API
+- [Stripe](https://stripe.com) — Subscription billing
+- [Vercel](https://vercel.com) — Hosting (or your preferred Node.js host)
+
+### 1. Set Up Supabase
+
+See [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) for the full walkthrough. In short:
+
+```bash
+npm install -g supabase
+supabase link --project-ref your-project-ref
+supabase db push
+```
+
+### 2. Set Up Stripe
+
+1. Create a Stripe account (test mode is fine to start) and grab your API keys from the Stripe Dashboard.
+2. Run the one-time setup script to create the "Chat IR Subscription" product/price (idempotent — safe to re-run):
+   ```bash
+   npx tsx scripts/stripe-setup.ts
+   ```
+   This prints a `STRIPE_PRICE_ID` — save it for the environment variables below.
+3. Register a webhook endpoint pointing at `https://<your-domain>/api/webhooks/stripe` (events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`) and copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+   - Locally, use `stripe listen --forward-to localhost:3000/api/webhooks/stripe` instead — it prints a local `whsec_...` secret.
+   - **Note:** you can only register the *production* webhook endpoint after your first deploy, once you know the live URL. Set `STRIPE_WEBHOOK_SECRET` to the local value first, deploy, then come back and set the production value in Vercel's environment variables.
+
+### 3. Environment Variables
+
+Set these in your **Vercel dashboard** → Project Settings → Environment Variables (Production, Preview, and Development):
 
 ```env
-# Supabase Configuration
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-# Application URLs
+# Used to encrypt per-tenant secrets (e.g. each org's Retell API key) at the application layer
+ENCRYPTION_KEY=a-strong-random-secret
+
+# Application URL
 NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
 
-# Retell AI (optional - can be stored per-tenant in database)
-# RETELL_API_KEY=your-default-retell-api-key
-
-# Optional: Stripe for billing
+# Stripe (required — subscription billing is live, card required at signup)
 STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_ID=price_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 ```
 
-**Important:** Never commit `.env.local` files. Use Vercel's environment variables for production.
+**Optional variables** (safe to leave unset — see `README.md` for full descriptions of each):
 
-## 🐳 Docker Deployment
+```env
+RETELL_WEBHOOK_SECRET=
+RETELL_WEBHOOK_VERIFY=            # "true" to enforce Retell webhook signature verification
+ALLOWED_LLM_MODELS=               # comma-separated allowlist; empty = no restriction
+WIDGET_RATE_LIMIT_ENABLED=        # "true" to enable per-IP rate limiting on the public chat widget
+WIDGET_RATE_LIMIT_PER_MINUTE=
+RETELL_API_KEY=                   # only used by local smoke-test scripts in scripts/, not by the app
+```
 
-### 1. Create Dockerfile
+**Note on Retell AI:** there is no global `RETELL_API_KEY` used by the running app. Each organization connects its **own** Retell workspace API key via **Settings → Voice Provider Integration** in the app (stored encrypted, per-tenant). See `docs/RETELL_WORKSPACE_ISOLATION.md` for why.
+
+**Important:** Never commit `.env.local`. Use your hosting platform's environment variable store for all secrets.
+
+## 🐳 Alternative: Docker Deployment
+
+Next.js supports a standalone Docker build. This repo does not ship a `Dockerfile` — add one if you need this path:
+
+1. Add `output: 'standalone'` to `next.config.ts`.
+2. Create a `Dockerfile`:
 
 ```dockerfile
-FROM node:18-alpine AS deps
+FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 COPY . .
 COPY --from=deps /app/node_modules ./node_modules
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-FROM node:18-alpine AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -98,353 +113,82 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
-
 EXPOSE 3000
-
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"]
 ```
 
-**Update `next.config.ts` for standalone output:**
-
-```typescript
-const nextConfig = {
-  output: 'standalone',
-  // ... rest of config
-};
-```
-
-### 2. Build and Run
+3. Build and run, passing all environment variables from the list above (via `-e` flags, an env file, or your platform's secrets manager):
 
 ```bash
-# Build the image
-docker build -t ai-client-care-app .
-
-# Run the container with environment variables
-docker run -p 3000:3000 \
-  -e NEXT_PUBLIC_SUPABASE_URL=your-supabase-url \
-  -e NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key \
-  -e SUPABASE_SERVICE_ROLE_KEY=your-service-role-key \
-  ai-client-care-app
+docker build -t chat-ir .
+docker run -p 3000:3000 --env-file .env.local chat-ir
 ```
 
-**Note:** For production, use Docker secrets or environment variable files instead of command-line args.
-
-## ☁️ AWS Deployment
-
-### 1. Using AWS Amplify
-```bash
-# Install Amplify CLI
-npm install -g @aws-amplify/cli
-
-# Initialize Amplify
-amplify init
-
-# Add hosting
-amplify add hosting
-
-# Deploy
-amplify publish
-```
-
-## 🌐 Netlify Deployment
-
-### 1. Build Settings
-```yaml
-# netlify.toml
-[build]
-  command = "npm run build"
-  publish = "out"
-
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
-```
-
-## 🔧 Environment Configuration
-
-### Development (.env.local)
-
-Create `.env.local` file in project root:
-
-```env
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-local-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-local-service-role-key
-
-# App
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-NODE_ENV=development
-
-# Retell AI (for testing)
-RETELL_API_KEY=your-retell-api-key
-```
-
-**Run Supabase locally:**
-```bash
-supabase start
-```
-
-### Production
-
-Set environment variables in your hosting platform (Vercel/Netlify/etc.):
-
-```env
-NODE_ENV=production
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-production-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-production-service-role-key
-NEXT_PUBLIC_APP_URL=https://your-domain.com
-```
+Any host that runs a standard Node.js server (Fly.io, Railway-style PaaS, a VM, etc.) works the same way — Vercel is simply the path this project is set up for out of the box (see `.github/workflows/deploy-vercel.yml`).
 
 ## 🗄️ Database Setup (Supabase)
 
-### 1. Run Migrations
-
 ```bash
-# Create migration file
-supabase migration new create_initial_schema
-
-# Edit migration file in supabase/migrations/
-# Then apply:
-supabase db push
+supabase migration new some_change   # create a new migration
+supabase db push                     # apply all pending migrations
 ```
 
-### 2. Enable Row Level Security (RLS)
-
-```sql
--- Enable RLS on all tables
-ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE interactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE billing_records ENABLE ROW LEVEL SECURITY;
-
--- Create policies (see docs/MULTITENANT_ARCHITECTURE.md for details)
-```
-
-### 3. Set Up Authentication
-
-In Supabase Dashboard:
-1. Go to Authentication → Providers
-2. Enable Email provider
-3. Configure email templates
-4. Set up OAuth providers (optional)
+Row Level Security is enabled on every multi-tenant table (`tenants`, `agents`, `interactions`, etc.) for tenant isolation — see [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) for the full setup guide and current table list.
 
 ## 🤖 Retell AI Integration
 
-### 1. Install Retell SDK
+1. Each client organization gets its **own** Retell workspace (Retell has no API-level tenant isolation — see `docs/RETELL_WORKSPACE_ISOLATION.md` for why one workspace per org is required, not optional).
+2. In that workspace's Retell dashboard, generate an API key and paste it into the org's **Settings → Voice Provider Integration** screen in Chat IR (it's encrypted at rest with `ENCRYPTION_KEY`).
+3. Configure the Retell webhook to point at `https://your-domain.com/api/webhooks/retell` for call/chat event delivery.
 
-```bash
-npm install retell-sdk
-```
+## 📦 Embeddable Chat Widget
 
-### 2. Configure Retell Webhooks
-
-**In Retell AI Dashboard:**
-1. Go to Settings → Webhooks
-2. Add webhook URL: `https://your-domain.com/api/webhooks/retell`
-3. Select events: `call.ended`, `call.connected`, `call.failed`
-
-**In Supabase:**
-Create Edge Function for webhook handling:
-
-```bash
-supabase functions new retell-webhook
-```
-
-### 3. Per-Tenant API Keys
-
-Store Retell API keys per tenant in Supabase (encrypted):
-
-```typescript
-// Each tenant has their own Retell API key
-// Store in tenants.retell_api_key column
-// Use tenant's key when making Retell API calls
-```
-
-## 📦 Embedding Code Generation
-
-### Generate Embed Code for Clients
-
-Clients can copy-paste this code into WordPress/Webflow/Shopify:
+Every chat agent has a **Get Embed Code** action (`ChatAgentList`) that produces:
 
 ```html
-<!-- Retell AI Widget -->
-<script>
-  (function() {
-    const script = document.createElement('script');
-    script.src = 'https://your-domain.com/widget.js';
-    script.setAttribute('data-tenant-id', 'TENANT_ID');
-    script.setAttribute('data-agent-id', 'AGENT_ID');
-    document.head.appendChild(script);
-  })();
-</script>
+<script src="https://your-domain.com/api/widget/chat.js?agent_id=AGENT_ID"></script>
 ```
 
-**API Endpoint:** `/api/tenants/[id]/embed-code`
-Returns embeddable script tag with tenant-specific configuration.
-
-## 📊 Performance Optimization
-
-### 1. Enable Caching
-```typescript
-// next.config.ts
-const nextConfig = {
-  experimental: {
-    outputFileTracingRoot: path.join(__dirname, '../../'),
-  },
-  onDemandEntries: {
-    maxInactiveAge: 25 * 1000,
-    pagesBufferLength: 2,
-  },
-};
-```
-
-### 2. Image Optimization
-```typescript
-// Use Next.js Image component
-import Image from 'next/image';
-
-<Image
-  src="/images/hero.jpg"
-  alt="Hero image"
-  width={800}
-  height={600}
-  priority
-/>
-```
+This can be pasted into any site (WordPress, Webflow, a plain HTML page, etc.). The widget script and its message endpoint are served from `/api/widget/*`; optional per-IP rate limiting is controlled by `WIDGET_RATE_LIMIT_ENABLED`/`WIDGET_RATE_LIMIT_PER_MINUTE`.
 
 ## 🔒 Security Considerations
 
-### 1. Environment Variables
-- ✅ Never commit `.env.local` files (already in `.gitignore`)
-- ✅ Use Vercel environment variables for production
-- ✅ Rotate API keys regularly
-- ✅ Use Supabase Service Role Key only on server-side
-- ✅ Never expose Service Role Key to client
-
-### 2. Supabase Security
-- ✅ Enable Row Level Security (RLS) on all tables
-- ✅ Use RLS policies for tenant isolation
-- ✅ Store Retell API keys encrypted in database
-- ✅ Use Supabase Auth for user authentication
-- ✅ Validate webhook signatures from Retell AI
-
-### 3. HTTPS & SSL
-- ✅ Always use HTTPS in production
-- ✅ Vercel provides SSL automatically
-- ✅ Enable HSTS headers (Vercel default)
-- ✅ Use secure cookies for sessions
-
-### 4. API Security
-- ✅ Validate all API requests
-- ✅ Use Supabase RLS instead of application-level checks
-- ✅ Rate limit API endpoints
-- ✅ Sanitize user inputs
-- ✅ Use TypeScript for type safety
-
-## 📈 Monitoring & Analytics
-
-### 1. Error Tracking
-
-```bash
-# Install Sentry
-npm install @sentry/nextjs
-```
-
-**Configure Sentry:**
-
-```typescript
-// sentry.client.config.ts
-import * as Sentry from "@sentry/nextjs";
-
-Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-  environment: process.env.NODE_ENV,
-  tracesSampleRate: 1.0,
-});
-```
-
-### 2. Performance Monitoring
-
-```bash
-# Install Vercel Analytics
-npm install @vercel/analytics
-```
-
-**Add to `app/layout.tsx`:**
-
-```typescript
-import { Analytics } from '@vercel/analytics/react';
-
-export default function RootLayout({ children }) {
-  return (
-    <html>
-      <body>
-        {children}
-        <Analytics />
-      </body>
-    </html>
-  );
-}
-```
-
-### 3. Supabase Monitoring
-
-- Use Supabase Dashboard for database monitoring
-- Set up alerts for high query times
-- Monitor RLS policy performance
-- Track authentication metrics
-
-### 4. Retell AI Monitoring
-
-- Monitor webhook delivery in Retell dashboard
-- Track call success/failure rates
-- Set up alerts for failed calls
-- Monitor API rate limits
+- ✅ Never commit `.env.local` (already in `.gitignore`)
+- ✅ Use your hosting platform's environment variable store for all secrets in production
+- ✅ Rotate API keys (Supabase, Stripe, Retell) regularly
+- ✅ `SUPABASE_SERVICE_ROLE_KEY` is server-only — never expose it to the client
+- ✅ Row Level Security is enabled on all tenant tables for isolation
+- ✅ Per-tenant Retell API keys are encrypted at the application layer (`ENCRYPTION_KEY`)
+- ✅ Stripe webhook requests are verified against `STRIPE_WEBHOOK_SECRET`; Retell webhook verification is opt-in via `RETELL_WEBHOOK_VERIFY`
+- ✅ Always use HTTPS in production (Vercel provides this automatically)
 
 ## 🆘 Troubleshooting
 
-### Common Issues
+### Build Failures
+- Check Node.js version (requires 18+)
+- Clear `node_modules` and reinstall
+- Run `npx tsc --noEmit` locally to catch type errors before deploying
 
-1. **Build Failures**
-   - Check Node.js version (requires 18+)
-   - Clear `node_modules` and reinstall
-   - Verify all dependencies are compatible
+### Deployment Issues
+- Check that every required environment variable above is set for the target environment
+- Verify the Vercel build/output settings — see [`VERCEL_SETUP.md`](./VERCEL_SETUP.md)
+- Check deployment logs in the Vercel dashboard
 
-2. **Deployment Issues**
-   - Check environment variables
-   - Verify build output directory
-   - Check deployment logs
+### Billing Issues
+- Confirm `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `STRIPE_PRICE_ID` are all set
+- If a production webhook isn't registered yet, `checkout.session.completed` events will never arrive — a tenant's `plan_status` won't update even after a successful Checkout
 
-3. **Performance Issues**
-   - Enable caching
-   - Optimize images
-   - Use CDN for static assets
-
-### Getting Help
-- 📧 Email: support@tinadmin.com
-- 📚 Documentation: [docs.tinadmin.com](https://docs.tinadmin.com)
-- 🐛 Issues: [GitHub Issues](https://github.com/tinadmin/tinadmin/issues)
+### Database Connection Errors
+- Verify `NEXT_PUBLIC_SUPABASE_URL` and the Supabase keys are correct
+- Check the Supabase project is active and migrations have been applied (`supabase migration list`)
 
 ## 📚 Additional Resources
 
-### Supabase
 - [Supabase Documentation](https://supabase.com/docs)
 - [Row Level Security Guide](https://supabase.com/docs/guides/auth/row-level-security)
-- [Supabase CLI Reference](https://supabase.com/docs/reference/cli)
-
-### Retell AI
-- [Retell AI API Documentation](https://docs.retellai.com/api-references/create-phone-call)
-- [Retell TypeScript SDK](https://github.com/RetellAI/retell-typescript-sdk)
-- [Retell Frontend Demo](https://github.com/RetellAI/retell-frontend-reactjs-demo)
-
-### Architecture
-- See `docs/ARCHITECTURE_RECOMMENDATIONS.md` for detailed architecture decisions
-- See `docs/MULTITENANT_ARCHITECTURE.md` for multi-tenancy patterns
-
----
-
-**Happy deploying! 🚀**
+- [Retell AI API Documentation](https://docs.retellai.com)
+- [Stripe Documentation](https://stripe.com/docs)
+- [Vercel Documentation](https://vercel.com/docs)

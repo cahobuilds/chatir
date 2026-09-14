@@ -54,7 +54,7 @@ testConnection()
       console.log('   Your Supabase setup is ready to use.');
     } else if (result.connected && !result.migrated) {
       console.log('⚠️  Connection works but migrations need to be run.');
-      console.log('   See MIGRATION_INSTRUCTIONS.md for details.');
+      console.log('   Run pending migrations via the Supabase dashboard SQL editor, or `supabase db push` — see SUPABASE_SETUP.md.');
     } else {
       console.log('❌ Connection failed.');
       console.log('   Check your credentials in .env.local');

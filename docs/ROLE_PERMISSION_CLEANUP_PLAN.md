@@ -1,6 +1,9 @@
 # Role & Permission Cleanup — Implementation Plan
 
-Status: **approved — implementation in progress (Phase 1, additive migration).**
+Status: **implemented — all 13 tracked tasks complete as of 2026-09-09; Phase 5 (Stripe) has
+since shipped separately (2026-09-14, see `docs/superpowers/specs/2026-09-14-stripe-billing-design.md`).
+Kept as the historical design record and audit trail for the current 6-role model — the role
+names/permission table below still match `src/lib/permissions-server.ts` exactly.**
 Migrated decisions:
 - Voices: **platform-provider only** (`retell-*`, 21 voices) — drop custom/third-party providers.
 
@@ -184,7 +187,10 @@ libs `lib/tenant.ts`, `lib/organization-context.ts`.
 - Phase 1: migration written (`20260908000000_platform_roles_cleanup.sql`), **awaiting apply**.
 - Phase 3: key-leak fix + `retell_key.manage` gating done; **encryption at rest is actually implemented** (not pending — corrected 2026-09-09, see audit below), but inconsistent; white-label UI is **not** fully done.
 - Phase 4: voices allowlist claim is **false** — 3 components still hardcode voices; LLM allowlist is enforced on create but **not** on update.
-- Phase 5: Stripe — **pending** (needs Stripe keys). Confirmed genuinely untouched.
+- Phase 5: Stripe — **shipped 2026-09-14** (single $99/mo plan, 14-day trial, card-at-signup,
+  soft-lock on agent creation, platform-admin manual override, grandfathering for pre-existing
+  tenants). See `docs/superpowers/specs/2026-09-14-stripe-billing-design.md` and
+  `docs/superpowers/plans/2026-09-14-stripe-billing.md` for the full design/implementation record.
 - Phase 6: webhook signature + widget IDOR + widget key + chat-agent `retrieve` done; widget rate-limit implemented but **off by default**; `retell/agents` tenant-scoping parity gap **not fixed** (real IDOR).
 
 ### Added this phase
@@ -208,7 +214,10 @@ A full pass was made comparing every checklist item's claimed status against the
 ### Critical — exploitable now
 1. **Cross-tenant agent overwrite (IDOR).** `src/app/api/retell/agents/route.ts` POST checks `canAccessTenant(user.id, tenant_id, 'agents.manage')` against the **client-supplied** `tenant_id`, then updates `.from('agents').update(...).eq('id', agent_id)` with no `.eq('tenant_id', tenant_id)` filter and no check that `agent_id` belongs to that tenant. A user with `agents.manage` on their own tenant can overwrite another tenant's agent row. `src/app/api/agents/link-retell/route.ts` has the correct pattern (derives `tenant_id` from the agent row itself) — this route needs parity.
 2. **Live committed secret.** `scripts/test-agent-creation-fix.ts:11` has a hardcoded fallback Retell API key (`key_2111b0be36b992beec8fd18b689b`). Needs rotation in the Retell dashboard, not just deletion from the file.
-3. **Default admin credentials still tracked.** `systemadmin@tin.info` / `88888888` appear in ~9 tracked scripts/docs (`scripts/create-system-admin.*`, `scripts/verify-system-admin-setup.ts`, `scripts/grant-system-admin-access.ts`, `scripts/setup-system-admin-complete.sql`, `docs/CREATE_SYSTEM_ADMIN.md`, `docs/SYSTEM_ADMIN_USER_CREATION.md`, `docs/LOCAL_CREDENTIALS.md`).
+3. **Default admin credentials still tracked.** `systemadmin@tin.info` / `88888888` appear in ~6 tracked scripts/docs (`scripts/create-system-admin.*`, `scripts/verify-system-admin-setup.ts`, `scripts/grant-system-admin-access.ts`, `scripts/setup-system-admin-complete.sql`, `docs/LOCAL_CREDENTIALS.md`). `docs/CREATE_SYSTEM_ADMIN.md` and `docs/SYSTEM_ADMIN_USER_CREATION.md` were deleted in the 2026-09-14 docs cleanup (they were built entirely around the deactivated `system_admin` role and their own scripts now produce a permission-less account under the current role model — a real bug in `scripts/create-system-admin.ts` et al., not yet fixed). `docs/LOCAL_CREDENTIALS.md` had its role names corrected and now documents the guard gap
+(2026-09-14 docs cleanup), but the actual guard still needs to be added to
+`scripts/setup-local-credentials.ts`, matching the local-only check `create-system-admin.ts`
+already has — that part remains a real, unfixed code gap.
 4. **Ciphertext shipped to the browser.** `src/components/TenantConfiguration.tsx:70-71` queries Supabase directly from client-side JS (`select('tenant_id, role, tenants(*)')`), bypassing the API layer's `sanitizeTenant()` entirely. The encrypted `retell_api_key` (not plaintext, but still a boundary violation) reaches the browser.
 5. **Access-control regression.** `src/app/api/agents/route.ts` GET authorizes via a hardcoded legacy-role array (`tenant_admin`, `super_admin`, `organization_admin`, `manager`) that doesn't match any of the new 6 canonical roles — none of the new role names will ever match, silently changing who gets treated as an admin for result filtering.
 

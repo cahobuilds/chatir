@@ -197,7 +197,7 @@ async function checkMigrationStatus() {
   } else {
     console.log('❌ Migration may NOT be fully applied');
     console.log('   Please apply: supabase/migrations/20251115000000_fix_agent_folders_rls_recursion.sql');
-    console.log('   See MIGRATION_INSTRUCTIONS.md for details.');
+    console.log('   Run it via the Supabase dashboard SQL editor, or `supabase db push` — see SUPABASE_SETUP.md.');
   }
   console.log('='.repeat(60));
 }

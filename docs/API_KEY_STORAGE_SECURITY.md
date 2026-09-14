@@ -2,24 +2,31 @@
 
 ## Current Storage Location
 
-**Retell API keys are currently stored in the Supabase database** in the `tenants.retell_api_key` column as **plain text** (not encrypted).
+**Status: implemented (2025-11-22).** Retell API keys are encrypted at rest before being
+written to the `tenants.retell_api_key` column — this doc originally proposed the design
+below as future work; it has since been built essentially as-is.
+
+- **Where:** `src/lib/encryption.ts` — AES-256-GCM, `encrypt()`/`decrypt()`, plus an
+  `isEncrypted()` helper (not in the original proposal) used on every read path to
+  gracefully handle any not-yet-migrated legacy plaintext rows.
+- **Write paths:** `src/app/api/tenants/[id]/route.ts` (`PATCH`) and
+  `src/app/api/tenants/[id]/retell/connect/route.ts` both call `encrypt(retell_api_key)`
+  before every write, gated on the `retell_key.manage` permission.
+- **Read paths:** `src/app/api/tenants/[id]/retell/billing/route.ts` and
+  `src/app/api/webhooks/retell/route.ts` both call `isEncrypted(key) ? decrypt(key) : key`
+  — decrypting when needed, falling back to the raw value for any legacy row that
+  predates this change.
+- **Format:** `iv:authTag:encrypted` hex string, matching this doc's original proposal
+  exactly.
 
 ### Database Schema
 ```sql
 CREATE TABLE tenants (
   ...
-  retell_api_key TEXT, -- Currently stored as plain text
+  retell_api_key TEXT, -- Encrypted at rest via src/lib/encryption.ts, see above
   ...
 );
 ```
-
-## Security Concerns
-
-⚠️ **Current State**: API keys are stored in plain text in the database, which means:
-- Anyone with database access can see the keys
-- Keys are visible in database backups
-- Keys are transmitted over the network (though HTTPS)
-- Keys are logged in application logs if not careful
 
 ## Vercel Secrets Management
 
@@ -37,9 +44,14 @@ Vercel integrates with:
 - **HCP Vault Secrets** - HashiCorp Vault integration
 - **AWS Secrets Manager** (via custom integration)
 
-## Recommended Security Improvements
+## Original Design Proposal (✅ Implemented — kept for reference)
 
-### Option 1: Encrypt API Keys in Database (Recommended)
+The section below is the original proposal for Option 1. It's kept here because it's an
+accurate description of what `src/lib/encryption.ts` actually does today (function names
+differ slightly — `encrypt`/`decrypt`, not `encryptApiKey`/`decryptApiKey` — everything
+else matches).
+
+### Option 1: Encrypt API Keys in Database (implemented)
 
 Use a master encryption key stored in Vercel environment variables to encrypt/decrypt API keys:
 
@@ -107,7 +119,7 @@ If you only had one Retell API key, you could store it in Vercel env vars. Howev
 
 ## Implementation Plan
 
-### Phase 1: Add Encryption (Immediate)
+### Phase 1: Add Encryption (✅ Done)
 
 1. **Generate master encryption key:**
    ```bash
@@ -154,13 +166,16 @@ If you only had one Retell API key, you could store it in Vercel env vars. Howev
 
 | Risk Level | Issue | Impact |
 |------------|-------|--------|
-| 🔴 **High** | Plain text storage | Anyone with DB access can see all API keys |
-| 🟡 **Medium** | No encryption | Keys visible in backups, logs, network traffic |
+| 🟢 **Resolved** | ~~Plain text storage~~ | Encrypted via `src/lib/encryption.ts` (AES-256-GCM) since 2025-11-22 |
+| 🟢 **Resolved** | ~~No encryption~~ | Same fix — keys in the DB/backups are ciphertext, not plaintext |
 | 🟢 **Low** | HTTPS in transit | Keys encrypted during transmission |
+| 🟡 **Medium** | No audit logging | Key access/updates are not separately logged (see Next Steps) |
+| 🟡 **Medium** | Single static `ENCRYPTION_KEY` | No key rotation/versioning mechanism yet |
 
 ## Next Steps
 
-1. **Immediate**: Implement Option 1 (Application-level encryption)
-2. **Short-term**: Add audit logging for key access
-3. **Long-term**: Consider Supabase Vault or external secrets manager
+1. **Done**: Application-level encryption (Option 1) — shipped.
+2. **Short-term**: Add audit logging for key access/updates.
+3. **Long-term**: Key rotation/versioning; consider Supabase Vault or an external secrets
+   manager if the single static `ENCRYPTION_KEY` becomes a concern.
 

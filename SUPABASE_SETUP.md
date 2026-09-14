@@ -1,5 +1,7 @@
 # Supabase Setup Instructions
 
+Supabase provides the database and authentication layer for **Chat IR**, a multi-tenant SaaS platform for AI voice/chat agents. Every tenant-scoped table uses Row Level Security (RLS) so one organization's data is never visible to another.
+
 ## Prerequisites
 
 1. Supabase account: [supabase.com](https://supabase.com)
@@ -12,8 +14,8 @@
 1. Go to [supabase.com/dashboard](https://supabase.com/dashboard)
 2. Click **"New Project"**
 3. Fill in:
-   - **Name**: `ai-client-care` (or your choice)
-   - **Database Password**: Create a strong password (save it!)
+   - **Name**: `chat-ir` (or your choice)
+   - **Database Password**: Create a strong password (save it! — this is `SUPABASE_DB_PASSWORD` in `.env.local`, used only for `supabase link`/CLI operations, not read by the app at runtime)
    - **Region**: Choose closest to your users
 4. Click **"Create new project"**
 5. Wait ~2 minutes for project creation
@@ -70,7 +72,13 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Encrypts sensitive per-tenant fields (e.g. each org's Retell API key) — generate any
+# strong random string for local dev
+ENCRYPTION_KEY=
 ```
+
+Supabase alone is enough to run `npm run dev`, but `ENCRYPTION_KEY` is required before you can connect a Retell workspace to an organization, and the Stripe variables (see `README.md`) are required before signup/billing works end-to-end. See the root [`README.md`](./README.md) for the full environment variable reference.
 
 ### 6. Verify Setup
 
@@ -110,16 +118,20 @@ supabase stop
 
 ## Database Schema
 
-The migration creates:
+The initial migration (`supabase/migrations/20251111172146_create_initial_schema.sql`) creates the core multi-tenant tables:
 
-- ✅ **tenants** - Organizations
-- ✅ **user_tenants** - User-tenant relationships
-- ✅ **agents** - Chatbots & voice bots
-- ✅ **interactions** - Interaction tracking
-- ✅ **billing_records** - Billing & invoices
-- ✅ **api_keys** - API authentication
+- ✅ **tenants** — organizations (also holds Stripe billing state: `stripe_customer_id`, `plan_status`, `billing_exempt`, etc.)
+- ✅ **user_tenants** — user-to-tenant membership/role links
+- ✅ **agents** — voice & chat agents
+- ✅ **interactions** — call/chat interaction tracking
+- ✅ **billing_records** — legacy billing/invoice records
+- ✅ **api_keys** — API authentication
 
-All with Row Level Security (RLS) for tenant isolation.
+Later migrations layer on top of this: a platform-wide **roles/permissions** system (`roles`, `role_permissions`, `permissions`), **knowledge bases** (`knowledge_bases`, `knowledge_base_sources`, `agent_knowledge_bases`), **agent folders & per-user agent access** (`agent_folders`, `user_agents`), and real **Stripe billing fields** on `tenants` (see `supabase/migrations/20260914130000_add_stripe_billing_fields_to_tenants.sql`).
+
+Run `supabase migration list` (or browse `supabase/migrations/`) for the full, current set — this doc intentionally doesn't enumerate every migration, since that list changes frequently.
+
+All tenant-scoped tables have Row Level Security (RLS) enabled for tenant isolation, with platform-staff roles (`platform_admin`/`platform_operator`/etc.) granted cross-tenant access via the roles/permissions tables above.
 
 ## Troubleshooting
 
@@ -145,8 +157,8 @@ supabase logs
 ## Next Steps
 
 1. ✅ Set up authentication (see `docs/ARCHITECTURE_RECOMMENDATIONS.md`)
-2. ✅ Create first tenant and user
-3. ✅ Set up Retell AI integration
+2. ✅ Create your first organization by signing up (`/auth/login?mode=signup`)
+3. ✅ Connect that organization's own Retell workspace (Settings → Voice Provider Integration) — see `docs/RETELL_WORKSPACE_ISOLATION.md`
 4. ✅ Test multi-tenant isolation
 
 ## Resources

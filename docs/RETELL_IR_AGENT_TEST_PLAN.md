@@ -9,7 +9,8 @@ manual sign-off before go-live, not a report of completed testing.
 ## Setup
 
 1. Provision a dedicated Retell workspace + API key for a test company (see
-   `docs/RETELL_WORKSPACE_ISOLATION.md`), connect it at `/settings`.
+   `docs/RETELL_WORKSPACE_ISOLATION.md`), connect it at `/tenant-settings` (edit the
+   organization's row → "Voice Provider" modal → paste API key → Save Configuration).
 2. Create a knowledge base and upload 1-2 realistic sample documents: e.g. a real
    (or realistic sample) 10-K/10-Q PDF, and a couple of paragraphs of investor-facing
    website copy as a text source. Confirm `status: 'complete'` on the KB before testing

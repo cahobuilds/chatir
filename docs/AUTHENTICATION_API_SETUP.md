@@ -31,7 +31,7 @@
 - Returns user's tenant memberships with roles
 
 **POST `/api/tenants`**
-- Create new tenant (super_admin only)
+- Create new tenant (platform staff only — requires the `orgs.create` permission, held by `platform_admin`/`platform_operator`)
 - Body: `{ name, subdomain?, tier?, settings?, branding? }`
 
 **GET `/api/tenants/[id]`**
@@ -39,11 +39,11 @@
 - Requires user to have access to tenant
 
 **PATCH `/api/tenants/[id]`**
-- Update tenant (tenant_admin or super_admin)
+- Update tenant (`company_admin` for that tenant, or platform staff)
 - Body: `{ name?, subdomain?, tier?, settings?, branding?, retell_api_key? }`
 
 **DELETE `/api/tenants/[id]`**
-- Delete tenant (super_admin only)
+- Delete tenant (platform staff only — requires the `orgs.delete` permission, held by `platform_admin`)
 
 #### Agent Management (`/api/agents`)
 
@@ -65,7 +65,7 @@
 - Body: `{ name?, type?, description?, configuration?, retell_agent_id?, retell_phone_number_id?, is_active? }`
 
 **DELETE `/api/agents/[id]`**
-- Delete agent (tenant_admin or super_admin)
+- Delete agent (requires the `agents.manage` permission — `company_admin`, `company_editor`, or platform staff)
 
 #### Authentication (`/api/auth`)
 
@@ -84,13 +84,16 @@
 
 ### Sign Up Flow
 
-1. User visits `/auth/signup`
-2. Fills form: name, email, password, company name
-3. System creates:
-   - Auth user in Supabase
-   - Tenant record
-   - User-tenant relationship with `tenant_admin` role
-4. User redirected to `/dashboard`
+1. User visits `/auth/signup` (redirects to `/auth/login?mode=signup`, the "Create Account" tab).
+2. Fills form: name, email, password, company name.
+3. Client calls `POST /api/auth/signup`, which atomically (via the service-role client):
+   - Creates the auth user in Supabase
+   - Creates the tenant record
+   - Creates the user-tenant relationship with the `company_admin` role
+   - Starts a Stripe Checkout Session (`createCheckoutSession()` in `src/lib/stripe.ts`) for the required subscription — 14-day trial, $99/mo, card required
+4. Client signs the user in (`supabase.auth.signInWithPassword`) to establish a session.
+5. **Stripe Checkout redirect:** if the signup response includes a `checkout_url`, the browser redirects to Stripe Checkout to collect payment. If Checkout Session creation failed server-side (e.g. Stripe misconfigured), the client falls back to `/dashboard`, which shows a soft-lock billing banner with a "start subscription" retry.
+6. The new tenant starts with `plan_status: 'inactive'` and stays soft-locked (see `src/lib/billing.ts`) until the Stripe webhook flips it to `trialing` after checkout completes.
 
 ### Login Flow
 

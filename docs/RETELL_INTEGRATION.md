@@ -17,20 +17,22 @@ The platform supports per-tenant Retell AI integration, allowing each organizati
 2. Navigate to **Settings** → **API Keys**
 3. Copy your API key (or create a new one if needed)
 
-### 2. Configure API Key in Tenant Settings
+### 2. Configure API Key (platform staff)
 
-1. Log in to the platform as a tenant admin (`tenant_admin`, `super_admin`, or `system_admin`)
-2. Navigate to **Settings** → **Tenant Settings** (or `/tenant-settings`)
-3. Scroll down to the **Retell AI Integration** section
-4. Paste your Retell API key in the input field
-5. Click **Save Key**
+Retell API keys are managed by **platform staff** with the `retell_key.manage` permission (not from company-facing org settings):
+
+1. Log in as platform staff (`platform_admin`, `platform_operator`, `platform_billing`, or legacy `system_admin` / `super_admin`)
+2. Navigate to **Organization Management** (`/tenant-settings`)
+3. Click **Edit** on the target organization
+4. In the **Voice Provider** modal, paste the workspace API key
+5. Click **Save** — the key is validated against Retell and encrypted at rest (`/api/tenants/[id]/retell/connect`)
 
 ### 3. Sync Agents from Retell
 
-Once your API key is configured:
+Once the organization's API key is connected:
 
-1. In the same **Retell AI Integration** section
-2. Click the **Sync Agents from Retell AI** button
+1. Navigate to **Agents** → **Voice Agents** (`/agents/voice`) or **Chat Agents** (`/agents/chat`)
+2. Click **Sync Agents** (or **Re-sync** on the voice page when agents already exist)
 3. The system will:
    - Fetch all agents from your Retell account
    - Create new agent records for agents not yet in the system
@@ -105,9 +107,12 @@ When syncing, the system:
 
 ### Agent Type Detection
 
-The system automatically determines agent type:
-- **Voice agents**: Have a `voice_id` in their Retell configuration
-- **Chat agents**: Don't have a `voice_id` (or have different configuration)
+During sync (`src/app/api/retell/agents/sync/route.ts`), agent type is taken from Retell's authoritative `channel` field on each list item — not from `voice_id` heuristics:
+
+- **Chat agents**: `channel === 'chat'`
+- **Voice agents**: any other `channel` value (typically `'voice'`)
+
+The UI passes a `type` filter so voice and chat lists sync independently (`VoiceAgentList.tsx` sends `type: 'voice'`; `ChatAgentList.tsx` sends `type: 'chat'`). Full agent details are fetched from the matching Retell resource (`chatAgent.retrieve` vs `agent.retrieve` — see `src/lib/retell.ts`).
 
 ### Data Mapping
 
@@ -120,7 +125,7 @@ Retell agent data is stored in the `agents` table:
 ## Security
 
 - API keys are stored securely in the `tenants.retell_api_key` column
-- Only tenant admins (`tenant_admin`, `super_admin`, `system_admin`) can configure API keys
+- Only platform staff with `retell_key.manage` can configure API keys (Organization Management → Edit → Voice Provider)
 - API keys are masked in the UI (password field) with a show/hide toggle
 - All API endpoints require authentication and verify tenant access
 
@@ -128,7 +133,7 @@ Retell agent data is stored in the `agents` table:
 
 ### "Tenant Retell API key not configured"
 
-**Solution**: Make sure you've saved your Retell API key in the tenant settings before attempting to sync.
+**Solution**: Make sure a platform staff user has saved the organization's Retell API key (Organization Management → Edit → Voice Provider) before attempting to sync.
 
 ### "Failed to list Retell AI agents"
 
