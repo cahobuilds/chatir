@@ -38,16 +38,18 @@ export async function GET(request: NextRequest) {
           negative: 0,
           average: 0,
         },
-        resolutionRate: 0,
+        resolutionRate: { rate: 0, resolved: 0, total: 0 },
         escalationPatterns: {
           total: 0,
+          rate: 0,
           byReason: {},
-          trends: [],
         },
         customerJourney: {
           singleCallResolution: 0,
           multiCallResolution: 0,
+          totalCustomers: 0,
           averageCallsPerCustomer: 0,
+          singleCallRate: 0,
         },
       });
     }
@@ -98,16 +100,18 @@ export async function GET(request: NextRequest) {
           negative: 0,
           average: 0,
         },
-        resolutionRate: 0,
+        resolutionRate: { rate: 0, resolved: 0, total: 0 },
         escalationPatterns: {
           total: 0,
+          rate: 0,
           byReason: {},
-          trends: [],
         },
         customerJourney: {
           singleCallResolution: 0,
           multiCallResolution: 0,
+          totalCustomers: 0,
           averageCallsPerCustomer: 0,
+          singleCallRate: 0,
         },
       });
     }
