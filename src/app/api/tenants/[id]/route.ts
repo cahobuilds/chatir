@@ -195,7 +195,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, subdomain, tier, settings, branding, retell_api_key, is_reseller, parent_id, plan_tier } = body;
+    const { name, subdomain, tier, settings, branding, retell_api_key, is_reseller, parent_id, plan_tier, billing_exempt, plan_status } = body;
 
     // System admins can update is_reseller and parent_id
     // Regular admins cannot
@@ -233,6 +233,27 @@ export async function PATCH(
         return NextResponse.json({ error: 'Forbidden: billing.manage permission required to change the plan.' }, { status: 403 });
       }
       updateData.plan_tier = plan_tier;
+    }
+
+    // Platform-admin-only manual billing override: comp/exempt a tenant, or force its Stripe
+    // sync status directly (e.g. an out-of-band/invoiced enterprise deal). Does not touch
+    // stripe_customer_id/stripe_subscription_id - purely a local override layered on top of
+    // whatever Stripe last reported.
+    if (billing_exempt !== undefined) {
+      if (!isSystemAdmin) {
+        return NextResponse.json({ error: 'Forbidden: Platform access required to change billing exemption.' }, { status: 403 });
+      }
+      updateData.billing_exempt = Boolean(billing_exempt);
+    }
+    if (plan_status !== undefined) {
+      if (!isSystemAdmin) {
+        return NextResponse.json({ error: 'Forbidden: Platform access required to override plan status.' }, { status: 403 });
+      }
+      const allowedStatuses = ['inactive', 'trialing', 'active', 'past_due', 'canceled'];
+      if (!allowedStatuses.includes(plan_status)) {
+        return NextResponse.json({ error: `plan_status must be one of: ${allowedStatuses.join(', ')}` }, { status: 400 });
+      }
+      updateData.plan_status = plan_status;
     }
     
     // System admin can update reseller settings (is_reseller/parent_id removed in Phase 1b).
