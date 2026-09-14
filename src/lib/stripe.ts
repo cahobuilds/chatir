@@ -7,7 +7,13 @@ if (!STRIPE_SECRET_KEY && process.env.NODE_ENV === 'production') {
   console.warn('⚠️  WARNING: STRIPE_SECRET_KEY is not set');
 }
 
-export const stripe = new Stripe(STRIPE_SECRET_KEY || '', {
+// The Stripe SDK throws synchronously at construction time if given an empty string
+// (not just an invalid one) - "Neither apiKey nor config.authenticator provided".
+// Next.js evaluates this module at build time (route data collection), so an empty
+// key here would crash `next build` entirely, not just fail at request time. Fall back
+// to an obviously-fake placeholder so the module always loads; any real API call made
+// with it will fail with a normal Stripe 401, which our routes already handle.
+export const stripe = new Stripe(STRIPE_SECRET_KEY || 'sk_test_not_configured', {
   typescript: true,
 });
 
