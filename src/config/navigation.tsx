@@ -9,7 +9,6 @@ import {
   ClockIcon,
   CreditCardIcon,
   ChartBarIcon,
-  CloudIcon,
 } from "@heroicons/react/24/outline";
 
 export type PageType = "functional" | "template";
@@ -141,15 +140,6 @@ export const navigationConfig: NavItem[] = [
         icon: <CreditCardIcon className="w-5 h-5" />,
         description: "Plans and usage across all organizations",
         platformOnly: true,
-      },
-      {
-        name: "Railway Services",
-        path: "/admin/railway-services",
-        type: "functional",
-        badge: "new",
-        description: "Manage Railway services for Notion MCP",
-        platformOnly: true,
-        icon: <CloudIcon className="w-5 h-5" />,
       },
     ],
   },
