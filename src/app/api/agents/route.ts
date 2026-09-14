@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { hasPlatformPermission, canAccessTenant } from '@/lib/permissions-server';
+import { hasActiveBilling } from '@/lib/billing';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/agents - Get agents for current user's tenant(s)
@@ -167,6 +168,26 @@ export async function POST(request: NextRequest) {
 
     // Use admin client for the write (access verified above).
     const clientToUse = createAdminClient();
+
+    // Soft-lock: block creating new agents if this tenant's subscription isn't active/trialing
+    // and it isn't grandfathered/comped. Everything else (existing agents, calls, chats,
+    // analytics) keeps working regardless - this is the one deliberate enforcement point.
+    const { data: billingTenant, error: billingTenantError } = await clientToUse
+      .from('tenants')
+      .select('billing_exempt, plan_status')
+      .eq('id', tenant_id)
+      .single();
+
+    if (billingTenantError || !billingTenant) {
+      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    }
+
+    if (!hasActiveBilling(billingTenant)) {
+      return NextResponse.json(
+        { error: 'Your subscription is not active. Please update your payment method or start your subscription to create new agents.' },
+        { status: 402 }
+      );
+    }
 
     // Create agent
     const { data: agent, error: agentError } = await clientToUse
