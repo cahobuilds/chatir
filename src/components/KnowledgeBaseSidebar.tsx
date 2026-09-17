@@ -134,7 +134,7 @@ export default function KnowledgeBaseSidebar({
                         </p>
                         {kb.status && getStatusIndicator(kb.status)}
                       </div>
-                      {kb.pageCount !== undefined && (
+                      {typeof kb.pageCount === "number" && kb.pageCount > 0 && (
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           {kb.pageCount} {kb.pageCount === 1 ? "Page" : "Pages"}
                         </p>

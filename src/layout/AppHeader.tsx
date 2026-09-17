@@ -129,7 +129,7 @@ const AppHeader: React.FC = () => {
             {/* Cross Icon */}
           </button>
 
-          <Link href="/" className="xl:hidden flex items-center gap-2">
+          <Link href="/dashboard" className="xl:hidden flex items-center gap-2">
             {organizationLogo ? (
               <Image
                 width={32}

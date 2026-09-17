@@ -1,5 +1,58 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import {
+  getAppOrigin,
+  getMarketingOrigin,
+  getSiteRole,
+  isAppPath,
+  isMarketingPath,
+} from '@/lib/site-role';
+
+/**
+ * Both Vercel projects build this whole repository, so each one can serve routes that
+ * belong to the other half. This keeps every path on the domain that owns it, so the
+ * marketing domain never exposes the product and neither domain publishes a duplicate
+ * copy of the other's pages.
+ *
+ * The redirects are temporary (307) rather than permanent so a domain change during
+ * setup can't be cached in visitors' browsers.
+ */
+function routeByRole(request: NextRequest) {
+  const role = getSiteRole();
+  if (role === 'both') return undefined;
+
+  const pathname = request.nextUrl.pathname;
+  const target = `${pathname}${request.nextUrl.search}`;
+
+  if (role === 'marketing') {
+    if (!isAppPath(pathname)) return undefined;
+
+    // Cross-origin redirects of API calls fail CORS in ways that are hard to debug, so
+    // the marketing domain simply doesn't answer for the API.
+    const appOrigin = getAppOrigin();
+    if (pathname.startsWith('/api') || !appOrigin) {
+      return new NextResponse('Not found', { status: 404 });
+    }
+    return NextResponse.redirect(new URL(target, appOrigin), 307);
+  }
+
+  // The marketing home page owns "/" in this codebase. On the application domain the
+  // bare URL keeps taking visitors into the product, as it did before marketing landed.
+  if (pathname === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
+  }
+
+  if (isMarketingPath(pathname)) {
+    const marketingOrigin = getMarketingOrigin();
+    // With no marketing domain configured yet, fall through and serve the page, so a
+    // single-project deployment still works.
+    if (marketingOrigin) return NextResponse.redirect(new URL(target, marketingOrigin), 307);
+  }
+
+  return undefined;
+}
 
 // Helper to create a timeout promise
 function timeoutPromise<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -26,6 +79,18 @@ export async function middleware(request: NextRequest) {
   }
 
   const pathname = request.nextUrl.pathname;
+
+  // Framework internals and static assets need neither routing nor auth work.
+  if (
+    pathname.startsWith('/_next/') ||
+    pathname === '/favicon.ico' ||
+    pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|txt|xml)$/)
+  ) {
+    return NextResponse.next();
+  }
+
+  const roleRedirect = routeByRole(request);
+  if (roleRedirect) return roleRedirect;
 
   // Early returns for public routes that don't need auth
   if (

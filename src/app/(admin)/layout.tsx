@@ -1,6 +1,10 @@
 "use client";
 
-import { useSidebar } from "@/context/SidebarContext";
+import "swiper/swiper-bundle.css";
+import "simplebar-react/dist/simplebar.min.css";
+import { SidebarProvider, useSidebar } from "@/context/SidebarContext";
+import { ThemeProvider } from "@/context/ThemeContext";
+import { OrganizationProvider } from "@/context/OrganizationContext";
 import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
@@ -9,11 +13,19 @@ import React, { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider>
+      <OrganizationProvider>
+        <SidebarProvider>
+          <AdminShell>{children}</AdminShell>
+        </SidebarProvider>
+      </OrganizationProvider>
+    </ThemeProvider>
+  );
+}
+
+function AdminShell({ children }: { children: React.ReactNode }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
   const pathname = usePathname();
   const router = useRouter();
@@ -64,7 +76,7 @@ export default function AdminLayout({
     : "xl:ml-[90px]";
 
   return (
-    <div className="min-h-screen xl:flex">
+    <div className="min-h-screen xl:flex dark:bg-gray-900">
       {/* Sidebar and Backdrop */}
       <AppSidebar />
       <Backdrop />

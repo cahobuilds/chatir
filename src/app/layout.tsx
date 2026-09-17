@@ -1,19 +1,30 @@
 import { Outfit } from "next/font/google";
 import type { Metadata } from "next";
 import "./globals.css";
-import "swiper/swiper-bundle.css";
-import "simplebar-react/dist/simplebar.min.css";
-import { SidebarProvider } from "@/context/SidebarContext";
-import { ThemeProvider } from "@/context/ThemeContext";
-import { OrganizationProvider } from "@/context/OrganizationContext";
+import { getSiteUrl } from "@/components/marketing/content";
 
 const outfit = Outfit({
   subsets: ["latin"],
 });
 
+const siteUrl = getSiteUrl();
+
 export const metadata: Metadata = {
-  title: "Chat IR",
-  description: "Build and manage AI-powered knowledge bots for your organization. Multi-tenant SaaS platform for intelligent knowledge management.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Chat IR — AI agents for investor relations",
+    template: "%s | Chat IR",
+  },
+  description: "Help investors explore your public company information with AI voice and chat agents built for investor relations teams.",
+  openGraph: {
+    type: "website",
+    siteName: "Chat IR",
+    locale: "en_US",
+    images: [{ url: "/images/marketing/architecture.jpg" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
 };
 
 export default function RootLayout({
@@ -23,14 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${outfit.className} dark:bg-gray-900`}>
-        <ThemeProvider>
-          <OrganizationProvider>
-            <SidebarProvider>{children}</SidebarProvider>
-          </OrganizationProvider>
-        </ThemeProvider>
-      </body>
+      <body className={outfit.className}>{children}</body>
     </html>
   );
 }
-
